@@ -53,12 +53,24 @@ export interface DeskMonitorProps {
   rotationY?: number;
   /** scale uniform — tune to match the mesh size */
   scale?: number;
+  /** which interactable to anchor the monitor to. defaults to the desk chair
+   *  since that's where the actual computer mesh sits in the room. swap to
+   *  'desk_workstation' if your room's monitor lives at that desk instead. */
+  anchorTo?: 'desk_chair' | 'desk_workstation';
+  /** distance forward from the seat (in metres) where the screen sits.
+   *  bigger = farther from the user's face. */
+  monitorDepth?: number;
+  /** vertical offset above the desk surface for screen center. */
+  monitorHeight?: number;
 }
 
 export function DeskMonitor({
   position = [0.55, 0.72, -0.62],
   rotationY = 0,
   scale = 0.32,
+  anchorTo = 'desk_chair',
+  monitorDepth = 0.6,
+  monitorHeight = 1.4,
 }: DeskMonitorProps = {}) {
   const taskLog = useConversationStore((s) => s.taskLog);
   const currentTask = useConversationStore((s) => s.currentTask);
@@ -68,38 +80,57 @@ export function DeskMonitor({
   const accent = persona?.paletteHex ?? 'var(--angel-accent)';
 
   /* ------------------------------------------------------------------ */
-  /* derive monitor pose from the desk_workstation interactable so the   */
-  /* CRT lands on the actual desk after calibration. Falls back to the   */
-  /* component props if the workstation isn't loaded yet (the JSON fetch  */
-  /* in Room.tsx can land a frame or two after this mounts), and polls a  */
-  /* few times to catch up once it does.                                  */
+  /* derive monitor pose from the chosen anchor interactable so the CRT  */
+  /* lands on the actual desk after calibration. Falls back to props if  */
+  /* nothing's loaded. Tuning knobs are live: window.__angel.tuneMonitor  */
+  /* dispatches an event that re-derives without a rebuild.               */
   /* ------------------------------------------------------------------ */
   const [derived, setDerived] = useState<{ pos: [number, number, number]; rotY: number } | null>(null);
+  const [tunedDepth, setTunedDepth] = useState(monitorDepth);
+  const [tunedHeight, setTunedHeight] = useState(monitorHeight);
+  const [tunedAnchor, setTunedAnchor] = useState(anchorTo);
+
+  // listen for runtime tuning from the devtools console helper
+  useEffect(() => {
+    const onTune = (e: Event) => {
+      const detail = (e as CustomEvent).detail as Partial<{
+        depth: number;
+        height: number;
+        anchorTo: 'desk_chair' | 'desk_workstation';
+      }>;
+      if (typeof detail.depth === 'number') setTunedDepth(detail.depth);
+      if (typeof detail.height === 'number') setTunedHeight(detail.height);
+      if (detail.anchorTo) setTunedAnchor(detail.anchorTo);
+    };
+    window.addEventListener('angel:monitor-tune', onTune);
+    return () => window.removeEventListener('angel:monitor-tune', onTune);
+  }, []);
 
   useEffect(() => {
     const compute = (): { pos: [number, number, number]; rotY: number } | null => {
-      const it = getInteractable('desk_workstation');
-      const approach = it?.approaches?.[0];
-      if (!it || !approach) return null;
+      const it = getInteractable(tunedAnchor);
+      if (!it) return null;
+      // prefer seat (where the user actually sits) over approaches —
+      // desk_chair has no approaches[], only a seat. fall through to
+      // approach[0] if no seat (workstation case). bail if neither.
+      const ref = it.seat ?? it.approaches?.[0] ?? null;
+      if (!ref) return null;
       // user's forward direction under VRM convention: rotation.y=0 → -Z.
-      // Forward = rotate (0,0,-1) around Y by approach.yaw.
-      const fx = -Math.sin(approach.yaw);
-      const fz = -Math.cos(approach.yaw);
-      // monitor sits ~70cm in front of the chair-side approach, on the
-      // desk surface. that lands roughly at the back of an authored desk
-      // (the 'far' edge from the user) without poking into the wall.
-      const monitorDepth = 0.7;
-      const deskTop = it.bbox.center.y + it.bbox.halfExtents.y;
+      const fx = -Math.sin(ref.yaw);
+      const fz = -Math.cos(ref.yaw);
+      // simple "height above the seat-ground" formula — works whether the
+      // anchor is a chair (ref.pos.y is 0, the floor) or a desk (ref.pos.y
+      // is also 0 because approach is on the floor). tunedHeight is the
+      // screen-center y in world units. ~1.40 lands at a seated user's
+      // eye level; tune higher if the screen reads too low.
       const pos: [number, number, number] = [
-        approach.pos.x + fx * monitorDepth,
-        deskTop + 0.32, // ~32cm above the desk surface for screen center
-        approach.pos.z + fz * monitorDepth,
+        ref.pos.x + fx * tunedDepth,
+        ref.pos.y + tunedHeight,
+        ref.pos.z + fz * tunedDepth,
       ];
-      // monitor's html plane normal (+Z by default for drei <Html transform>)
-      // should point at the user. The user's facing yaw is approach.yaw, so
-      // for the html's +Z to point opposite (toward the user), we set the
-      // monitor's rotation.y == approach.yaw.
-      return { pos, rotY: approach.yaw };
+      // monitor html plane's +Z normal should point back at the user;
+      // rotation.y = ref.yaw matches the user's own body yaw.
+      return { pos, rotY: ref.yaw };
     };
 
     const initial = compute();
@@ -107,8 +138,8 @@ export function DeskMonitor({
       setDerived(initial);
       return;
     }
-    // workstation not loaded yet — poll briefly while Room.tsx fetches the
-    // defaults JSON + applies overrides. caps at 30 retries × 200ms = 6s.
+    // anchor interactable not loaded yet — poll briefly while Room.tsx
+    // fetches the defaults JSON. caps at 30 retries × 200ms = 6s.
     let attempts = 0;
     const id = window.setInterval(() => {
       attempts += 1;
@@ -121,7 +152,7 @@ export function DeskMonitor({
       }
     }, 200);
     return () => window.clearInterval(id);
-  }, []);
+  }, [tunedAnchor, tunedDepth, tunedHeight]);
 
   const finalPosition = derived?.pos ?? position;
   const finalRotationY = derived?.rotY ?? rotationY;

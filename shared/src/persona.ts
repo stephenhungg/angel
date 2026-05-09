@@ -41,23 +41,19 @@ export interface Persona {
 /**
  * Maps archetype indices → asset paths. Both web and desktop must agree.
  *
- * NOTE: The abison-curated VRoid pool (cottagecore / tech-minimal / cyber /
- * academia) all ship with arms-up bind poses that bleed through whenever
- * the active idle clip doesn't drive every shoulder/upper-arm bone — so the
- * avatar reads as a T-pose-ish "arms in the air" stance until a richer clip
- * fires. The original placeholder VRM survives our Mixamo retarget cleanly,
- * so until we ship a bind-pose normalization pass, we route every archetype
- * to it. Personality (palette, voice, vibe) still varies per archetype; only
- * the model file is shared. Swap back to per-archetype models once retargeting
- * accounts for non-T bind poses.
+ * The abison-curated VRoid pool (cottagecore / tech-minimal / cyber /
+ * academia) all ship with non-T-pose bind poses (arms angled, shoulders
+ * rotated). The Mixamo retargeter assumed T-pose at rest, so any humanoid
+ * bone the active idle clip didn't drive read as "arms in the air". This
+ * is now normalized at VRM load time by
+ * `desktop/src/lib/vrm-load.ts#normalizeHumanoidToTPose`, so every model
+ * starts from a clean T-pose and Mixamo animates cleanly on top.
  */
-const WORKING_VRM = '/vrm/2068967230566994300.vrm';
-
 export const VRM_BY_AESTHETIC: Record<AestheticArchetype, string> = {
-  A1: WORKING_VRM,
-  A2: WORKING_VRM,
-  A3: WORKING_VRM,
-  A4: WORKING_VRM,
+  A1: '/vrm/cottagecore.vrm',
+  A2: '/vrm/tech-minimal.vrm',
+  A3: '/vrm/cyber.vrm',
+  A4: '/vrm/academia.vrm',
 };
 
 export const PALETTE_BY_AESTHETIC: Record<AestheticArchetype, string> = {

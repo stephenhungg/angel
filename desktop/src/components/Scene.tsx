@@ -20,12 +20,12 @@ import { isChairAnchor, yawToFace } from '@/lib/anchors';
 import { useAngelStore } from '@/stores/angel';
 import { listVrms, type VrmMatch } from '@/lib/vrmMatcher';
 
-// Original placeholder VRM, restored from git after the swipe-pipeline
-// merge clobbered it. The abison-curated pool (cottagecore, academia,
-// tech-minimal, cyber) all ship with arms-up bind poses that bleed through
-// our Mixamo retarget when an idle clip doesn't drive every arm bone — this
-// model behaves cleanly with Idle.fbx, so it's the safe fallback.
-const FALLBACK_VRM = '/vrm/2068967230566994300.vrm';
+// Default body for the initial pre-onboarding launch (before the user has
+// completed the swipe flow). The abison-curated pool used to all read as
+// "arms in the air" because their bind poses aren't T-pose — that's now
+// neutralized at load by `vrm-load.ts#normalizeHumanoidToTPose`, so any
+// of the five works. Picking cottagecore here so first-launch reads warm.
+const FALLBACK_VRM = '/vrm/cottagecore.vrm';
 const FALLBACK_ROOM = '/room.glb';
 
 type SceneProps = {
