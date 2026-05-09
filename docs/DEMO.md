@@ -109,9 +109,16 @@ each beat is a separate dopamine spike, ~300ms apart:
 
 ### [2:50 – 3:00] sms kill-shot (the post-credits scene)
 
-**THE move:** close the laptop ostentatiously. pull out phone. text the angel number. her reply pops up within 5 seconds.
+**THE move (option A — full delivery):** close the laptop ostentatiously. pull out phone. text +1 321 353 8501. her reply pops up within 5 seconds.
 
 **voice-over:** *"close the laptop. text her. she'll reply. open the laptop. you're back where you left off. same memory. same soul. one being, every surface."*
+
+**THE move (option B — outbound blocked by A2P 10DLC, fallback):**
+text the number → /admin/space dashboard shows live SMS turn flowing in → her response visible in real-time on screen. say:
+
+> "she received it. her response is logged in our backend right now — see this dashboard? on a registered production number it'd flow back as iMessage, but trial 10DLC requires A2P registration which takes 24-72hr of carrier review. the architecture is provable; the last-mile delivery is gated by US carrier policy. **same nia memory store as electron — she remembers what you texted when you reopen the laptop.**"
+
+option B is honest, sponsor-track-credible, and still demonstrates the parasocial pull (her real-time response visible).
 
 ## demo prep checklist
 

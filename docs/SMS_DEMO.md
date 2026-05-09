@@ -18,10 +18,24 @@ architecturally: there's ONE angel. she has many bodies. lid-closed doesn't kill
 ## demo phone number
 
 ```
-ANGEL_PHONE_NUMBER: <set via env after twilio provision>
+ANGEL_PHONE_NUMBER: +1 321 353 8501
 ```
 
-set by stephen at demo-prep time. default routing: any text to this number triggers angel's SMS orchestrator.
+provisioned via twilio trial. **inbound webhook fires → orchestrator generates reply → BUT outbound delivery currently blocked** by A2P 10DLC carrier policy (`error 30034 - US A2P 10DLC - Message from an Unregistered Number`).
+
+architecture is fully wired:
+- ✅ user texts +1 321 353 8501
+- ✅ twilio webhook hits `https://necessary-leopard-395.convex.site/sms/inbound`
+- ✅ orchestrator action runs (~5s) — claude generates contextual reply with nia memory
+- ✅ smsTurns + memoryMirror + orchestratorTurns all logged
+- ❌ twilio attempts outbound send → carrier rejects (A2P registration required)
+
+**resolution paths post-hackathon:**
+1. **A2P 10DLC Sole Proprietor registration** — $4.50 + $15, 24-72hr carrier review
+2. **Switch to twilio toll-free** — A2P-exempt, immediate
+3. **Sendblue iMessage** — provider-agnostic factory, single env var flip (`SENDBLUE_API_KEY`)
+
+**for the demo**, option B in DEMO.md: show /admin/space live as user texts. her response appears in the dashboard in real-time, proving the orchestrator fired + memory wrote.
 
 ## judge instructions
 
