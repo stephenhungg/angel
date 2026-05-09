@@ -76,7 +76,7 @@ export function Archetypes() {
 
         <Reveal delay={0.3} className="mt-16 tablet:mt-20">
           <Link
-            href="/discover"
+            href="/swipe"
             className="group inline-flex items-baseline gap-3 font-sans text-[20px] font-medium tracking-[-0.005em] text-ink-near transition-colors duration-200 ease-linear hover:text-sakura-600"
           >
             <span>explore all paths</span>

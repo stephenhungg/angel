@@ -1,0 +1,117 @@
+{
+  "url": "https://angel-swipe-gx3oo9o4f-stephen-hungs-projects-d01c13ef.vercel.app",
+  "timestamp": "2026-05-09T21:12:49.596Z",
+  "issuesByKind": {
+    "console": [
+      {
+        "kind": "console",
+        "msg": "[warning] GSAP target .hero-bg not found. https://gsap.com"
+      },
+      {
+        "kind": "console",
+        "msg": "[warning] GSAP target .hero-decor not found. https://gsap.com"
+      },
+      {
+        "kind": "console",
+        "msg": "[warning] GSAP target .hero-snow not found. https://gsap.com"
+      },
+      {
+        "kind": "console",
+        "msg": "[warning] GSAP target .hero-preview not found. https://gsap.com"
+      },
+      {
+        "kind": "console",
+        "msg": "[warning] GSAP target .hero-wordmark not found. https://gsap.com"
+      },
+      {
+        "kind": "console",
+        "msg": "[warning] GSAP target .hero-byline not found. https://gsap.com"
+      },
+      {
+        "kind": "console",
+        "msg": "[warning] GSAP target .hero-meta-l not found. https://gsap.com"
+      },
+      {
+        "kind": "console",
+        "msg": "[warning] GSAP target .hero-meta-r not found. https://gsap.com"
+      },
+      {
+        "kind": "console",
+        "msg": "[warning] GSAP target .hero-grain not found. https://gsap.com"
+      },
+      {
+        "kind": "console",
+        "msg": "[warning] GSAP target .hero-subtitle not found. https://gsap.com"
+      },
+      {
+        "kind": "console",
+        "msg": "[warning] GSAP target .hero-stack li not found. https://gsap.com"
+      },
+      {
+        "kind": "console",
+        "msg": "[warning] GSAP target .hero-bg not found. https://gsap.com"
+      },
+      {
+        "kind": "console",
+        "msg": "[warning] GSAP target .hero-decor not found. https://gsap.com"
+      },
+      {
+        "kind": "console",
+        "msg": "[warning] GSAP target .hero-snow not found. https://gsap.com"
+      },
+      {
+        "kind": "console",
+        "msg": "[warning] GSAP target .hero-grain not found. https://gsap.com"
+      },
+      {
+        "kind": "console",
+        "msg": "[warning] GSAP target .hero-wordmark not found. https://gsap.com"
+      },
+      {
+        "kind": "console",
+        "msg": "[warning] GSAP target .hero-byline not found. https://gsap.com"
+      },
+      {
+        "kind": "console",
+        "msg": "[warning] GSAP target .hero-preview not found. https://gsap.com"
+      },
+      {
+        "kind": "console",
+        "msg": "[warning] GSAP target .hero-meta-l not found. https://gsap.com"
+      },
+      {
+        "kind": "console",
+        "msg": "[warning] GSAP target .hero-meta-r not found. https://gsap.com"
+      },
+      {
+        "kind": "console",
+        "msg": "[warning] GSAP target .hero-subtitle not found. https://gsap.com"
+      },
+      {
+        "kind": "console",
+        "msg": "[warning] GSAP target .hero-stack li not found. https://gsap.com"
+      },
+      {
+        "kind": "console",
+        "msg": "[error] Failed to load resource: the server responded with a status of 404 ()"
+      }
+    ],
+    "network": [
+      {
+        "kind": "network",
+        "msg": "GET 404",
+        "url": "https://angel-swipe-gx3oo9o4f-stephen-hungs-projects-d01c13ef.vercel.app/discover?_rsc=1p-R_iEY6bj0jY31",
+        "status": 404
+      }
+    ],
+    "flow": [
+      {
+        "kind": "flow",
+        "msg": "landing CTA navigated to https://angel-swipe-gx3oo9o4f-stephen-hungs-projects-d01c13ef.vercel.app/ not /swipe (404 risk)"
+      }
+    ]
+  },
+  "totalIssues": 25,
+  "claimHref": "angel://claim?token=eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJ1c2VySWQiOiI5ZjZhMTA0Zi1jMTNlLTQ3NDItOWU4OS03ZTEzZTJkZTVhOTUiLCJ2cm1JZCI6IkEzIiwicGFsZXR0ZUhleCI6IiM3YzNhZWQiLCJuYW1lIjoidGVzdCIsInRyYWl0cyI6eyJhZXN0aGV0aWMiOiJBMyIsImRpc3Bvc2l0aW9uIjoiQjQiLCJzdHlsZSI6IkMyIiwidm9pY2VfY2x1c3RlciI6Mn0sImlhdCI6MTc3ODM2MTE2MCwiZXhwIjoxNzc4MzYxNDYwLCJudW1lcmljVHJhaXRzIjp7Indhcm10aCI6NS4yNSwiZW5lcmd5Ijo3LjY2NjY2NjY2NjY2NjY2NywiZWRnZSI6Ni43NSwic29waGlzdGljYXRpb24iOjYuMDgzMzMzMzMzMzMzMzMzLCJwbGF5ZnVsbmVzcyI6NS44MzMzMzMzMzMzMzMzMzN9LCJ2b2ljZUNvbmZpZyI6eyJiYXNlX2NsdXN0ZXIiOjIsInBpdGNoX3ZhcmlhbmNlIjowLjE3NDc3NSwic3BlZWQiOjEuMTE3MzMzMzMzMzMzMzMzMywic3lsbGFibGVfY291bnQiOjksInBhdXNlX2RlbnNpdHkiOjAuMjM2NjY2NjY2NjY2NjY2NjQsImF0dGFjayI6MC43MDYyNSwiZGVjYXkiOjAuNDExMjQ5OTk5OTk5OTk5OTUsImdsaXNzYW5kbyI6MC41MTU2MjUsInZvd2VsX2JpYXMiOiJtaXhlZCIsImJyZWF0aGluZXNzIjowLjM1MjI0OTk5OTk5OTk5OTk1fSwicGVyc29uYWxpdHlNZCI6ImFuZ2VsIGlzIGhlcmUuIHNoZSB3YXRjaGVzIG1vcmUgdGhhbiBzaGUgc3BlYWtzLiBzaGUgd2lsbCBrbm93IGlmIHlvdSBza2lwIGRpbm5lci4ifQ.",
+  "screenshots": 17
+}
