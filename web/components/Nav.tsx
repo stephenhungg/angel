@@ -99,29 +99,27 @@ export function Nav() {
       style={{ transition: "background-color 200ms linear" }}
     >
       <div
-        className="rounded-pill border border-white/50 bg-cloud/35 px-5 shadow-[0_8px_24px_-8px_rgba(199,78,122,0.25),inset_0_1px_0_rgba(255,255,255,0.6)] backdrop-blur-2xl tablet:px-7"
+        className="rounded-pill border border-white/50 bg-cloud/35 px-3 shadow-[0_8px_24px_-8px_rgba(199,78,122,0.25),inset_0_1px_0_rgba(255,255,255,0.6)] backdrop-blur-2xl tablet:px-5"
         style={{
-          // safari fallback for backdrop-filter
           WebkitBackdropFilter: "blur(24px) saturate(140%)",
           backdropFilter: "blur(24px) saturate(140%)",
         }}
       >
-        <nav className="flex items-center justify-between py-[18px] desktop:py-[26px]">
-          {/* kawaii sticker wordmark + bow flourish */}
+        <nav className="flex items-center justify-between py-2 tablet:py-2.5">
+          {/* kawaii sticker wordmark + bow flourish — slim variant */}
           <Link
             href="/"
             onClick={() => setOpen(false)}
-            className="group relative inline-flex min-h-11 items-center gap-2"
-           
+            className="group relative inline-flex items-center gap-1.5"
           >
             <Image
               src="/kawaii/wordmark-pink-nano-t.png"
               alt="angel"
               width={400}
               height={200}
-              className="h-12 w-auto select-none tablet:h-14 desktop:h-16"
+              className="h-8 w-auto select-none tablet:h-9 desktop:h-10"
               style={{
-                filter: "drop-shadow(0 4px 0 rgba(155, 58, 95, 0.25))",
+                filter: "drop-shadow(0 3px 0 rgba(155, 58, 95, 0.25))",
               }}
               priority
             />
@@ -131,7 +129,7 @@ export function Nav() {
               aria-hidden
               width={120}
               height={120}
-              className="h-7 w-auto -translate-y-1 select-none transition-transform duration-300 ease-out group-hover:rotate-12 group-hover:scale-110 tablet:h-9 desktop:h-10"
+              className="h-5 w-auto -translate-y-0.5 select-none transition-transform duration-300 ease-out group-hover:rotate-12 group-hover:scale-110 tablet:h-6 desktop:h-7"
             />
           </Link>
           <button
@@ -139,8 +137,7 @@ export function Nav() {
             aria-label={open ? "close menu" : "open menu"}
             aria-expanded={open}
             onClick={() => setOpen((v) => !v)}
-            className="inline-flex h-11 w-11 items-center justify-center text-ink-near transition-colors hover:text-sakura-600"
-           
+            className="inline-flex h-9 w-9 items-center justify-center text-ink-near transition-colors hover:text-sakura-600"
           >
             <DotIcon open={open} />
           </button>
