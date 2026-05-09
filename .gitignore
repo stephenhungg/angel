@@ -27,8 +27,8 @@ dist-electron/
 npm-debug.log*
 yarn-debug.log*
 
-# convex generated
-convex/_generated/
+# convex generated — committed so vercel can build without convex codegen
+# (regenerate with: cd convex && bunx convex codegen)
 
 # editor / ide
 .vscode/
