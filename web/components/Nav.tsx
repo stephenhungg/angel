@@ -100,11 +100,11 @@ export function Nav() {
     >
       <div className="w-full px-6 tablet:px-9">
         <nav className="flex items-center justify-between py-[18px] desktop:py-[26px]">
-          {/* kawaii sticker wordmark replaces "stpn." text */}
+          {/* kawaii sticker wordmark + bow flourish */}
           <Link
             href="/"
             onClick={() => setOpen(false)}
-            className="inline-flex min-h-11 items-center"
+            className="group relative inline-flex min-h-11 items-center gap-2"
             data-cursor-grow
           >
             <Image
@@ -117,6 +117,14 @@ export function Nav() {
                 filter: "drop-shadow(0 4px 0 rgba(155, 58, 95, 0.25))",
               }}
               priority
+            />
+            <Image
+              src="/kawaii/cute-bow-t.png"
+              alt=""
+              aria-hidden
+              width={120}
+              height={120}
+              className="h-7 w-auto -translate-y-1 select-none transition-transform duration-300 ease-out group-hover:rotate-12 group-hover:scale-110 tablet:h-9 desktop:h-10"
             />
           </Link>
           <button

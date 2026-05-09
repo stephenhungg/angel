@@ -1,66 +1,77 @@
+import Image from "next/image";
 import { Reveal } from "./Reveal";
-import { ImageCard } from "./ImageCard";
-import { StockScene } from "./StockScene";
+import { MaskedLine } from "./MaskedLine";
+import { TiltedCard } from "./TiltedCard";
+import { SparkleField } from "./SparkleField";
+import { CuteAccent } from "./CuteAccent";
 
-// section 04 — showcase. mirrors moment's `04 / Pexels showcase` 4-up image
-// grid with one highlighted card (moment uses 'Pexels 3 - highlight' framer
-// name). 4 ambient scenes, ImageCard rest scale 1.15 → hover scale 1.0
-// (camera-pulls-back hover). content swap: moment's photo gallery → angel's
-// 'her hours' — what she's been up to while you were away. ties to the
-// always-on agents track 30% bg-autonomy criterion.
+// section 04 — "her hours" — kawaii mascot variants showing what she did while
+// you were away. each card is a transparent sticker pose + a small activity
+// label. replaces the stock-photo placeholders entirely.
 
 const scenes = [
-  { title: "Wednesday morning", meta: "shipped 3 commits", seed: "showcase-wed" },
-  { title: "deep work", meta: "PR #42 · convex schema", seed: "showcase-deep" },
-  { title: "golden hour", meta: "highlight · she lingered", seed: "showcase-golden", highlight: true },
-  { title: "twilight", meta: "afk, reading", seed: "showcase-twilight" },
+  { title: "while you slept",  meta: "afk · 3:42 AM",        asset: "/kawaii/mascot-sleep-t.png" },
+  { title: "she texted you",   meta: "iMessage · 11:08 AM",  asset: "/kawaii/mascot-phone-t.png" },
+  { title: "shipped a PR",     meta: "main · #142",          asset: "/kawaii/mascot-wave-t.png" },
+  { title: "made you tea",     meta: "boba o'clock",         asset: "/kawaii/cute-boba-t.png" },
 ];
 
 export function Showcase() {
   return (
-    <section className="gutter relative pt-[160px] pb-[60px] tablet:pt-[200px]">
-      {/* matches moment h2 ground-truth: 64px / Manrope 600 / lineHeight 1.2 /
-          margin 0 / max-width 560px / color black */}
-      <Reveal>
-        <h2 className="m-0 max-w-[560px] font-sans text-[48px] font-semibold leading-[1.2] tracking-[-0.02em] text-ink-primary tablet:text-[56px] desktop:text-[64px]">
-          her hours — while you were away.
-        </h2>
-      </Reveal>
+    <section
+      className="relative overflow-hidden"
+      style={{
+        background:
+          "radial-gradient(ellipse at 70% 0%, #ffd9e6 0%, #fff5fa 55%, #ffffff 100%)",
+      }}
+    >
+      <SparkleField variant="ambient" density={28} />
+      <CuteAccent kind="moon"    size={140} rotate={-10} top="60px"    left="4%"  opacity={0.9} />
+      <CuteAccent kind="blossom" size={120} rotate={14}  bottom="14%"  right="4%" opacity={0.92} />
+      <CuteAccent kind="hearts"  size={100} rotate={-6}  top="42%"     right="6%" opacity={0.8} />
 
-      <div className="mt-16" />
+      <div className="gutter relative pt-[140px] pb-[120px] tablet:pt-[180px]">
+        <MaskedLine duration={1} ease="expo.out">
+          <h2 className="m-0 max-w-[820px] font-bagel text-[44px] font-normal leading-[1.05] tracking-[-0.01em] text-ink-near tablet:text-[64px] desktop:text-[80px]">
+            her hours, while you were away.
+          </h2>
+        </MaskedLine>
 
-      {/* 4-up grid w/ one highlighted (taller) card. on tablet+, the highlight
-          spans 2 rows for the cinematic moment-style emphasis. */}
-      <ul className="grid auto-rows-[280px] grid-cols-1 gap-4 tablet:grid-cols-2 tablet:gap-5 desktop:grid-cols-4 desktop:auto-rows-[360px] desktop:gap-6">
-        {scenes.map((s, i) => (
-          <Reveal
-            as="li"
-            key={s.title}
-            delay={i * 0.1}
-            className={s.highlight ? "tablet:row-span-2 desktop:row-span-1 desktop:col-span-2" : ""}
-          >
-            <ImageCard className="relative h-full w-full rounded-sm">
-              <StockScene seed={s.seed} w={800} h={600} className="absolute inset-0" />
-              <div
-                aria-hidden
-                className="absolute inset-0"
-                style={{
-                  background:
-                    "linear-gradient(180deg, rgba(6,6,6,0) 50%, rgba(6,6,6,0.55) 100%)",
-                }}
-              />
-              <div className="absolute bottom-4 left-4 right-4 flex items-end justify-between gap-3">
-                <h3 className="font-sans text-[24px] font-medium leading-tight tracking-[-0.01em] text-cloud tablet:text-[28px]">
-                  {s.title}
-                </h3>
-                <span className="font-mono text-[11px] text-cloud opacity-80">
-                  {s.meta}
-                </span>
-              </div>
-            </ImageCard>
-          </Reveal>
-        ))}
-      </ul>
+        <ul className="mt-16 grid grid-cols-1 gap-10 tablet:grid-cols-2 tablet:gap-12 desktop:grid-cols-4 desktop:gap-10">
+          {scenes.map((s, i) => (
+            <Reveal as="li" key={s.title} delay={i * 0.08}>
+              <article className="flex h-full flex-col items-start gap-5">
+                <div className="relative aspect-square w-full" data-cursor-grow>
+                  <TiltedCard
+                    rotateAmplitude={10}
+                    scaleOnHover={1.04}
+                    showTooltip
+                    captionText={s.title}
+                    className="h-full w-full"
+                  >
+                    <Image
+                      src={s.asset}
+                      alt={s.title}
+                      width={620}
+                      height={620}
+                      className="h-full w-full select-none object-contain"
+                      style={{ transform: "translateZ(0)" }}
+                    />
+                  </TiltedCard>
+                </div>
+                <div className="flex w-full flex-col gap-1 px-1">
+                  <h3 className="font-sans text-[20px] font-semibold tracking-[-0.01em] text-ink-near">
+                    {s.title}
+                  </h3>
+                  <span className="font-mono text-[12px] text-muted-secondary">
+                    {s.meta}
+                  </span>
+                </div>
+              </article>
+            </Reveal>
+          ))}
+        </ul>
+      </div>
     </section>
   );
 }
