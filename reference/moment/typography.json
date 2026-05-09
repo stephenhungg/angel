@@ -1,0 +1,206 @@
+{
+  "source": "https://moment.framer.photos via local mirror, computed-style probe @ 1440x900",
+  "extractedAt": "2026-05-09",
+  "fontFamilies": {
+    "primary": {
+      "family": "Manrope",
+      "stack": "Manrope, \"Manrope Placeholder\", sans-serif",
+      "weights": [400, 500, 600],
+      "fallback": "sans-serif",
+      "source": "framerusercontent.com (woff2 in /assets/) — variable / multi-weight",
+      "description": "Display + body typeface for the entire site. all visible copy is Manrope."
+    },
+    "monospace": {
+      "family": "Fragment Mono",
+      "weights": [400],
+      "fallback": "monospace",
+      "source": "fonts.gstatic.com (3 woff2 chunks for latin / latin-ext / cyrillic at /__mirror/https/fonts.gstatic.com/s/fragmentmono/v5/)",
+      "description": "Loaded but NOT used in any visible copy on the captured routes. defined as the framer `code` block default. include for parity, but the rebuild can omit unless you add code blocks.",
+      "uncertainty": "could be activated on a route we did not capture — the framer template ships with a code block style preset"
+    },
+    "fallbackInter": {
+      "family": "Inter",
+      "weights": [400, 700],
+      "italics": true,
+      "stack": "Inter, \"Inter Placeholder\", sans-serif",
+      "source": "framerusercontent.com",
+      "description": "Inter is loaded as a framer-system fallback (rich text / blockquote defaults) but no measured node renders in Inter — Manrope wins for every visible class."
+    }
+  },
+  "typeScales": {
+    "displayHero": {
+      "fontFamily": "Manrope",
+      "fontWeight": 500,
+      "fontSize": "160px",
+      "lineHeight": "160px",
+      "lineHeightUnitless": 1.0,
+      "letterSpacing": "-3.2px",
+      "letterSpacingEm": "-0.02em",
+      "textTransform": "none",
+      "usedFor": "wordmark hero `moment` on home & in footer band; appears at the bottom-of-page cinematic display",
+      "instances": 8,
+      "breakpoints": {
+        "desktop": { "fontSize": "160px" },
+        "tablet": { "fontSize": "160px (assumed — framer scales with content; not directly measured at tablet)" },
+        "mobile": { "fontSize": "scales down — could not measure, recommend 88-96px target" }
+      }
+    },
+    "displayLargeBold": {
+      "fontFamily": "Manrope",
+      "fontWeight": 600,
+      "fontSize": "64px",
+      "lineHeight": "76.8px",
+      "lineHeightUnitless": 1.2,
+      "letterSpacing": "-1.28px",
+      "letterSpacingEm": "-0.02em",
+      "textTransform": "none",
+      "usedFor": "primary section h1/h2: 'Moments I capture', 'Memories', 'Most viewed Pexels album', 'Studio journal', 'Let's have a chat', gallery index 'Memories'",
+      "instances": 4
+    },
+    "displayLargeMedium": {
+      "fontFamily": "Manrope",
+      "fontWeight": 500,
+      "fontSize": "64px",
+      "lineHeight": "89.6px",
+      "lineHeightUnitless": 1.4,
+      "letterSpacing": "-1.28px",
+      "letterSpacingEm": "-0.02em",
+      "textTransform": "none",
+      "usedFor": "journal article h1 (e.g. 'Photography for beginners') — slightly looser than the section heading variant",
+      "instances": 1
+    },
+    "displayMediumBold": {
+      "fontFamily": "Manrope",
+      "fontWeight": 600,
+      "fontSize": "45px",
+      "lineHeight": "63px",
+      "lineHeightUnitless": 1.4,
+      "letterSpacing": "normal",
+      "textTransform": "none",
+      "usedFor": "h3 — 'Awards', testimonial blockquote, journal article cards, intro paragraph on home ('This portfolio is a visual diary…')",
+      "instances": 8
+    },
+    "displayMediumMedium": {
+      "fontFamily": "Manrope",
+      "fontWeight": 500,
+      "fontSize": "45px",
+      "lineHeight": "45px",
+      "lineHeightUnitless": 1.0,
+      "letterSpacing": "normal",
+      "textTransform": "none",
+      "usedFor": "contact-cta email link 'kerrigan@hello.com' (h3) — display-tight version, single-line",
+      "instances": 7
+    },
+    "headingLarge": {
+      "fontFamily": "Manrope",
+      "fontWeight": 500,
+      "fontSize": "32px",
+      "lineHeight": "48px",
+      "lineHeightUnitless": 1.5,
+      "letterSpacing": "normal",
+      "textTransform": "none",
+      "usedFor": "h4 — gallery card titles ('Spring Bloom', 'Prague'), about-page kicker ('I turn everyday moments…'), contact-page email h4",
+      "instances": 23
+    },
+    "labelLargeBold": {
+      "fontFamily": "Manrope",
+      "fontWeight": 600,
+      "fontSize": "28px",
+      "lineHeight": "26px",
+      "lineHeightUnitless": 0.93,
+      "letterSpacing": "normal",
+      "textTransform": "none",
+      "usedFor": "nav 'menu' button (top-right), inline page-level toggles — visually a tight bold label",
+      "instances": 7
+    },
+    "bodyLargeMedium": {
+      "fontFamily": "Manrope",
+      "fontWeight": 500,
+      "fontSize": "20px",
+      "lineHeight": "30px",
+      "lineHeightUnitless": 1.5,
+      "letterSpacing": "normal",
+      "textTransform": "none",
+      "usedFor": "journal article body paragraphs ('Let's be honest — photography…')",
+      "instances": 8
+    },
+    "bodyDefaultBold": {
+      "fontFamily": "Manrope",
+      "fontWeight": 600,
+      "fontSize": "16px",
+      "lineHeight": "24px",
+      "lineHeightUnitless": 1.5,
+      "letterSpacing": "normal",
+      "textTransform": "none",
+      "usedFor": "card meta-bold ('Shot in', author byline lead), most prominent body class — 59 instances",
+      "instances": 59
+    },
+    "bodyDefaultMedium": {
+      "fontFamily": "Manrope",
+      "fontWeight": 500,
+      "fontSize": "16px",
+      "lineHeight": "24px",
+      "lineHeightUnitless": 1.5,
+      "letterSpacing": "normal",
+      "textTransform": "none",
+      "usedFor": "card meta-medium ('Oslo, Norway'), location/role values",
+      "instances": 26
+    },
+    "bodyDefaultRegular": {
+      "fontFamily": "Manrope",
+      "fontWeight": 400,
+      "fontSize": "16px",
+      "lineHeight": "16px",
+      "lineHeightUnitless": 1.0,
+      "letterSpacing": "normal",
+      "textTransform": "none",
+      "usedFor": "compact byline 'By Henry Kerrigan', tight inline labels — 54 instances",
+      "instances": 54
+    },
+    "labelTinyBold": {
+      "fontFamily": "Manrope",
+      "fontWeight": 600,
+      "fontSize": "14px",
+      "lineHeight": "24px",
+      "lineHeightUnitless": 1.71,
+      "letterSpacing": "normal",
+      "textTransform": "none",
+      "usedFor": "footer fine link 'Buy template'",
+      "instances": 7
+    },
+    "captionMicroBold": {
+      "fontFamily": "Manrope",
+      "fontWeight": 600,
+      "fontSize": "12px",
+      "lineHeight": "14px",
+      "lineHeightUnitless": 1.17,
+      "letterSpacing": "-0.64px",
+      "letterSpacingEm": "-0.053em",
+      "textTransform": "none",
+      "usedFor": "© copyright glyph in footer",
+      "instances": 5
+    },
+    "navMicro": {
+      "fontFamily": "sans-serif",
+      "fontWeight": 400,
+      "fontSize": "12px",
+      "lineHeight": "normal",
+      "lineHeightUnitless": null,
+      "letterSpacing": "normal",
+      "textTransform": "none",
+      "usedFor": "raw nav text containers — not a final visible style; the rendered 'menu' label inside reads at 28px/600. this row is the UA-default sans-serif on the nav wrapper element.",
+      "instances": 38,
+      "uncertainty": "this is a wrapper computed style; not authored by framer. ignore for type scale purposes."
+    }
+  },
+  "scaleNotes": [
+    "exactly 13 distinct authored type scales surface across the captured routes (the 14th, 'navMicro', is wrapper-level UA default and not real).",
+    "no `text-transform: uppercase` anywhere — uppercase strings are uppercase in source.",
+    "no italics in measured nodes (italic Inter faces are loaded but unused on these routes).",
+    "letter-spacing tightens proportionally with size: ~-0.02em on 64-160px display; normal on 12-45px text.",
+    "line-height pattern: 1.0 (160px hero, 45px h3-medium, tight 16px), 1.2 (64px section), 1.4-1.5 (32px h4, 20px body, 16px body), 1.71 (14px footer micro).",
+    "every heading is fontWeight 500 OR 600 — never 700+; framer template stays in Manrope's medium/semibold range.",
+    "Fragment Mono is loaded but not used. Inter is loaded as a framer fallback but not rendered."
+  ],
+  "notes": "responsive variants beyond desktop (1440) were not measured directly. framer media queries split at 940px and 1439px — expect mobile/tablet to scale displayHero (160px) and displayLargeBold (64px) down. recommended phase-3 targets if not re-measured: hero 160→112→88, h2 64→48→40, h3 45→36→32."
+}

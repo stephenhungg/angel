@@ -1,0 +1,181 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+  pink/white kawaii palette — angel's pivot from moment's monochrome cream.
+  brand color = sakura/hot pink. white surfaces. minimal cream/amber.
+*/
+
+:root {
+  --paper: #fffafc;
+  --cloud: #ffffff;
+  --soft: #fff0f5;
+  --hairline: #ffd6e3;
+  --mute-3: #d99fb5;
+  --mute-2: #b87592;
+  --mute-1: #7a3e58;
+  --ink-near: #1a0a12;
+  --ink: #0a0507;
+
+  /* sakura brand colors */
+  --sakura-100: #ffe5ee;
+  --sakura-200: #ffb7c5;
+  --sakura-300: #ff95b3;
+  --sakura-400: #ff6f9d;
+  --sakura-500: #ff4f8b;
+  --sakura-600: #e63a73;
+  --sakura-700: #c73e73;
+  --sakura-800: #9c2a55;
+  --sakura-900: #6e1a3a;
+}
+
+html,
+body {
+  background: var(--paper);
+  color: var(--ink-near);
+  font-family: var(--font-manrope), system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: var(--sakura-500);
+  color: var(--cloud);
+}
+
+/* page-edge gutter scaling — only 2 framer breakpoints (940, 1440) */
+.gutter {
+  padding-left: 16px;
+  padding-right: 16px;
+}
+
+@media (min-width: 940px) {
+  .gutter {
+    padding-left: 40px;
+    padding-right: 40px;
+  }
+}
+
+@media (min-width: 1440px) {
+  .gutter {
+    padding-left: 100px;
+    padding-right: 100px;
+  }
+}
+
+.hairline {
+  border-color: var(--hairline);
+}
+
+.pre-reveal {
+  opacity: 0.001;
+}
+
+.decor-stroke {
+  stroke: var(--sakura-500);
+  stroke-width: 1.25;
+  fill: none;
+}
+
+/* ----------------------------------------------------------------- */
+/* kawaii utilities — sparkles, glows, twinkle keyframes               */
+/* ----------------------------------------------------------------- */
+
+@keyframes twinkle {
+  0%,
+  100% {
+    transform: scale(1) rotate(0deg);
+    opacity: 0.9;
+  }
+  50% {
+    transform: scale(0.4) rotate(180deg);
+    opacity: 0.2;
+  }
+}
+
+@keyframes float-up {
+  0% {
+    transform: translateY(0) scale(0.5);
+    opacity: 0;
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-120vh) scale(1.1);
+    opacity: 0;
+  }
+}
+
+@keyframes wobble {
+  0%,
+  100% {
+    transform: rotate(-2deg);
+  }
+  50% {
+    transform: rotate(2deg);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.kawaii-bg {
+  background: radial-gradient(ellipse at top, #ffe5ee 0%, var(--paper) 50%, var(--cloud) 100%);
+}
+
+.kawaii-bg-deep {
+  background: linear-gradient(135deg, var(--sakura-100) 0%, var(--paper) 35%, #fff0f7 100%);
+}
+
+.kawaii-card-shadow {
+  box-shadow:
+    0 4px 0 var(--sakura-200),
+    0 14px 40px -8px rgba(255, 79, 139, 0.25),
+    0 30px 80px -16px rgba(255, 79, 139, 0.15);
+}
+
+.kawaii-glow {
+  box-shadow:
+    0 0 0 2px var(--sakura-200),
+    0 0 24px 4px rgba(255, 79, 139, 0.4);
+}
+
+.kawaii-glow-soft {
+  box-shadow: 0 0 32px 8px rgba(255, 183, 197, 0.45);
+}
+
+.kawaii-text-glow {
+  text-shadow: 0 0 16px rgba(255, 79, 139, 0.4);
+}
+
+.kawaii-shimmer {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 79, 139, 0.15) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2.5s ease-in-out infinite;
+}
+
+.sparkle {
+  position: absolute;
+  pointer-events: none;
+  animation: twinkle 1.6s ease-in-out infinite;
+}
+
+.font-cute {
+  font-family: var(--font-instrument-serif), Georgia, serif;
+  font-style: italic;
+  font-weight: 400;
+}

@@ -1,0 +1,189 @@
+/**
+ * convex schema — angel realtime spine.
+ *
+ * setup note (when convex is wired):
+ *   pnpm dlx convex dev   from this workspace
+ *   sets CONVEX_DEPLOYMENT + NEXT_PUBLIC_CONVEX_URL into ../web/.env.local
+ *
+ * tables in this file are the source of truth. docs/CONVEX_SCHEMA.md is the
+ * narrative companion. when these drift, this file wins.
+ *
+ * the observability tables (swipeEvents, traitVectorTrace,
+ * personalitySynthesisLog, orchestratorTurns) power the /admin dashboard at
+ * /admin/space, /admin/traces, /admin/synthesis. they are append-only logs.
+ */
+
+import { defineSchema, defineTable } from 'convex/server';
+import { v } from 'convex/values';
+
+export default defineSchema({
+  // ──────────────────────────────────────────────────────────────────────────
+  // canonical tables (mirrors docs/CONVEX_SCHEMA.md)
+  // ──────────────────────────────────────────────────────────────────────────
+
+  users: defineTable({
+    authId: v.string(),
+    email: v.string(),
+    personaVector: v.array(v.float64()),
+    archetypeHistory: v.array(
+      v.object({
+        round: v.number(),
+        archetypeId: v.string(),
+        timestamp: v.number(),
+      }),
+    ),
+    traits: v.object({
+      aesthetic: v.string(),
+      disposition: v.string(),
+      style: v.string(),
+      voice_cluster: v.number(),
+    }),
+    createdAt: v.number(),
+    lastSeenAt: v.number(),
+  }).index('by_authId', ['authId']),
+
+  agentState: defineTable({
+    userId: v.id('users'),
+    emotion: v.string(),
+    location: v.string(),
+    faceExpression: v.optional(v.string()),
+    currentTaskId: v.optional(v.id('tasks')),
+    isWalking: v.boolean(),
+    walkTarget: v.optional(v.string()),
+    updatedAt: v.number(),
+  }).index('by_userId', ['userId']),
+
+  tasks: defineTable({
+    userId: v.id('users'),
+    intent: v.string(),
+    translatedPrompt: v.optional(v.string()),
+    type: v.string(),
+    status: v.string(),
+    startedAt: v.number(),
+    completedAt: v.optional(v.number()),
+    output: v.optional(
+      v.object({
+        summary: v.string(),
+        evidence: v.array(v.string()),
+        artifactUrl: v.optional(v.string()),
+      }),
+    ),
+    error: v.optional(v.string()),
+  }).index('by_userId_status', ['userId', 'status']),
+
+  evolutionLog: defineTable({
+    userId: v.id('users'),
+    eventType: v.string(),
+    vectorDelta: v.optional(v.array(v.float64())),
+    signal: v.string(),
+    timestamp: v.number(),
+  }).index('by_userId_time', ['userId', 'timestamp']),
+
+  consolidations: defineTable({
+    userId: v.id('users'),
+    date: v.string(),
+    summary: v.string(),
+    newEntities: v.array(v.string()),
+    newRelationships: v.array(
+      v.object({ from: v.string(), to: v.string(), kind: v.string() }),
+    ),
+    reflectiveSummaryDiff: v.optional(v.string()),
+    createdAt: v.number(),
+  }),
+
+  turns: defineTable({
+    userId: v.id('users'),
+    role: v.string(),
+    text: v.string(),
+    emotion: v.optional(v.string()),
+    toolCalls: v.optional(
+      v.array(
+        v.object({
+          tool: v.string(),
+          args: v.any(),
+          result: v.optional(v.any()),
+        }),
+      ),
+    ),
+    timestamp: v.number(),
+  }).index('by_userId_time', ['userId', 'timestamp']),
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // observability tables — append-only, /admin dashboard subscribes to these
+  // ──────────────────────────────────────────────────────────────────────────
+
+  /**
+   * one row per swipe — the unit of evidence for the trait-space viewer.
+   * userId is v.string() (not v.id) to allow anonymous demo-day visitors who
+   * never finish onboarding.
+   */
+  swipeEvents: defineTable({
+    userId: v.string(),
+    round: v.number(),
+    cardId: v.string(),
+    decision: v.union(v.literal('yes'), v.literal('no')),
+    currentCentroid: v.array(v.number()), // 5-dim trait space
+    timestamp: v.number(),
+  })
+    .index('by_userId_time', ['userId', 'timestamp'])
+    .index('by_time', ['timestamp']),
+
+  /**
+   * per-round summary — vector evolution sparkline source. one row per
+   * (userId, round). distancesToMacros lets the trace inspector show
+   * "how close this user got to each centroid over time."
+   */
+  traitVectorTrace: defineTable({
+    userId: v.string(),
+    round: v.number(),
+    centroid: v.array(v.number()),
+    distancesToMacros: v.object({
+      cute: v.number(),
+      pretty: v.number(),
+      hot: v.number(),
+    }),
+    signalStrength: v.number(),
+  })
+    .index('by_userId_round', ['userId', 'round'])
+    .index('by_userId', ['userId']),
+
+  /**
+   * every personality.md generation. inputSignals is structured but free-form
+   * (vector + dialogue samples + macro + voice cluster). the rerun flow on
+   * /admin/synthesis re-feeds inputSignals + metaPromptVersion to verify
+   * stability.
+   */
+  personalitySynthesisLog: defineTable({
+    userId: v.string(),
+    inputSignals: v.any(),
+    metaPromptVersion: v.string(),
+    metaPromptText: v.optional(v.string()),
+    outputMarkdown: v.string(),
+    model: v.string(),
+    temperature: v.optional(v.number()),
+    latencyMs: v.number(),
+    timestamp: v.number(),
+  })
+    .index('by_userId_time', ['userId', 'timestamp'])
+    .index('by_time', ['timestamp'])
+    .index('by_promptVersion', ['metaPromptVersion']),
+
+  /**
+   * every orchestrator turn — claude sonnet 4.6 system prompt + user input +
+   * tool calls + output. the systemPromptHash lets us detect when prompts
+   * mutate; full text is kept for reconstruction.
+   */
+  orchestratorTurns: defineTable({
+    userId: v.string(),
+    turnId: v.string(),
+    systemPromptHash: v.string(),
+    systemPromptFull: v.string(),
+    userInput: v.string(),
+    output: v.string(),
+    toolsCalled: v.array(v.any()),
+    latencyMs: v.number(),
+    timestamp: v.number(),
+  })
+    .index('by_userId_time', ['userId', 'timestamp'])
+    .index('by_turnId', ['turnId']),
+});

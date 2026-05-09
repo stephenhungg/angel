@@ -1,0 +1,14 @@
+node_modules
+.next
+out
+.env*.local
+*.log
+.DS_Store
+next-env.d.ts
+.vercel
+
+# scrape outputs (regenerate via `bun run scripts/scrape-vroid.ts`)
+data/library_thumbnails.json
+data/scrape-report.json
+data/.scrape-checkpoint.json
+public/library/*.jpg
