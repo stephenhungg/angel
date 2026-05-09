@@ -165,91 +165,110 @@ On launch, electron:
 
 ---
 
-## 6. FILE STRUCTURE
+## 6. FILE STRUCTURE — actual monorepo (already scaffolded)
 
 ```
-angel-app/
-├── electron/
-│   ├── main.ts                  # window creation, ipc, agent spawn
-│   ├── preload.ts               # contextBridge api
-│   ├── agent/
-│   │   ├── runner.ts            # codex/claude subprocess loop
-│   │   ├── prompt.ts            # system prompt builder (uses persona axes)
-│   │   ├── tools.ts             # SCENE_TOOLS + computer_use tools
-│   │   └── parser.ts            # extracts <action> tags from llm output
-│   ├── tools/
-│   │   ├── computer-use.ts      # claude computer-use api loop
-│   │   ├── playwright.ts        # browser automation
-│   │   ├── shell.ts             # child_process exec
-│   │   └── fs.ts                # file ops
-│   └── persona/
-│       └── claim.ts             # token verify + convex fetch
-├── src/
-│   ├── App.tsx
-│   ├── main.tsx                 # react entry
-│   ├── components/
-│   │   ├── Scene.tsx            # <Canvas> + lights + camera
-│   │   ├── Room.tsx             # glb loader, exposes anchors
-│   │   ├── Avatar.tsx           # vrm + animation mixer
-│   │   ├── ActionRunner.tsx     # consumes ipc scene actions
-│   │   ├── ChatOverlay.tsx      # speech bubble + input
-│   │   ├── StateBars.tsx        # mood/energy/trust
-│   │   └── FirstPersonControls.tsx
-│   ├── lib/
-│   │   ├── ipc.ts               # typed wrapper around window.angel
-│   │   ├── vrm-load.ts          # vrm loader helper
-│   │   ├── retarget.ts          # mixamo bone → vrm humanoid bone remap
-│   │   ├── expressions.ts       # blink, lipsync, look-at
-│   │   └── anchors.ts           # anchor name → world position lookup
-│   └── stores/
-│       └── angel.ts        # zustand: persona, state, action queue, chat history
-├── public/
-│   ├── room.glb
-│   ├── vrm/                     # avatar files (one per archetype)
-│   └── animations/              # mixamo .fbx clips
-├── .env.local                   # CONVEX_URL, ANTHROPIC_API_KEY, JWT_SECRET, etc.
-├── package.json
-├── vite.config.ts
-└── electron-builder.yml
+angel/                                 # repo root
+├── package.json                       # bun workspaces root
+├── .env.example                       # all required env vars listed
+├── README.md                          # github landing
+│
+├── web/                               # next.js — landing + swipe (stephen)
+│   ├── src/                           #   app router pages, components
+│   ├── public/archetypes/             #   archetype reference images
+│   └── package.json
+│
+├── desktop/                           # electron app (your lane is mostly here)
+│   ├── electron/                      # main process (stephen)
+│   │   ├── main.ts                    #   window creation, ipc, agent spawn
+│   │   ├── preload.ts                 #   contextBridge → window.angel.*
+│   │   ├── agent/
+│   │   │   ├── runner.ts              #   sonnet 4.6 orchestrator loop
+│   │   │   ├── prompt.ts              #   system prompt builder
+│   │   │   ├── tools.ts               #   tool defs (typed via @angel/shared)
+│   │   │   └── parser.ts              #   structured output extraction
+│   │   ├── tools/
+│   │   │   ├── codex.ts               #   spawn codex exec, stream stdout
+│   │   │   ├── playwright.ts          #   browser automation
+│   │   │   ├── verifier.ts            #   reality-checks tool outputs
+│   │   │   ├── shell.ts               #   child_process exec
+│   │   │   └── fs.ts                  #   file ops
+│   │   └── persona/
+│   │       └── claim.ts               #   token verify + convex fetch
+│   │
+│   ├── src/                           # renderer (YOUR PRIMARY LANE)
+│   │   ├── App.tsx
+│   │   ├── main.tsx                   #   react entry
+│   │   ├── components/
+│   │   │   ├── Scene.tsx              #   <Canvas> + lights + camera
+│   │   │   ├── Room.tsx               #   glb loader, exposes anchors
+│   │   │   ├── Avatar.tsx             #   vrm + animation mixer
+│   │   │   ├── ActionRunner.tsx       #   consumes ipc scene actions
+│   │   │   ├── ChatOverlay.tsx        #   speech bubble + input
+│   │   │   └── StateBars.tsx          #   mood/energy/trust
+│   │   ├── lib/
+│   │   │   ├── ipc.ts                 #   typed wrapper around window.angel
+│   │   │   ├── vrm-load.ts            #   vrm loader helper
+│   │   │   ├── retarget.ts            #   mixamo bone → vrm humanoid bone
+│   │   │   ├── expressions.ts         #   blink, lipsync, look-at
+│   │   │   └── anchors.ts             #   anchor name → world position
+│   │   └── stores/
+│   │       └── angel.ts               #   zustand: persona, queue, chat
+│   │
+│   ├── public/
+│   │   ├── room.glb                   #   sketchfab room (you place this)
+│   │   ├── vrm/                       #   vroid avatars (one per archetype)
+│   │   └── animations/                #   mixamo .fbx clips
+│   │
+│   └── package.json
+│
+├── convex/                            # realtime spine (stephen)
+│   ├── schema.ts                      #   tables — see CONVEX_SCHEMA.md
+│   ├── users.ts agentState.ts tasks.ts turns.ts evolution.ts memory.ts
+│   ├── crons.ts                       #   scheduled bg jobs (always-on track!)
+│   └── package.json
+│
+├── shared/                            # ⚠️ THE CONTRACT (both, coordinate first)
+│   ├── src/
+│   │   ├── scene.ts                   #   SceneAction, AnchorId, Emotion, etc.
+│   │   ├── persona.ts                 #   PersonaTraits, archetype enums
+│   │   ├── claim.ts                   #   ClaimTokenPayload (jwt shape)
+│   │   ├── agent.ts                   #   AgentState, ToolCall, MemoryEntry
+│   │   └── index.ts
+│   ├── tsconfig.json
+│   └── package.json
+│
+└── docs/                              # all design + planning docs
+    ├── HACKATHON.md ARCHITECTURE.md DEMO.md BUILD_PLAN.md ...
+    └── (this file)
+```
+
+**important:** import shared types in your files as `@angel/shared`:
+```ts
+import type { SceneAction, AnchorId, Emotion } from '@angel/shared';
 ```
 
 ---
 
-## 7. INSTALL LIST
+## 7. INSTALL — already done by stephen, you just clone
 
-### scaffold
 ```bash
-bun create electron-vite angel-app --template react-ts
-cd angel-app
-bun install
+git clone https://github.com/stephenhungg/angel.git
+cd angel
+bun install                    # installs all workspaces
+cp .env.example .env.local     # fill JWT_SECRET (ask stephen) + ANTHROPIC_API_KEY etc.
+bun run dev:desktop            # spin up your lane (electron + vite hot reload)
 ```
 
-### 3d
-```bash
-bun add three @react-three/fiber @react-three/drei
-bun add @pixiv/three-vrm @pixiv/three-vrm-animation
-bun add -D @types/three
-```
+deps already declared in `desktop/package.json`:
+- 3d: `three @react-three/fiber @react-three/drei @pixiv/three-vrm @pixiv/three-vrm-animation`
+- state: `zustand`
+- realtime: `convex`
+- agent: `@anthropic-ai/sdk openai playwright`
+- auth: `jsonwebtoken`
+- electron toolchain: `electron electron-builder electron-vite vite`
 
-### state + ui
-```bash
-bun add zustand framer-motion
-bun add tailwindcss postcss autoprefixer
-bunx tailwindcss init -p
-```
-
-### realtime backend (talks to stephen's convex)
-```bash
-bun add convex
-```
-
-### agent + computer use
-```bash
-bun add @anthropic-ai/sdk openai
-bun add playwright
-bunx playwright install chromium
-bun add @nut-tree-fork/nut-js   # mouse/keyboard for non-browser apps (optional)
-```
+run `bun install` and they're all there. don't re-add deps unless you need a new one.
 
 ### auth
 ```bash

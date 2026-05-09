@@ -26,13 +26,28 @@ judging weights: bg execution 30%, statefulness 25%, agentic depth 25%, demo 10%
 
 if anything in the spike phase fails by 11:15am, fall back. don't sink the demo trying to debug rigging at 3pm.
 
+## monorepo layout (already scaffolded — see /README.md)
+
+```
+angel/
+├── web/              [stephen]   next.js — landing + swipe → vercel = submission url
+├── desktop/
+│   ├── electron/     [stephen]   main process: orchestrator, codex, verifier, ipc
+│   └── src/          [matthew]   renderer: r3f scene, vrm, action runner, hud
+├── convex/           [stephen]   schema, mutations, scheduled bg jobs
+├── shared/           [both]      typescript contract — coordinate before editing
+└── docs/             — all design docs
+```
+
+shared types live in `shared/src/{scene,persona,claim,agent}.ts`. import as `@angel/shared`. before editing shared/, ping the other dev — see [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## phase 1 — spike (9:15 am – 11:15 am, 2 hr)
 
 validate the three highest-risk unknowns *before* committing to anything:
 
-1. **vrm in r3f walking between waypoints** — load vroid avatar, swap mixamo idle/walk anim, walk to a target. if not green by 1pm, switch to 2d portrait mode.
-2. **codex headless stdout stream** — `codex exec` with prompt → capture stdout → stream over local ws. confirm reliable on this machine today.
-3. **html-on-plane in r3f for desk monitor** — drei `<Html>` portal showing live text. validate it renders at proper scale + readability.
+1. **vrm in r3f walking between waypoints** *(in `desktop/`)* — load vroid avatar, swap mixamo idle/walk anim, walk to a target. if not green by 11:15am, switch to 2d portrait mode.
+2. **codex headless stdout stream** *(in `desktop/electron/tools/`)* — `codex exec` with prompt → capture stdout → stream over local ws. confirm reliable on this machine today.
+3. **html-on-plane in r3f for desk monitor** *(in `desktop/src/components/`)* — drei `<Html>` portal showing live text. validate it renders at proper scale + readability.
 
 **deliverable:** three working spike demos. no styling, ugly, but functional.
 
@@ -40,46 +55,54 @@ validate the three highest-risk unknowns *before* committing to anything:
 
 eat lunch at desk 12:30-1pm. don't lose 30min walking to a real lunch.
 
-split into 4 lanes:
+four lanes mapped to monorepo dirs:
 
-### lane A — web onboarding (codex agent or stephen)
-- next.js app on vercel — **deployed early, this is the submission link**
-- swipe ui (3 rounds × 4 archetypes)
+### lane A — `web/` (stephen)
+**goal: deployable url EARLY — this is the submission safety net**
+- next.js app scaffold + tailwind
+- landing page (chunky cartoon font, miside-coded)
+- swipe ui (3 rounds × 4 archetypes — see `docs/PERSONA.md`)
 - archetype cards (pre-made imgs + descriptions)
-- clip embedding per archetype, weighted centroid on swipe history
+- clip embedding per archetype (openai api), weighted centroid on swipe history
 - pca on accumulated centroids → 768d persona vector
 - voice cluster assignment (1 of 6 banks)
 - write to convex.users on completion
-- "download angel.app" cta → triggers electron deep link via `angel://claim?token=...`
+- generate JWT claim token (uses `shared/src/claim.ts`)
+- "download angel.app" cta → triggers `angel://claim?token=...` deep link
+- **deploy to vercel ASAP** — even with placeholder UI, get a live url banked
 
-### lane B — electron + 3d room (matthew)
-- electron + vite + react + r3f scaffold
-- load sketchfab bedroom + vroid avatar
-- waypoints: desk, couch, window, door (named transforms in scene)
-- `walkTo(waypoint)` function — lerp position + play walk anim
-- desk monitor mesh — `<Html>` portal
-- in-world browser plane — `<Html>` w/ iframe
-- subscribe to convex.emotion / location / task
-- subtitle hud (chunky font, fade in/out)
-- animalese player (web audio, sample bank per persona)
-- text input + push-to-talk mic toggle
+### lane B — `desktop/src/` (matthew)
+- electron + vite + react + r3f scaffold (verify electron-vite hot reload)
+- `<Scene>` w/ canvas, lights, camera (drei `<Environment preset="apartment" />`)
+- `<Room>` — load sketchfab bedroom glb, find named anchor empties (see `docs/MATTHEW_CONTEXT.md` §3.2)
+- `<Avatar>` — vrm via @pixiv/three-vrm + animation mixer (see §3.3)
+- mixamo retarget helper in `src/lib/retarget.ts`
+- `<ActionRunner>` — consumes ipc scene actions (uses `shared/src/scene.ts` types)
+- `<ChatOverlay>` — speech bubble + chunky subtitle hud + animalese player
+- `<StateBars>` — mood/energy/trust hud (subscribes to convex.agentState)
+- zustand store in `src/stores/angel.ts` (persona, queue, chat history)
+- ipc wrapper in `src/lib/ipc.ts` (typed `window.angel.*`)
 
-### lane C — convex + nia + tools (codex agent)
-- convex schema (see CONVEX_SCHEMA.md)
-- mutations: setEmotion, setLocation, setTask, logEvolution
-- queries: subscribe to user state
-- nia integration: episodic write, semantic search
-- tool router (orchestrator → handlers)
-- seed fake history in nia (5-10 entries)
-- **bg execution stub:** scheduled job that writes "she did stuff while you were gone" event every N min — for always-on track criterion
+### lane C — `convex/` (codex agent / stephen)
+- schema in `convex/schema.ts` (see `docs/CONVEX_SCHEMA.md`)
+- mutations: setEmotion, setLocation, setTask, logEvolution, appendTurn, saveOnboarding
+- queries: getAgentState, getCurrentTask, recentTurns, getUser
+- convex auth (oauth or magic link)
+- nia client wrapper in `convex/memory.ts` (`AngelMemory` interface)
+- seed fake history (8-10 entries — see `docs/PERSONA.md`)
+- **bg crons** in `convex/crons.ts` — checkUserRepos, prepareGreeting (the always-on track requirement)
 
-### lane D — orchestrator + executors (codex agent or stephen)
-- main process orchestrator: claude sonnet 4.6 client w/ tool defs
-- system prompt template loading persona vector → traits
-- task translator (haiku 4.5)
-- codex spawner + stdout ws bridge to renderer
-- verifier: scripted checks + haiku reality-check
-- stt: deepgram client (input only) — *can cut for v1*
+### lane D — `desktop/electron/` (codex agent / stephen)
+- `main.ts`: BrowserWindow + ipc + agent spawn + protocol handler `angel://`
+- `preload.ts`: contextBridge `window.angel.*` api
+- `agent/runner.ts`: orchestrator (sonnet 4.6) — system prompt = soul_anchor + persona + reflective_summary + nia recent
+- `agent/prompt.ts`: template loader (loads `~/.angel/soul_anchor.md`, etc.)
+- `agent/tools.ts`: tool defs (uses `shared/src/agent.ts` types)
+- `agent/parser.ts`: structured output extraction
+- `tools/codex.ts`: spawn `codex exec` headless, stream stdout via ws
+- `tools/playwright.ts`: browser actions
+- `tools/verifier.ts`: scripted checks + haiku reality-check
+- `persona/claim.ts`: JWT parse + verify + convex fetch + cache to `app.getPath('userData')/persona.json`
 
 ## phase 3 — integration + submission prep (3:30 pm – 5:00 pm, 1.5 hr)
 

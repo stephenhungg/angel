@@ -9,70 +9,91 @@
 - **judging:** 6:10 pm, 3 min in-person slot per team
 - **team:** stephen + matthew
 
+## scaffold (DONE ✓)
+
+- [x] github repo at https://github.com/stephenhungg/angel (private, matthew invited as collaborator)
+- [x] monorepo: `web/` `desktop/` `convex/` `shared/` `docs/`
+- [x] bun workspaces config in root `package.json`
+- [x] `.env.example` with all required secrets
+- [x] `shared/src/{scene,persona,claim,agent}.ts` types — the contract, import as `@angel/shared`
+- [x] CONTRIBUTING.md with ownership map + trunk-based workflow
+- [x] per-workspace READMEs
+
 ## phase 1: spike (9:15 am – 11:15 am)
 
-- [ ] init monorepo: `angel/web` (next.js) + `angel/desktop` (electron + vite + r3f)
-- [ ] **spike A:** vrm in r3f walking between waypoints
-  - [ ] load vroid avatar (vrm)
-  - [ ] load mixamo idle + walk anim, retarget to vrm
+- [ ] both: clone + `bun install` at root
+- [ ] both: copy `.env.example` → `.env.local`, share JWT_SECRET in discord
+- [ ] **spike A:** vrm walking — `desktop/src/components/Avatar.tsx` + `desktop/src/lib/retarget.ts`
+  - [ ] vroid avatar in `desktop/public/vrm/test.vrm`
+  - [ ] mixamo idle + walk fbx in `desktop/public/animations/`
+  - [ ] retarget mixamo → vrm humanoid bones
   - [ ] `walkTo(position)` lerps + plays anim
-  - [ ] arrived event fires
-- [ ] **spike B:** codex headless stdout stream
-  - [ ] `codex exec` invocation from node main process
+  - [ ] arrived event fires (typed via `SceneActionComplete` from `@angel/shared`)
+- [ ] **spike B:** codex stream — `desktop/electron/tools/codex.ts`
+  - [ ] `codex exec` from node main process
   - [ ] capture stdout
-  - [ ] stream over local websocket
+  - [ ] stream over ipc/ws to renderer
   - [ ] renderer receives + displays
-- [ ] **spike C:** html-on-plane in r3f for desk monitor
-  - [ ] drei `<Html>` portal
+- [ ] **spike C:** html-on-plane — `desktop/src/components/Scene.tsx`
+  - [ ] drei `<Html>` portal w/ `transform` + `distanceFactor`
   - [ ] readable text from typical camera angle
-  - [ ] update content live
-- [ ] **commit decision at 11:15 am:** all three green → continue. any red → activate kill-switch.
+  - [ ] live content update via zustand
+- [ ] **commit decision at 11:15 am:** all three green → continue. any red → activate kill-switch in BUILD_PLAN.md.
 
 ## phase 2: parallel build (11:15 am – 3:30 pm — lunch at desk 12:30-1pm)
 
-### lane A — web onboarding (codex agent or stephen)
-- [ ] next.js app scaffold on vercel
+### lane A — `web/` (stephen) — DEPLOYABLE URL EARLY
+- [ ] next.js 15 app router + tailwind in `web/src/app/`
 - [ ] landing page (chunky cartoon font, miside-coded)
-- [ ] swipe component (3 rounds × 4 cards each)
-- [ ] archetype card data (4 archetypes per round, see PERSONA.md)
-- [ ] clip embeddings via openai api
+- [ ] swipe component (3 rounds × 4 cards each — see `PERSONA.md`)
+- [ ] archetype card data + reference images in `web/public/archetypes/`
+- [ ] clip embeddings via openai api (centralized in `web/src/lib/embeddings.ts`)
 - [ ] weighted centroid + pca → 768d vector
 - [ ] voice cluster assignment (1 of 6)
-- [ ] write to convex.users
-- [ ] "download angel.app" cta → triggers electron launch
+- [ ] write to convex.users via `saveOnboarding` mutation
+- [ ] generate JWT claim token (`web/src/lib/claim.ts`, uses `@angel/shared` types)
+- [ ] "download angel" cta → `angel://claim?token=...` deep link
+- [ ] **`vercel --prod` deploy by 12:30pm** — banked submission url
 
-### lane B — electron + 3d room (matthew)
-- [ ] electron + vite + react scaffold
-- [ ] r3f scene
-- [ ] load sketchfab bedroom asset
-- [ ] load vroid avatar (your chosen demo persona)
-- [ ] waypoints: desk, couch, window, door (named scene transforms)
-- [ ] `walkTo(waypoint)` w/ anim
-- [ ] desk monitor mesh w/ html portal
-- [ ] in-world browser plane w/ iframe
-- [ ] convex client subscriptions
+### lane B — `desktop/src/` (matthew) — RENDERER
+- [ ] electron-vite scaffold
+- [ ] `Scene.tsx` — canvas, lights, camera, `<Environment preset="apartment" />`
+- [ ] `Room.tsx` — useGLTF for `desktop/public/room.glb`, expose anchors
+- [ ] `Avatar.tsx` — vrm load + animation mixer
+- [ ] `ActionRunner.tsx` — consumes ipc scene actions (typed via `@angel/shared`)
+- [ ] `ChatOverlay.tsx` — speech bubble, input, animalese player
+- [ ] `StateBars.tsx` — convex subscription, mood/energy/trust
+- [ ] `stores/angel.ts` — zustand store
+- [ ] `lib/{ipc,vrm-load,retarget,expressions,anchors}.ts`
 - [ ] subtitle hud (chunky cartoon font, fade in/out)
-- [ ] animalese player (web audio, sample bank)
-- [ ] text input + push-to-talk mic toggle
+- [ ] animalese player (web audio, sample bank by `traits.voice_cluster`)
+- [ ] text input + (optional) push-to-talk mic
 
-### lane C — convex + nia + state (codex agent)
-- [ ] convex schema (see CONVEX_SCHEMA.md)
-- [ ] mutations: setEmotion, setLocation, setTask, logEvolution, appendTurn
-- [ ] queries: getAgentState, getCurrentTask, recentTurns
-- [ ] convex auth (oauth or magic link)
-- [ ] nia client w/ AngelMemory interface
-- [ ] seed fake history (8-10 entries, see PERSONA.md)
+### lane C — `convex/` (codex agent / stephen)
+- [ ] `convex/schema.ts` (see `CONVEX_SCHEMA.md`)
+- [ ] `convex/users.ts` — saveOnboarding, getUser
+- [ ] `convex/agentState.ts` — setEmotion, setLocation, setWalkingState
+- [ ] `convex/tasks.ts` — createTask, updateTaskStatus
+- [ ] `convex/turns.ts` — appendTurn, recentTurns
+- [ ] `convex/evolution.ts` — logEvolution
+- [ ] `convex/memory.ts` — `AngelMemory` interface w/ nia backend
+- [ ] **`convex/crons.ts` — bg jobs (always-on track requirement, 30%!)**
+- [ ] convex auth
+- [ ] seed fake history (8-10 entries, see `PERSONA.md`)
 
-### lane D — orchestrator + executors (codex agent or stephen)
-- [ ] main process orchestrator: claude sonnet 4.6 client
-- [ ] system prompt template (loads soul_anchor.md + persona traits + reflective_summary.md + recent memory)
-- [ ] tool definitions (see TOOLS.md)
-- [ ] task translator: claude haiku 4.5 (intent → codex prompt)
-- [ ] codex spawner + ws bridge
-- [ ] verifier: scripted checks + haiku reality-check
-- [ ] stt: deepgram client
-- [ ] ipc handlers (renderer → orchestrator)
-- [ ] tool result → renderer (walkTo, monitor stream, browser open)
+### lane D — `desktop/electron/` (codex agent / stephen) — MAIN PROCESS
+- [ ] `main.ts` — BrowserWindow + ipc + protocol handler `angel://`
+- [ ] `preload.ts` — contextBridge `window.angel.*`
+- [ ] `persona/claim.ts` — JWT verify + convex fetch + cache
+- [ ] `agent/runner.ts` — sonnet 4.6 orchestrator loop
+- [ ] `agent/prompt.ts` — template loader (soul_anchor + persona + reflective + nia recent)
+- [ ] `agent/tools.ts` — tool defs (typed via `@angel/shared`)
+- [ ] `agent/parser.ts` — structured output parser
+- [ ] `tools/codex.ts` — spawn `codex exec` headless, stream
+- [ ] `tools/playwright.ts` — browser automation
+- [ ] `tools/verifier.ts` — scripted checks + haiku reality-check
+- [ ] `~/.angel/` bootstrap (skills/, soul_anchor.md, reflective_summary.md)
+- [ ] (optional) deepgram stt — *cuttable*
 
 ## phase 3: integration + submission prep (3:30 pm – 5:00 pm)
 
