@@ -2,6 +2,8 @@ import { useEffect, useRef } from 'react';
 import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 import { autoDiscoverFromRoom, resetInteractables, loadOverridesFromLocalStorage } from '../lib/interactables';
+import { getColliders, summarizeLayers } from '../lib/colliders';
+import { bakeOccupancyGrid, setActiveGrid } from '../lib/pathfind';
 
 type RoomProps = {
   url?: string;
@@ -94,6 +96,15 @@ export function Room({ url = '/room.glb', scale, targetFootprint = DEFAULT_TARGE
     resetInteractables();
     autoDiscoverFromRoom(root);
     loadOverridesFromLocalStorage();
+
+    // bake the pathfinding occupancy grid against the WALL layer only so
+    // furniture doesn't appear as obstacles (the avatar passes through it
+    // during interact_with macros via the layered collider policy).
+    const summary = summarizeLayers(root);
+    console.info('[room] collider layers', summary);
+    const walls = getColliders(root, 'wall');
+    const grid = bakeOccupancyGrid(walls, { cellSize: 0.06, radius: 0.3, padding: 0.5 });
+    setActiveGrid(grid);
 
     onLoadRef.current?.(root);
   }, [scene, scale, targetFootprint]);

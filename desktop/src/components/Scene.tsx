@@ -259,12 +259,14 @@ export function Scene({ debug = true }: SceneProps) {
       <PointerLockBridge canvasParentRef={sceneWrapRef} />
 
       {!pointerLocked && <PointerLockPrompt />}
-      <Crosshair />
+      {pointerLocked && <Crosshair />}
       <InteractablePromptHUD />
       <PlayerInteractKeyHandler />
       <CalibrationOverlay />
-      {debug && <SceneDebugBadge {...debugInfo} />}
-      {debug && <AnimationTestPanel avatarRef={avatarRef} />}
+      {/* debug surfaces only during the esc/menu state — they'd clutter
+          the in-game view otherwise */}
+      {debug && !pointerLocked && <SceneDebugBadge {...debugInfo} />}
+      {debug && !pointerLocked && <AnimationTestPanel avatarRef={avatarRef} />}
     </div>
   );
 }
@@ -282,7 +284,31 @@ function VrmLoadProbe({
   return null;
 }
 
+/**
+ * The "esc tab" — when pointer-lock is released, the world dims and a
+ * MiSide-coded pause menu floats centered. Chunky persona-accent border,
+ * dark plum card, sparkle corners, big display name as the title, controls
+ * laid out as labelled key-chips.
+ *
+ * Stays pointer-events: none on the backdrop so the global click-to-lock
+ * bridge still fires from anywhere on screen.
+ */
 function PointerLockPrompt() {
+  const persona = useAngelStore((s) => s.persona);
+  const stateEmotion = useAngelStore((s) => s.state.emotion);
+  const accent = persona?.paletteHex ?? '#ff7eb6';
+
+  const controls: Array<{ keys: string[]; label: string }> = [
+    { keys: ['W', 'A', 'S', 'D'], label: 'move' },
+    { keys: ['mouse'], label: 'look' },
+    { keys: ['shift'], label: 'sprint' },
+    { keys: ['E'], label: 'interact' },
+    { keys: ['T'], label: 'talk' },
+    { keys: ['R'], label: 'respawn' },
+    { keys: ['K'], label: 'calibrate' },
+    { keys: ['esc'], label: 'menu' },
+  ];
+
   return (
     <div
       style={{
@@ -291,35 +317,216 @@ function PointerLockPrompt() {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        background: 'radial-gradient(ellipse at center, rgba(13,10,20,0.55), rgba(13,10,20,0.85) 70%)',
-        backdropFilter: 'blur(2px)',
+        background:
+          'radial-gradient(ellipse at center, rgba(13,10,20,0.55), rgba(13,10,20,0.88) 70%)',
+        backdropFilter: 'blur(6px) saturate(120%)',
+        WebkitBackdropFilter: 'blur(6px) saturate(120%)',
         zIndex: 50,
         cursor: 'pointer',
         pointerEvents: 'none', // bubble click to scene wrap so PointerLockBridge handles it
+        animation: 'angel-fade-in 220ms ease',
       }}
     >
       <div
         style={{
+          position: 'relative',
+          minWidth: 460,
+          maxWidth: 560,
+          padding: '34px 44px 30px',
+          borderRadius: 28,
+          background:
+            'linear-gradient(180deg, rgba(28, 16, 36, 0.95) 0%, rgba(20, 12, 28, 0.95) 100%)',
+          border: `3px solid ${accent}`,
+          boxShadow: [
+            '0 24px 60px -12px rgba(0,0,0,0.7)',
+            `0 0 60px -10px ${accent}`,
+            '0 0 0 4px rgba(255,255,255,0.04) inset',
+            '0 1px 0 rgba(255,255,255,0.14) inset',
+          ].join(', '),
           textAlign: 'center',
-          color: 'var(--angel-fg)',
-          fontFamily: 'var(--font-display)',
-          letterSpacing: '0.06em',
         }}
       >
-        <div style={{ fontSize: 36, marginBottom: 6, color: 'var(--angel-accent)' }}>click to enter</div>
+        {/* corner sparkles — MiSide-coded kawaii decoration */}
+        <CornerSparkle accent={accent} style={{ top: -12, left: -12 }} />
+        <CornerSparkle accent={accent} style={{ top: -12, right: -12 }} />
+        <CornerSparkle accent={accent} style={{ bottom: -12, left: -12 }} />
+        <CornerSparkle accent={accent} style={{ bottom: -12, right: -12 }} />
+
+        {/* tag chip — chapter-title vibe */}
         <div
           style={{
             fontFamily: 'var(--font-ui)',
-            fontSize: 11,
+            fontSize: 10,
+            letterSpacing: '0.34em',
+            textTransform: 'uppercase',
+            color: accent,
+            opacity: 0.9,
+            marginBottom: 6,
+          }}
+        >
+          ♡ paused
+        </div>
+
+        {/* big chunky title — the persona is the menu's identity */}
+        <div
+          style={{
+            fontFamily: 'var(--font-display)',
+            fontSize: 64,
+            lineHeight: 1,
+            letterSpacing: '0.01em',
+            color: 'var(--angel-fg)',
+            textShadow: `0 2px 0 rgba(0,0,0,0.45), 0 0 28px ${accent}66`,
+          }}
+        >
+          {persona?.name ?? 'angel'}
+          <span style={{ color: accent }}>.</span>
+        </div>
+
+        {/* persona traits subtitle */}
+        <div
+          style={{
+            fontFamily: 'var(--font-ui)',
+            fontSize: 10,
             letterSpacing: '0.18em',
             textTransform: 'uppercase',
             color: 'var(--angel-fg-muted)',
+            marginTop: 10,
+            marginBottom: 22,
           }}
         >
-          wasd · move &nbsp;·&nbsp; mouse · look &nbsp;·&nbsp; shift · run &nbsp;·&nbsp; e · interact &nbsp;·&nbsp; t · talk &nbsp;·&nbsp; k · calibrate &nbsp;·&nbsp; r · respawn &nbsp;·&nbsp; esc · release
+          {persona
+            ? `${persona.traits.aesthetic} · ${persona.traits.disposition} · ${persona.traits.style} · ${stateEmotion}`
+            : 'discovered, not designed'}
+        </div>
+
+        {/* CTA — chunky persona-accent pill with a 4px dropdown shadow that
+            screams "video game button". Pulsing softly to invite the click. */}
+        <div
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 10,
+            padding: '13px 28px',
+            borderRadius: 999,
+            background: accent,
+            color: '#1a0c1f',
+            fontFamily: 'var(--font-display)',
+            fontSize: 22,
+            letterSpacing: '0.02em',
+            boxShadow: [
+              '0 1px 0 rgba(255,255,255,0.5) inset',
+              `0 0 36px -4px ${accent}`,
+              '0 4px 0 rgba(0,0,0,0.32)',
+            ].join(', '),
+            animation: 'angel-pulse 2.4s ease-in-out infinite',
+          }}
+        >
+          ▶ click to play
+        </div>
+
+        {/* divider */}
+        <div
+          style={{
+            margin: '26px auto 18px',
+            height: 1,
+            width: '70%',
+            background: `linear-gradient(90deg, transparent, ${accent}66, transparent)`,
+          }}
+        />
+
+        {/* controls grid */}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            gap: '10px 28px',
+          }}
+        >
+          {controls.map(({ keys, label }) => (
+            <div
+              key={label}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 10,
+                fontFamily: 'var(--font-ui)',
+              }}
+            >
+              <span
+                style={{
+                  fontSize: 10,
+                  letterSpacing: '0.16em',
+                  textTransform: 'uppercase',
+                  color: 'var(--angel-fg-muted)',
+                }}
+              >
+                {label}
+              </span>
+              <span style={{ display: 'flex', gap: 4 }}>
+                {keys.map((k) => (
+                  <KeyChip key={k} label={k} accent={accent} />
+                ))}
+              </span>
+            </div>
+          ))}
         </div>
       </div>
     </div>
+  );
+}
+
+function KeyChip({ label, accent }: { label: string; accent: string }) {
+  const isWord = label.length > 1;
+  return (
+    <span
+      style={{
+        display: 'inline-grid',
+        placeItems: 'center',
+        minWidth: isWord ? undefined : 24,
+        height: 24,
+        padding: isWord ? '0 8px' : 0,
+        borderRadius: 6,
+        background: 'rgba(255,255,255,0.08)',
+        border: `1px solid ${accent}66`,
+        color: 'var(--angel-fg)',
+        fontFamily: 'var(--font-ui)',
+        fontSize: 10,
+        letterSpacing: '0.04em',
+        textTransform: 'lowercase',
+        boxShadow: [
+          '0 1px 0 rgba(255,255,255,0.18) inset',
+          '0 2px 0 rgba(0,0,0,0.35)',
+        ].join(', '),
+      }}
+    >
+      {label}
+    </span>
+  );
+}
+
+function CornerSparkle({ accent, style }: { accent: string; style: React.CSSProperties }) {
+  return (
+    <span
+      aria-hidden
+      style={{
+        position: 'absolute',
+        width: 18,
+        height: 18,
+        display: 'grid',
+        placeItems: 'center',
+        color: accent,
+        fontFamily: 'var(--font-display)',
+        fontSize: 16,
+        lineHeight: 1,
+        textShadow: `0 0 10px ${accent}`,
+        opacity: 0.95,
+        animation: 'angel-pulse 2.6s ease-in-out infinite',
+        ...style,
+      }}
+    >
+      ✦
+    </span>
   );
 }
 

@@ -19,6 +19,12 @@ export function App() {
   const applyClaim = useAngelStore((s) => s.applyClaim);
   const persona = useAngelStore((s) => s.persona);
   const stateEmotion = useAngelStore((s) => s.state.emotion);
+  const pointerLocked = useAngelStore((s) => s.pointerLocked);
+  // chrome (header / state bars / chat) is hidden during gameplay so the
+  // scene reads as immersive — only the menu (esc tab) shows the full HUD.
+  // Subtitle stays mounted unconditionally because dialogue is part of the
+  // world, not chrome.
+  const showChrome = !pointerLocked;
 
   // bridge → store
   useEffect(() => {
@@ -79,49 +85,56 @@ export function App() {
         <Scene debug />
       </div>
       <div className="hud">
-        {/* titlebar identity */}
-        <header
-          style={{
-            position: 'absolute',
-            top: 48,
-            left: 36,
-            fontFamily: 'var(--font-display)',
-            fontSize: 30,
-            color: 'var(--angel-fg)',
-            letterSpacing: '0.02em',
-            textShadow: '0 2px 18px rgba(0,0,0,0.7)',
-            pointerEvents: 'none',
-          }}
-        >
-          {persona?.name ? (
-            <>
-              {persona.name}
-              <span style={{ color: 'var(--angel-accent)' }}>.</span>
-            </>
-          ) : (
-            <>
-              angel<span style={{ color: 'var(--angel-accent)' }}>.</span>
-            </>
-          )}
-          <div
+        {/* titlebar identity — chrome, only on the esc menu */}
+        {showChrome && (
+          <header
             style={{
-              fontFamily: 'var(--font-ui)',
-              fontSize: 11,
-              opacity: 0.55,
-              marginTop: 6,
-              letterSpacing: '0.08em',
-              textTransform: 'uppercase',
+              position: 'absolute',
+              top: 48,
+              left: 36,
+              fontFamily: 'var(--font-display)',
+              fontSize: 30,
+              color: 'var(--angel-fg)',
+              letterSpacing: '0.02em',
+              textShadow: '0 2px 18px rgba(0,0,0,0.7)',
+              pointerEvents: 'none',
+              animation: 'angel-fade-in 220ms ease',
             }}
           >
-            {persona
-              ? `${persona.traits.aesthetic} · ${persona.traits.disposition} · ${persona.traits.style} · ${stateEmotion}`
-              : 'discovered, not designed'}
-          </div>
-        </header>
+            {persona?.name ? (
+              <>
+                {persona.name}
+                <span style={{ color: 'var(--angel-accent)' }}>.</span>
+              </>
+            ) : (
+              <>
+                angel<span style={{ color: 'var(--angel-accent)' }}>.</span>
+              </>
+            )}
+            <div
+              style={{
+                fontFamily: 'var(--font-ui)',
+                fontSize: 11,
+                opacity: 0.55,
+                marginTop: 6,
+                letterSpacing: '0.08em',
+                textTransform: 'uppercase',
+              }}
+            >
+              {persona
+                ? `${persona.traits.aesthetic} · ${persona.traits.disposition} · ${persona.traits.style} · ${stateEmotion}`
+                : 'discovered, not designed'}
+            </div>
+          </header>
+        )}
 
+        {/* dialogue — always visible. she's still talking even when you're
+            in pointer-locked gameplay mode */}
         <Subtitle />
-        <StateBars />
-        <ChatOverlay />
+
+        {/* chrome — hide during gameplay for an immersive view */}
+        {showChrome && <StateBars />}
+        {showChrome && <ChatOverlay />}
       </div>
     </>
   );

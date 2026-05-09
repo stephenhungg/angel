@@ -53,19 +53,19 @@ function InteractableMarker({ it, focused }: { it: Interactable; focused: boolea
   });
 
   return (
-    <group position={[it.worldPos.x, it.worldPos.y, it.worldPos.z]}>
+    <group position={[it.bbox.center.x, it.bbox.center.y, it.bbox.center.z]}>
       {/* primary hit-radius wireframe */}
       <mesh>
-        <sphereGeometry args={[it.hitRadius, 16, 12]} />
+        <sphereGeometry args={[it.pickRadius, 16, 12]} />
         <meshBasicMaterial color={color} wireframe transparent opacity={focused ? 0.55 : 0.18} />
       </mesh>
       {/* spinning emphasis ring on the floor under the interactable */}
-      <mesh ref={ringRef} position={[0, -it.worldPos.y + 0.005, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[it.hitRadius * 0.35, it.hitRadius * 0.45, 28]} />
+      <mesh ref={ringRef} position={[0, -it.bbox.center.y + 0.005, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[it.pickRadius * 0.35, it.pickRadius * 0.45, 28]} />
         <meshBasicMaterial color={color} side={THREE.DoubleSide} transparent opacity={focused ? 0.7 : 0.28} />
       </mesh>
       {/* floating 3D label */}
-      <Billboard position={[0, it.hitRadius + 0.18, 0]}>
+      <Billboard position={[0, it.pickRadius + 0.18, 0]}>
         <Text
           fontSize={0.11}
           color={color}
@@ -134,7 +134,7 @@ export function InteractablePicker({
     // proximity gate — feet position lives in store
     const p = useAngelStore.getState().player;
     playerPosRef.current.set(p.x, p.y - 1.5, p.z); // approx feet
-    const dist = playerPosRef.current.distanceTo(hit.worldPos);
+    const dist = playerPosRef.current.distanceTo(hit.bbox.center);
     // big props (workstation, window, bookshelf) get a slightly longer reach
     // since their hitbox center is up high or behind the interactable
     const kindReach =
@@ -220,16 +220,20 @@ export function PlayerInteractKeyHandler() {
       if (!it) return;
       const verb = it.primaryAction;
       if (verb === 'sit' || verb === 'sit_and_type' || verb === 'sit_playful') {
+        // for player E-key, prefer the seat anchor (the locked seated pose)
+        // over the approach anchor (where you stand BEFORE sitting). For
+        // chairs without explicit seat we fall back to first approach.
+        const seat = it.seat ?? it.approaches[0];
         setSeated({
           interactableId: it.id,
-          pos: it.approachAnchor?.pos.toArray() as [number, number, number] | undefined,
-          yaw: it.approachAnchor?.yaw,
+          pos: seat ? (seat.pos.toArray() as [number, number, number]) : undefined,
+          yaw: seat?.yaw,
           mode: verb,
         });
       } else if (verb === 'look_out') {
         // teleport the player a step toward the window approach anchor —
         // doesn't lock them in, just plants a "you're looking outside" mood.
-        const anchor = it.approachAnchor;
+        const anchor = it.approaches[0];
         if (anchor) {
           // we do this through the store; Player.tsx watches lookOutTarget
           useAngelStore.getState().setLookOutTarget(anchor.pos.toArray() as [number, number, number]);
