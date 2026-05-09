@@ -316,4 +316,27 @@ export default defineSchema({
     .index('by_user', ['userId', 'timestamp'])
     .index('by_discord', ['discordUserId', 'timestamp'])
     .index('by_time', ['timestamp']),
+
+  /**
+   * discordListenerCursors — durable per-channel "last processed message id"
+   * cursors used by the Tensorlake-hosted polling listener
+   * (tensorlake/discord-listener/). The listener fires every 60s, asks convex
+   * "what was the last message id you saw on channel X?", polls Discord REST
+   * for messages after that id, then writes the new high-water mark back here.
+   *
+   * This is the durable-memory primitive for the Tensorlake always-on agent —
+   * Tensorlake's per-request state is stateless across cron firings, so we
+   * keep the cursor source-of-truth in Convex and let Tensorlake be the
+   * scheduled execution layer.
+   */
+  discordListenerCursors: defineTable({
+    /** Discord channel snowflake (or DM channel id). */
+    channelId: v.string(),
+    /** Discord message snowflake — last processed message in this channel. */
+    lastMessageId: v.string(),
+    /** Most recent invocation that touched this row (for /admin debug). */
+    updatedAt: v.number(),
+    /** Tensorlake invocation id (or 'init') — proves which cron run wrote it. */
+    invocationId: v.optional(v.string()),
+  }).index('by_channel', ['channelId']),
 });

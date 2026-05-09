@@ -128,6 +128,178 @@ http.route({
   }),
 });
 
+/**
+ * Passive (gateway) message ingress. The standalone gateway bridge process
+ * (web/scripts/discord-bridge.ts) hits this endpoint for every MESSAGE_CREATE
+ * it decides should trigger a reply. We do the auth-light validation (shared
+ * secret if configured), schedule the orchestrator action, and return 200
+ * immediately — the action handles claude + posts to discord directly via
+ * the bot token. The bridge does NOT post the reply; convex does.
+ *
+ * Auth: optional shared secret via `DISCORD_BRIDGE_SECRET`. If unset, accept
+ * unauthenticated calls (acceptable for hackathon — convex's URL is hard to
+ * guess and the orchestrator just generates a chat reply).
+ */
+http.route({
+  path: '/discord/passive-message',
+  method: 'POST',
+  handler: httpAction(async (ctx, request) => {
+    const expectedSecret = process.env.DISCORD_BRIDGE_SECRET?.trim();
+    if (expectedSecret) {
+      const provided =
+        request.headers.get('x-bridge-secret') ?? request.headers.get('authorization');
+      const cleaned = provided?.replace(/^Bearer\s+/i, '').trim();
+      if (cleaned !== expectedSecret) {
+        return new Response(JSON.stringify({ ok: false, error: 'unauthorized' }), {
+          status: 401,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+    }
+
+    let payload: {
+      messageId?: string;
+      channelId?: string;
+      guildId?: string;
+      authorId?: string;
+      authorUsername?: string;
+      content?: string;
+      trigger?: string;
+    };
+    try {
+      payload = (await request.json()) as typeof payload;
+    } catch {
+      return new Response(JSON.stringify({ ok: false, error: 'bad json' }), {
+        status: 400,
+        headers: { 'content-type': 'application/json' },
+      });
+    }
+
+    const channelId = payload.channelId?.trim();
+    const authorId = payload.authorId?.trim();
+    const content = payload.content?.trim() ?? '';
+    if (!channelId || !authorId || !content) {
+      return new Response(
+        JSON.stringify({ ok: false, error: 'missing channelId/authorId/content' }),
+        { status: 400, headers: { 'content-type': 'application/json' } },
+      );
+    }
+
+    // Resolve discord user → angel user. Fallback to demo persona for judges.
+    const lookup = await ctx.runQuery(api.discord.functions.findUserByDiscordId, {
+      discordUserId: authorId,
+    });
+    const userId = lookup?.authId ?? `demo:discord:${authorId}`;
+
+    console.log(
+      `[http:/discord/passive-message] trigger=${payload.trigger ?? 'unknown'} ` +
+        `ch=${channelId} guild=${payload.guildId ?? 'DM'} author=${payload.authorUsername ?? authorId} ` +
+        `len=${content.length}`,
+    );
+
+    await ctx.scheduler.runAfter(0, api.discord.orchestrator.handlePassiveMessage, {
+      userId,
+      discordUserId: authorId,
+      discordUsername: payload.authorUsername,
+      discordChannelId: channelId,
+      discordGuildId: payload.guildId,
+      body: content,
+      trigger: payload.trigger ?? 'unknown',
+      replyToMessageId: payload.messageId,
+    });
+
+    return new Response(JSON.stringify({ ok: true, scheduled: true }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  }),
+});
+
+/**
+ * Listener cursor read — the Tensorlake-hosted polling agent calls this on
+ * every cron firing to know "where did I leave off on each channel?". Returns
+ * a flat record { channelId: { lastMessageId, updatedAt } }.
+ *
+ * Auth: the same DISCORD_BRIDGE_SECRET shared secret as /discord/passive-message
+ * (when set). Read-only, so unauthenticated reads are also acceptable for the
+ * hackathon if the secret isn't configured.
+ */
+http.route({
+  path: '/discord/listener-cursor/get',
+  method: 'GET',
+  handler: httpAction(async (ctx, request) => {
+    const expectedSecret = process.env.DISCORD_BRIDGE_SECRET?.trim();
+    if (expectedSecret) {
+      const provided =
+        request.headers.get('x-bridge-secret') ?? request.headers.get('authorization');
+      const cleaned = provided?.replace(/^Bearer\s+/i, '').trim();
+      if (cleaned !== expectedSecret) {
+        return new Response(JSON.stringify({ ok: false, error: 'unauthorized' }), {
+          status: 401,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+    }
+    const cursors = await ctx.runQuery(api.discord.functions.getListenerCursors, {});
+    return new Response(JSON.stringify({ ok: true, cursors }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  }),
+});
+
+/**
+ * Listener cursor write — the Tensorlake agent calls this after relaying every
+ * new message in a channel, to advance the high-water mark so the next cron
+ * firing doesn't re-process the same messages. Idempotent.
+ *
+ * Body: { channelId: string, lastMessageId: string, invocationId?: string }
+ */
+http.route({
+  path: '/discord/listener-cursor/set',
+  method: 'POST',
+  handler: httpAction(async (ctx, request) => {
+    const expectedSecret = process.env.DISCORD_BRIDGE_SECRET?.trim();
+    if (expectedSecret) {
+      const provided =
+        request.headers.get('x-bridge-secret') ?? request.headers.get('authorization');
+      const cleaned = provided?.replace(/^Bearer\s+/i, '').trim();
+      if (cleaned !== expectedSecret) {
+        return new Response(JSON.stringify({ ok: false, error: 'unauthorized' }), {
+          status: 401,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+    }
+    let payload: { channelId?: string; lastMessageId?: string; invocationId?: string };
+    try {
+      payload = (await request.json()) as typeof payload;
+    } catch {
+      return new Response(JSON.stringify({ ok: false, error: 'bad json' }), {
+        status: 400,
+        headers: { 'content-type': 'application/json' },
+      });
+    }
+    const channelId = payload.channelId?.trim();
+    const lastMessageId = payload.lastMessageId?.trim();
+    if (!channelId || !lastMessageId) {
+      return new Response(
+        JSON.stringify({ ok: false, error: 'missing channelId/lastMessageId' }),
+        { status: 400, headers: { 'content-type': 'application/json' } },
+      );
+    }
+    await ctx.runMutation(api.discord.functions.setListenerCursor, {
+      channelId,
+      lastMessageId,
+      invocationId: payload.invocationId,
+    });
+    return new Response(JSON.stringify({ ok: true }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  }),
+});
+
 http.route({
   path: '/discord/health',
   method: 'GET',

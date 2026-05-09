@@ -1,9 +1,5 @@
 import { ImageResponse } from "next/og";
 
-// next.js conventional file: served at /opengraph-image.png and auto-wires
-// og:image / og:image:width / og:image:height in <head>. rebuilt per deploy,
-// cached by vercel CDN.
-
 export const runtime = "edge";
 export const alt = "angel — kawaii AI coworker. discovered, not designed.";
 export const size = { width: 1200, height: 630 };
@@ -12,8 +8,6 @@ export const contentType = "image/png";
 const SITE = "https://angel-swipe.vercel.app";
 
 export default async function OGImage() {
-  // load assets from our own deploy as base64 so they inline into the SVG
-  // that ImageResponse renders (no external fetches at view time)
   const [wordmarkBuf, cherryBuf] = await Promise.all([
     fetch(`${SITE}/kawaii/wordmark-pink-nano.png`).then((r) => r.arrayBuffer()),
     fetch(`${SITE}/kawaii/cherry-pattern.png`).then((r) => r.arrayBuffer()),
@@ -25,99 +19,129 @@ export default async function OGImage() {
     (
       <div
         style={{
-          height: "100%",
           width: "100%",
+          height: "100%",
           display: "flex",
-          flexDirection: "column",
-          alignItems: "flex-start",
-          justifyContent: "space-between",
-          padding: "64px 76px",
-          backgroundImage: `url(${cherry})`,
-          backgroundSize: "440px auto",
-          backgroundRepeat: "repeat",
-          color: "#0a0507",
+          background: "#fff5fa",
           position: "relative",
         }}
       >
-        {/* soft white wash so text reads cleanly over the cherry pattern */}
+        {/* RIGHT: cherry-pattern band, ~40% width */}
         <div
           style={{
             position: "absolute",
-            inset: 0,
-            background:
-              "radial-gradient(ellipse at 25% 35%, rgba(255,255,255,0.85) 0%, rgba(255,245,250,0.55) 45%, rgba(255,235,245,0.65) 100%)",
-            display: "flex",
-          }}
-        />
-
-        {/* top kicker */}
-        <div
-          style={{
+            top: 0,
+            right: 0,
+            bottom: 0,
+            width: "44%",
+            backgroundImage: `url(${cherry})`,
+            backgroundSize: "260px auto",
+            backgroundRepeat: "repeat",
             display: "flex",
             alignItems: "center",
-            gap: 14,
-            fontSize: 22,
-            color: "#7a3e58",
-            fontWeight: 500,
-            zIndex: 2,
+            justifyContent: "center",
           }}
         >
-          <span
-            style={{
-              display: "flex",
-              width: 12,
-              height: 12,
-              borderRadius: 999,
-              background: "#ff85a8",
-            }}
-          />
-          <span>angel · 天使 · discovered, not designed</span>
-        </div>
-
-        {/* center: wordmark sticker (already in bagel typography) */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "flex-start",
-            zIndex: 2,
-          }}
-        >
+          {/* wordmark sticker centered on the cherry side */}
           <img
             src={wordmark}
-            width={520}
-            height={520}
+            width={360}
+            height={360}
             alt=""
             style={{
-              width: 520,
+              width: 360,
               height: "auto",
-              filter: "drop-shadow(0 12px 0 rgba(155, 58, 95, 0.35))",
+              filter: "drop-shadow(0 14px 0 rgba(155, 58, 95, 0.4))",
             }}
           />
         </div>
 
-        {/* bottom: tagline + url + cta pill */}
+        {/* LEFT: white panel with the copy */}
         <div
           style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            bottom: 0,
+            width: "60%",
             display: "flex",
             flexDirection: "column",
-            gap: 22,
-            zIndex: 2,
-            maxWidth: 1000,
+            justifyContent: "space-between",
+            padding: "64px 56px 64px 76px",
+            background:
+              "linear-gradient(90deg, #ffffff 0%, #ffffff 70%, rgba(255,255,255,0) 100%)",
           }}
         >
+          {/* top kicker */}
           <div
             style={{
               display: "flex",
-              fontSize: 52,
-              lineHeight: 1.05,
-              letterSpacing: "-0.02em",
-              color: "#5e2640",
-              fontWeight: 700,
+              alignItems: "center",
+              gap: 14,
+              fontSize: 22,
+              color: "#7a3e58",
+              fontWeight: 500,
             }}
           >
-            she sits at the desk with you. you don&apos;t feel alone.
+            <span
+              style={{
+                display: "flex",
+                width: 12,
+                height: 12,
+                borderRadius: 999,
+                background: "#ff85a8",
+              }}
+            />
+            <span>angel · 天使 · discovered, not designed</span>
           </div>
+
+          {/* big tagline */}
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 18,
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                fontSize: 76,
+                lineHeight: 0.98,
+                letterSpacing: "-0.03em",
+                color: "#0a0507",
+                fontWeight: 800,
+              }}
+            >
+              she sits at the desk
+            </div>
+            <div
+              style={{
+                display: "flex",
+                fontSize: 76,
+                lineHeight: 0.98,
+                letterSpacing: "-0.03em",
+                color: "#ff4f8b",
+                fontWeight: 800,
+              }}
+            >
+              with you.
+            </div>
+            <div
+              style={{
+                display: "flex",
+                marginTop: 14,
+                fontSize: 28,
+                lineHeight: 1.3,
+                color: "#5e2640",
+                maxWidth: 520,
+              }}
+            >
+              a kawaii desktop coworker. discovered, not prompted. one of millions of versions of her.
+            </div>
+          </div>
+
+          {/* bottom: url + cta pill */}
           <div
             style={{
               display: "flex",
@@ -133,11 +157,12 @@ export default async function OGImage() {
                 display: "flex",
                 alignItems: "center",
                 gap: 10,
-                background: "#ff85a8",
+                background: "#ff4f8b",
                 color: "#ffffff",
                 padding: "12px 24px",
                 borderRadius: 999,
                 fontWeight: 600,
+                boxShadow: "0 6px 0 rgba(155, 58, 95, 0.35)",
               }}
             >
               download angel ↓

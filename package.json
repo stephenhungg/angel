@@ -13,6 +13,7 @@
     "dev:web": "bun run --cwd web dev",
     "dev:desktop": "bun run --cwd desktop dev",
     "dev:convex": "bun run --cwd convex dev",
+    "discord:bridge": "bun run --cwd web discord:bridge",
     "build": "bun run --cwd web build && bun run --cwd desktop build",
     "lint": "bun run --filter '*' lint || true",
     "typecheck": "bun run --filter '*' typecheck || true"

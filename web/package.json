@@ -8,7 +8,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "discord:bridge": "bun run scripts/discord-bridge.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.95.1",
@@ -24,6 +25,7 @@
     "openai": "^4.60.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "ws": "^8.20.0",
     "zustand": "^5"
   },
   "devDependencies": {
@@ -32,6 +34,7 @@
     "@types/node": "^20.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "@types/ws": "^8.18.1",
     "autoprefixer": "^10.4.0",
     "playwright": "^1.59.1",
     "postcss": "^8.4.0",

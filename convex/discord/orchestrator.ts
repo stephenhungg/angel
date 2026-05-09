@@ -528,6 +528,249 @@ function hashShort(s: string): string {
   return `h${(h >>> 0).toString(16)}-${s.length}`;
 }
 
+/* ----------------------- passive (gateway bridge) -------------------------- */
+
+/**
+ * Post a normal channel message via the Discord REST API. Used by the passive
+ * message handler — unlike slash commands, gateway-relayed messages have no
+ * interaction token, so we authenticate with the bot token.
+ *
+ * If `replyToId` is provided we make this a Discord "reply" so the response
+ * threads under the user's message in clients (chat-style affordance).
+ */
+async function postChannelMessage(args: {
+  botToken: string;
+  channelId: string;
+  content: string;
+  replyToId?: string;
+}): Promise<{ ok: boolean; messageId?: string; error?: string }> {
+  const url = `${DISCORD_API_BASE}/channels/${args.channelId}/messages`;
+  try {
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bot ${args.botToken}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        content: args.content,
+        message_reference: args.replyToId
+          ? { message_id: args.replyToId, fail_if_not_exists: false }
+          : undefined,
+        allowed_mentions: { parse: ['users'], replied_user: false },
+      }),
+    });
+    if (!resp.ok) {
+      const text = await resp.text().catch(() => '');
+      return { ok: false, error: `discord ${resp.status}: ${text.slice(0, 240)}` };
+    }
+    const json = (await resp.json().catch(() => ({}))) as { id?: string };
+    return { ok: true, messageId: json.id };
+  } catch (err) {
+    return { ok: false, error: (err as Error).message };
+  }
+}
+
+/**
+ * Handle a passive Discord message (came in via the gateway WebSocket bridge,
+ * not via a slash command). Same orchestrator pipeline as `handleInteraction`
+ * — memory load, anthropic call, transcript + memory write — but the reply is
+ * sent via `POST /channels/{id}/messages` using the bot token instead of the
+ * interaction followup webhook.
+ *
+ * Inputs (from the bridge):
+ *   - userId: convex authId resolved from discordUserId, or 'demo:discord:<id>'
+ *   - discordUserId / username for context
+ *   - channelId / guildId from the gateway event
+ *   - body: the message content (bot mention already stripped by the bridge)
+ *   - trigger: why we decided to respond (mention | dm | reply_to_bot | etc)
+ *   - replyToMessageId: discord message id to reply to (chat affordance)
+ *
+ * Output: { ok, reply?, error? }
+ *
+ * Side effects: same as `handleInteraction` — discordTurns rows, nia memory
+ * write, memoryMirror, observability log, plus a posted Discord message.
+ */
+export const handlePassiveMessage = action({
+  args: {
+    userId: v.string(),
+    discordUserId: v.string(),
+    discordUsername: v.optional(v.string()),
+    discordChannelId: v.string(),
+    discordGuildId: v.optional(v.string()),
+    body: v.string(),
+    trigger: v.string(),
+    replyToMessageId: v.optional(v.string()),
+  },
+  handler: async (
+    ctx,
+    args,
+  ): Promise<{ ok: boolean; reply?: string; error?: string }> => {
+    const startedAt = Date.now();
+
+    const botToken = process.env.DISCORD_BOT_TOKEN?.trim();
+    if (!botToken) {
+      return { ok: false, error: 'DISCORD_BOT_TOKEN missing on convex deployment' };
+    }
+
+    // 1. record inbound
+    await ctx.runMutation(api.discord.functions.appendDiscordTurn, {
+      userId: args.userId,
+      direction: 'inbound',
+      body: args.body,
+      discordUserId: args.discordUserId,
+      discordChannelId: args.discordChannelId,
+      discordGuildId: args.discordGuildId,
+    });
+
+    // 2. resolve persona
+    const userRecord = await ctx.runQuery(api.users.getUser, {
+      userId: args.userId,
+    });
+    const personalityMd: string =
+      (userRecord?.extras?.personalityMd as string | undefined) ??
+      (userRecord?.personalityMd as string | undefined) ??
+      DEFAULT_DEMO_PERSONALITY;
+    const userDisplayName: string | undefined =
+      (userRecord?.extras?.name as string | undefined) ??
+      (userRecord?.name as string | undefined) ??
+      args.discordUsername;
+
+    // 3. memory: nia recent + relevant
+    const niaKey = process.env.NIA_API_KEY?.trim();
+    let recentMemory: NiaContextRow[] = [];
+    let relevantMemory: NiaContextRow[] = [];
+    if (niaKey) {
+      [recentMemory, relevantMemory] = await Promise.all([
+        niaRecentEpisodic(niaKey, args.userId, 5),
+        niaSemanticSearch(niaKey, args.userId, args.body, 3),
+      ]);
+    }
+
+    // 4. last N discord turns for in-conversation context
+    const recentDiscordTurns: Array<{ direction: 'inbound' | 'outbound'; body: string }> =
+      await ctx.runQuery(api.discord.functions.recentDiscordTurns, {
+        userId: args.userId,
+        limit: HISTORY_LIMIT,
+      });
+    const history = recentDiscordTurns
+      .slice()
+      .reverse()
+      .filter((t) => t.body.trim().length > 0)
+      .map((t) => ({
+        role: t.direction === 'inbound' ? ('user' as const) : ('assistant' as const),
+        content: t.body,
+      }));
+    if (history.length > 0 && history[history.length - 1]!.role === 'user') {
+      history.pop();
+    }
+
+    const systemPrompt = buildSystemPrompt({
+      personalityMd,
+      recentMemory,
+      relevantMemory,
+      userDisplayName,
+    });
+
+    // 5. anthropic
+    const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
+    if (!apiKey) {
+      const fallback =
+        "(angel: my brain isn't wired up yet — `ANTHROPIC_API_KEY` missing on the cloud orchestrator)";
+      await postChannelMessage({
+        botToken,
+        channelId: args.discordChannelId,
+        content: fallback,
+        replyToId: args.replyToMessageId,
+      });
+      return { ok: false, error: 'ANTHROPIC_API_KEY missing', reply: fallback };
+    }
+
+    let reply: string;
+    try {
+      reply = await callAnthropic({
+        apiKey,
+        systemPrompt,
+        history,
+        userMessage: args.body,
+      });
+    } catch (err) {
+      const errMsg = (err as Error).message;
+      console.error('[discord.orchestrator/passive] anthropic call failed:', errMsg);
+      const fallback = 'hey — brain hiccuped for a sec. say that again?';
+      await postChannelMessage({
+        botToken,
+        channelId: args.discordChannelId,
+        content: fallback,
+        replyToId: args.replyToMessageId,
+      });
+      return { ok: false, error: errMsg, reply: fallback };
+    }
+
+    // sanitize: same rules as the slash command path
+    reply = reply.replace(/^angel\s*:\s*/i, '').replace(/\s+/g, ' ').trim();
+    if (!reply) reply = 'hey.';
+    if (reply.length > 1900) reply = reply.slice(0, 1900);
+
+    // 6. post via REST (bot token)
+    const sendResult = await postChannelMessage({
+      botToken,
+      channelId: args.discordChannelId,
+      content: reply,
+      replyToId: args.replyToMessageId,
+    });
+    if (!sendResult.ok) {
+      console.error('[discord.orchestrator/passive] post failed:', sendResult.error);
+    }
+
+    // 7. record outbound + memory + observability (mirror of handleInteraction)
+    await ctx.runMutation(api.discord.functions.appendDiscordTurn, {
+      userId: args.userId,
+      direction: 'outbound',
+      body: reply,
+      discordUserId: args.discordUserId,
+      discordChannelId: args.discordChannelId,
+      discordGuildId: args.discordGuildId,
+    });
+
+    if (niaKey) {
+      const userTrim = args.body.length > 200 ? args.body.slice(0, 200) + '…' : args.body;
+      const replyTrim = reply.length > 200 ? reply.slice(0, 200) + '…' : reply;
+      const summary = `[discord:${args.trigger}] user said "${userTrim}"; angel replied "${replyTrim}"`;
+      await niaWrite(niaKey, args.userId, summary, 'episodic');
+    }
+
+    await ctx
+      .runMutation(api.memoryMirror.mirror, {
+        userId: args.userId,
+        type: 'episodic',
+        content: `[discord:${args.trigger}] ${args.body.slice(0, 100)} → ${reply.slice(0, 100)}`,
+        metadata: {
+          source: 'discord-passive',
+          trigger: args.trigger,
+          discordUserId: args.discordUserId,
+          discordChannelId: args.discordChannelId,
+        },
+      })
+      .catch(() => {});
+
+    await ctx
+      .runMutation(api.observability.appendOrchestratorTurn, {
+        userId: args.userId,
+        turnId: `discord-passive-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        systemPromptHash: hashShort(systemPrompt),
+        systemPromptFull: systemPrompt,
+        userInput: args.body,
+        output: reply,
+        toolsCalled: [],
+        latencyMs: Date.now() - startedAt,
+      })
+      .catch(() => {});
+
+    return { ok: sendResult.ok, reply, error: sendResult.error };
+  },
+});
+
 /*
  * ──────────────────────────────────────────────────────────────────────────
  * one-time slash command registration (run from your laptop, NOT at runtime)

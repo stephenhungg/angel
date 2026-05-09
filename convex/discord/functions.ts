@@ -116,3 +116,65 @@ export const setDiscordUserId = mutation({
     });
   },
 });
+
+/* ------------------------------------------------------------------ */
+/* listener cursors — durable state for the Tensorlake polling agent  */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Read all known channel cursors. The Tensorlake-hosted polling agent
+ * calls this on every cron firing to know "where did I leave off on
+ * each channel?".
+ *
+ * Returns a record { channelId: lastMessageId } for fast lookup. Channels
+ * the listener watches but has never seen are absent — the agent treats
+ * "absent" as "fetch most recent N and seed the cursor".
+ */
+export const getListenerCursors = query({
+  args: {},
+  handler: async (ctx) => {
+    const rows = await ctx.db.query('discordListenerCursors').collect();
+    const byChannel: Record<string, { lastMessageId: string; updatedAt: number }> = {};
+    for (const r of rows) {
+      byChannel[r.channelId] = {
+        lastMessageId: r.lastMessageId,
+        updatedAt: r.updatedAt,
+      };
+    }
+    return byChannel;
+  },
+});
+
+/**
+ * Upsert the high-water mark for a single channel. Called by the Tensorlake
+ * agent at the end of each poll round, after every new message has been
+ * relayed to the orchestrator. Idempotent — safe to retry on failure.
+ */
+export const setListenerCursor = mutation({
+  args: {
+    channelId: v.string(),
+    lastMessageId: v.string(),
+    invocationId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query('discordListenerCursors')
+      .withIndex('by_channel', (q) => q.eq('channelId', args.channelId))
+      .unique();
+    const now = Date.now();
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        lastMessageId: args.lastMessageId,
+        updatedAt: now,
+        invocationId: args.invocationId,
+      });
+      return existing._id;
+    }
+    return await ctx.db.insert('discordListenerCursors', {
+      channelId: args.channelId,
+      lastMessageId: args.lastMessageId,
+      updatedAt: now,
+      invocationId: args.invocationId,
+    });
+  },
+});
