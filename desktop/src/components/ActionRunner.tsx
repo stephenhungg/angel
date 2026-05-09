@@ -200,9 +200,11 @@ export function ActionRunner({ avatarRef, roomRoot }: Props) {
           ctx.toPos.copy(root.position);
         }
         ctx.toRotY = yawToFace(player.x - ctx.toPos.x, player.z - ctx.toPos.z);
-        // walk_to_user goes to a free space, not into a piece of furniture, so
-        // the avatar collides against everything (no furniture passthrough).
-        ctx.walkColliders = allCollidersRef.current;
+        // walls-only collision on come-to-me. The user is the destination
+        // and the user already lives in walkable space, so any furniture
+        // between her and them (notably the chair/desk she's just standing
+        // up from) should pass through. Walls still bound her to the room.
+        ctx.walkColliders = wallCollidersRef.current;
         initWalkPath(ctx, root.position, current.speed ?? 'normal');
         avatarRef.current?.play('walking', 200);
         setClip('walking');
@@ -483,7 +485,14 @@ export function ActionRunner({ avatarRef, roomRoot }: Props) {
             pathLen: ctx.path.length,
             pathIdx: ctx.pathIdx,
           });
-          if (arrived) {
+          // scripted destinations (posOverride present) are authoritative —
+          // if the path-walker gives up because of furniture mis-classified
+          // as wall, just teleport the rest of the way instead of cancelling
+          // the chained sit_at. Free-form walk_to without an override still
+          // bails (so the brain can adapt and try a different path).
+          const isScripted = current.type === 'walk_to' && !!current.posOverride;
+          const recovered = !arrived && (stuck || timedOut) && isScripted;
+          if (arrived || recovered) {
             root.position.x = ctx.toPos.x;
             root.position.z = ctx.toPos.z;
           }
@@ -493,18 +502,24 @@ export function ActionRunner({ avatarRef, roomRoot }: Props) {
           if (current.type === 'walk_to_user' || current.anchor === 'user') {
             setStoreState({ isWalking: false, walkTarget: null });
           } else {
+            const ok = arrived || recovered;
             setStoreState({
               isWalking: false,
               walkTarget: null,
-              location: arrived ? current.anchor : currentLocationRef.current,
+              location: ok ? current.anchor : currentLocationRef.current,
             });
-            if (arrived) currentLocationRef.current = current.anchor;
+            if (ok) currentLocationRef.current = current.anchor;
           }
-          // brain feedback: tell the orchestrator whether we actually
-          // arrived. failure (stuck or timeout-without-arrived) flows back
-          // through the IPC so the agent can adjust strategy instead of
-          // silently chaining the next sit_at and teleporting.
-          finish(current, arrived, { stuck, timedOut, distToFinal });
+          if (recovered) {
+            console.info('[walk] recovered via teleport (scripted destination)', {
+              distToFinal: distToFinal.toFixed(2),
+              stuck,
+              timedOut,
+            });
+          }
+          // brain feedback: success when we arrived OR recovered; failure
+          // only when a free-form walk got wedged so the agent can adapt.
+          finish(current, arrived || recovered, { stuck, timedOut, distToFinal });
           break;
         }
 
@@ -686,7 +701,10 @@ function expandInteract(
   const fallbackAnchor: AnchorId = anchorId ?? 'center';
 
   /** Read the calibrated approach (where she stops BEFORE sitting),
-   *  honoring approachLabel when present. */
+   *  honoring approachLabel when present. Returns null when there's no
+   *  explicit approach AND no seat — caller decides whether to fall back
+   *  to the bbox center (which is INSIDE the chair geometry — she'll get
+   *  stuck on collision). For chairs, prefer `stagingFor(id)` instead. */
   function approachOf(id: string): { pos: [number, number, number]; yaw: number } | null {
     const it = getInteractable(id);
     if (!it) return null;
@@ -707,9 +725,38 @@ function expandInteract(
     return approachOf(id);
   }
 
+  /** Pre-seat staging — where she walks TO before snapping into the seat.
+   *  Prefers explicit calibrated approach. If none exists, synthesizes a
+   *  point ~0.55m back from the seat in the open direction (opposite the
+   *  user's facing) so she lands somewhere walkable instead of bumping the
+   *  chair geometry itself. The sit_at that follows snaps her exactly. */
+  function stagingFor(id: string, stagingDist = 0.55): { pos: [number, number, number]; yaw: number } | null {
+    const it = getInteractable(id);
+    if (!it) return null;
+    const a = approachByLabel(it, approachLabel);
+    if (a) return { pos: [a.pos.x, a.pos.y, a.pos.z], yaw: a.yaw };
+    // no explicit approach — derive from the seat. user-forward (where she
+    // looks when seated) = (-sin(yaw), -cos(yaw)). open side is the inverse,
+    // so staging = seat - forward * dist.
+    const seat = seatPoseOf(it);
+    if (seat) {
+      const fx = -Math.sin(seat.yaw);
+      const fz = -Math.cos(seat.yaw);
+      return {
+        pos: [seat.pos.x - fx * stagingDist, seat.pos.y, seat.pos.z - fz * stagingDist],
+        yaw: seat.yaw,
+      };
+    }
+    // no seat either — bbox center (current behavior, may still get stuck)
+    return { pos: [it.bbox.center.x, 0, it.bbox.center.z], yaw: it.bbox.yaw };
+  }
+
   if (verb === 'sit_and_type') {
     const chairId = pairedChairId ?? interactableId;
-    const a = approachOf(chairId);
+    // walk to a staging point in front of the chair (synthesized from the
+    // seat pose if no explicit approach exists), then snap to seat. Avoids
+    // bumping the chair geometry on approach when bbox.center is inside it.
+    const a = stagingFor(chairId);
     const s = seatOf(chairId);
     const chair = getInteractable(chairId);
     const chairAnchor = (chair?.anchorId ?? fallbackAnchor) as AnchorId;
@@ -730,7 +777,7 @@ function expandInteract(
       { id: newId('type'), type: 'play_clip', clip: 'typing', durationMs: src.durationMs ?? 8000 },
     );
   } else if (verb === 'sit' || verb === 'sit_playful') {
-    const a = approachOf(interactableId);
+    const a = stagingFor(interactableId);
     const s = seatOf(interactableId);
     out.push(
       {

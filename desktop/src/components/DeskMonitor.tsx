@@ -24,6 +24,7 @@ import { useConversationStore } from '../stores/conversation';
 import { useAngelStore } from '../stores/angel';
 import { onTaskStatus } from '../lib/ipcEvents';
 import { getInteractable } from '../lib/interactables';
+import { readMonitorPose, MONITOR_POSE_EVENT, type MonitorPose } from '../lib/monitorPose';
 import type { AngelTask } from '@angel/shared';
 
 const MAX_VISIBLE_LINES = 14;
@@ -86,24 +87,27 @@ export function DeskMonitor({
   /* dispatches an event that re-derives without a rebuild.               */
   /* ------------------------------------------------------------------ */
   const [derived, setDerived] = useState<{ pos: [number, number, number]; rotY: number } | null>(null);
-  const [tunedDepth, setTunedDepth] = useState(monitorDepth);
-  const [tunedHeight, setTunedHeight] = useState(monitorHeight);
-  const [tunedAnchor, setTunedAnchor] = useState(anchorTo);
+  // seed from persisted monitor-pose first, then fall through to props.
+  // The K-window calibration writes to localStorage; we read it once on
+  // mount and then live-update via the MONITOR_POSE_EVENT listener below.
+  const seed = readMonitorPose();
+  const [tunedDepth, setTunedDepth] = useState(seed.depth ?? monitorDepth);
+  const [tunedHeight, setTunedHeight] = useState(seed.height ?? monitorHeight);
+  const [tunedAnchor, setTunedAnchor] = useState(seed.anchorTo ?? anchorTo);
+  const [tunedScale, setTunedScale] = useState(seed.scale ?? scale);
 
-  // listen for runtime tuning from the devtools console helper
+  // listen for runtime tuning — fired by writeMonitorPose() from the K-window
+  // panel and from window.__angel.tuneMonitor() in devtools.
   useEffect(() => {
     const onTune = (e: Event) => {
-      const detail = (e as CustomEvent).detail as Partial<{
-        depth: number;
-        height: number;
-        anchorTo: 'desk_chair' | 'desk_workstation';
-      }>;
+      const detail = (e as CustomEvent).detail as Partial<MonitorPose>;
       if (typeof detail.depth === 'number') setTunedDepth(detail.depth);
       if (typeof detail.height === 'number') setTunedHeight(detail.height);
+      if (typeof detail.scale === 'number') setTunedScale(detail.scale);
       if (detail.anchorTo) setTunedAnchor(detail.anchorTo);
     };
-    window.addEventListener('angel:monitor-tune', onTune);
-    return () => window.removeEventListener('angel:monitor-tune', onTune);
+    window.addEventListener(MONITOR_POSE_EVENT, onTune);
+    return () => window.removeEventListener(MONITOR_POSE_EVENT, onTune);
   }, []);
 
   useEffect(() => {
@@ -222,11 +226,14 @@ export function DeskMonitor({
   }, [visible.length]);
 
   return (
-    <group position={finalPosition} rotation={[0, finalRotationY, 0]} scale={scale}>
+    <group position={finalPosition} rotation={[0, finalRotationY, 0]} scale={tunedScale}>
       <Html
         transform
         distanceFactor={1}
-        occlude={false}
+        // 'blending' adds an invisible depth-meshed shadow that fades the
+        // html out as soon as a 3D object passes in front of it. Without
+        // this the html plane always wins z-order and floats over the room.
+        occlude="blending"
         zIndexRange={[5, 0]}
         style={{ pointerEvents: 'none' }}
       >

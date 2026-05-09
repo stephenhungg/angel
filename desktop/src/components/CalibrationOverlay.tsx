@@ -41,6 +41,15 @@ import {
 } from '@/lib/interactables';
 import { useAngelStore } from '@/stores/angel';
 import { ipc } from '@/lib/ipc';
+import {
+  readMonitorPose,
+  writeMonitorPose,
+  resetMonitorPose,
+  MONITOR_POSE_EVENT,
+  DEFAULT_MONITOR_POSE,
+  type MonitorPose,
+  type MonitorAnchor,
+} from '@/lib/monitorPose';
 
 /* -------------------------------------------------------------------------- */
 /* shared aim-state — stashed by the raycaster, read by the form panel        */
@@ -404,6 +413,11 @@ export function CalibrationOverlay() {
             }
           />
         )}
+
+        {/* monitor pose — move + resize the codex.stdout CRT panel without
+            touching room interactables. Persists to localStorage and live
+            broadcasts to DeskMonitor. */}
+        <MonitorPosePanel onFlash={flash} />
 
         {/* footer — save + reset */}
         <div style={{ marginTop: 22, paddingTop: 14, borderTop: '1px dashed rgba(255,255,255,0.1)', display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -953,5 +967,137 @@ function btn(kind: 'primary' | 'row' | 'action' | 'save' | 'danger' | 'ghost'): 
     default:
       return { ...base, background: 'transparent' };
   }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Monitor pose panel — move + resize the codex.stdout CRT panel              */
+/* -------------------------------------------------------------------------- */
+
+function MonitorPosePanel({ onFlash }: { onFlash: (msg: string) => void }) {
+  const [pose, setPose] = useState<MonitorPose>(() => readMonitorPose());
+
+  // sync external changes (e.g., window.__angel.tuneMonitor from devtools)
+  useEffect(() => {
+    const onTune = (e: Event) => {
+      const detail = (e as CustomEvent).detail as Partial<MonitorPose>;
+      setPose((p) => ({ ...p, ...detail }));
+    };
+    window.addEventListener(MONITOR_POSE_EVENT, onTune);
+    return () => window.removeEventListener(MONITOR_POSE_EVENT, onTune);
+  }, []);
+
+  const update = (patch: Partial<MonitorPose>) => {
+    const next = writeMonitorPose(patch);
+    setPose(next);
+  };
+
+  return (
+    <>
+      <SectionTitle>monitor</SectionTitle>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 6 }}>
+        <PoseSlider
+          label="depth"
+          unit="m forward of seat"
+          min={0.2}
+          max={1.6}
+          step={0.02}
+          value={pose.depth}
+          onChange={(v) => update({ depth: v })}
+        />
+        <PoseSlider
+          label="height"
+          unit="m above floor"
+          min={0.6}
+          max={2.2}
+          step={0.02}
+          value={pose.height}
+          onChange={(v) => update({ height: v })}
+        />
+        <PoseSlider
+          label="size"
+          unit="× scale"
+          min={0.05}
+          max={1.0}
+          step={0.01}
+          value={pose.scale}
+          onChange={(v) => update({ scale: v })}
+        />
+
+        <div style={{ display: 'flex', gap: 6 }}>
+          {(['desk_chair', 'desk_workstation'] as MonitorAnchor[]).map((anchor) => {
+            const sel = pose.anchorTo === anchor;
+            return (
+              <button
+                key={anchor}
+                onClick={() => update({ anchorTo: anchor })}
+                style={{ ...btn(sel ? 'primary' : 'row'), flex: 1, fontSize: 11 }}
+              >
+                {anchor}
+              </button>
+            );
+          })}
+        </div>
+
+        <button
+          onClick={() => {
+            resetMonitorPose();
+            setPose({ ...DEFAULT_MONITOR_POSE });
+            onFlash('monitor reset to defaults');
+          }}
+          style={{ ...btn('ghost'), fontSize: 10, opacity: 0.75 }}
+        >
+          reset monitor
+        </button>
+      </div>
+    </>
+  );
+}
+
+function PoseSlider({
+  label,
+  unit,
+  min,
+  max,
+  step,
+  value,
+  onChange,
+}: {
+  label: string;
+  unit: string;
+  min: number;
+  max: number;
+  step: number;
+  value: number;
+  onChange: (v: number) => void;
+}) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'baseline',
+          justifyContent: 'space-between',
+          fontSize: 10,
+          letterSpacing: '0.16em',
+          textTransform: 'uppercase',
+          opacity: 0.7,
+        }}
+      >
+        <span>{label}</span>
+        <span style={{ fontFamily: 'ui-monospace, monospace', opacity: 0.85 }}>
+          {value.toFixed(2)} <span style={{ opacity: 0.5 }}>{unit}</span>
+        </span>
+      </div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        style={{ width: '100%', accentColor: 'var(--angel-accent, #ff7eb6)' }}
+      />
+    </div>
+  );
 }
 

@@ -165,14 +165,26 @@ export function setupPersonaPersist(): () => void {
         m.clearOverrides();
         console.info('[__angel] cleared interactable overrides — reload the window to re-read defaults');
       },
-      // monitor pose tuner — broadcasts a custom event that DeskMonitor
-      // listens to and re-derives its position on. nudge depth/height
-      // /anchor live without rebuilding. examples:
+      // monitor pose tuner — persists to localStorage AND broadcasts a
+      // change event so the live DeskMonitor picks it up. examples:
       //   window.__angel.tuneMonitor({ depth: 0.5, height: 1.45 })
+      //   window.__angel.tuneMonitor({ scale: 0.5 })  // bigger panel
       //   window.__angel.tuneMonitor({ anchorTo: 'desk_workstation' })
-      tuneMonitor: (patch: { depth?: number; height?: number; anchorTo?: 'desk_chair' | 'desk_workstation' }) => {
-        window.dispatchEvent(new CustomEvent('angel:monitor-tune', { detail: patch }));
-        console.info('[__angel] tuneMonitor →', patch);
+      //   window.__angel.resetMonitorPose()           // back to defaults
+      tuneMonitor: async (patch: {
+        depth?: number;
+        height?: number;
+        scale?: number;
+        anchorTo?: 'desk_chair' | 'desk_workstation';
+      }) => {
+        const m = await import('./monitorPose');
+        const next = m.writeMonitorPose(patch);
+        console.info('[__angel] tuneMonitor →', next);
+      },
+      resetMonitorPose: async () => {
+        const m = await import('./monitorPose');
+        const next = m.resetMonitorPose();
+        console.info('[__angel] resetMonitorPose →', next);
       },
     };
   }
