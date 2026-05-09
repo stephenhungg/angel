@@ -1,24 +1,21 @@
 /**
  * TitleScreen — first thing the user sees on app launch (before any persona
- * is loaded). Shows the wordmark, a brief subtitle, and a single fat
- * "discover your angel" CTA that flips the swipe-store phase to 'swipe'.
+ * is loaded). Kawaii-coded landing: dark plum gradient, sparkle field, the
+ * pink wordmark image, mascot accent, and a chunky persona-accent CTA that
+ * fires onBegin to advance App.tsx's phase machine into 'onboarding'.
  *
- * Visual design: dark plum gradient with a layered sparkle field, the
- * wordmark in display font with the trademark accent dot, and a chunky
- * persona-accent pill button with the 4px solid drop-shadow that gives it
- * that retro game-button pop (same treatment as the esc menu's CTA).
- *
- * No marketing scrollytelling here — this is the in-app entry point, not
- * the web landing page. We respect the user's time.
+ * Doesn't own the swipe-store phase — App.tsx is the source of truth for
+ * which screen is active. This component only signals "user clicked begin".
  */
 
 import { motion } from 'framer-motion';
-import { useSwipeStore } from '@/lib/swipeStore';
 import { SparkleField } from './SparkleField';
 
-export function TitleScreen() {
-  const beginSwipe = useSwipeStore((s) => s.beginSwipe);
+interface TitleScreenProps {
+  onBegin: () => void;
+}
 
+export function TitleScreen({ onBegin }: TitleScreenProps) {
   return (
     <main
       style={{
@@ -40,7 +37,45 @@ export function TitleScreen() {
       <SparkleField variant="ambient" density={28} zIndex={1} />
       <SparkleField variant="shower" density={8} zIndex={2} />
 
-      {/* upper sparkle accent */}
+      {/* tenshi (angel) stamp — top-right corner accent */}
+      <motion.img
+        src="/kawaii/tenshi-stamp-t.png"
+        alt=""
+        initial={{ opacity: 0, scale: 0.8, rotate: -8 }}
+        animate={{ opacity: 0.85, scale: 1, rotate: 0 }}
+        transition={{ duration: 1.0, ease: 'easeOut', delay: 0.3 }}
+        style={{
+          position: 'absolute',
+          top: 56,
+          right: 64,
+          width: 96,
+          height: 'auto',
+          zIndex: 5,
+          filter: 'drop-shadow(0 0 24px var(--angel-accent-soft))',
+          pointerEvents: 'none',
+        }}
+      />
+
+      {/* mascot wave — bottom-left peeking in */}
+      <motion.img
+        src="/kawaii/mascot-wave-t.png"
+        alt=""
+        initial={{ opacity: 0, x: -20, y: 20 }}
+        animate={{ opacity: 0.95, x: 0, y: 0 }}
+        transition={{ duration: 1.1, ease: 'easeOut', delay: 0.9 }}
+        style={{
+          position: 'absolute',
+          bottom: 24,
+          left: 36,
+          width: 168,
+          height: 'auto',
+          zIndex: 5,
+          filter: 'drop-shadow(0 8px 30px rgba(0,0,0,0.45))',
+          pointerEvents: 'none',
+        }}
+      />
+
+      {/* upper sparkle accent above the wordmark */}
       <motion.div
         initial={{ opacity: 0, y: -8, rotate: -90 }}
         animate={{ opacity: 0.85, y: 0, rotate: 0 }}
@@ -65,24 +100,21 @@ export function TitleScreen() {
         </svg>
       </motion.div>
 
-      {/* wordmark — display font with trademark accent dot */}
-      <motion.div
+      {/* wordmark — kawaii pink lockup, replaces the text "angel." */}
+      <motion.img
+        src="/kawaii/wordmark-pink-nano-t.png"
+        alt="angel"
         initial={{ opacity: 0, y: 16, scale: 0.96 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 1.0, ease: [0.16, 1, 0.3, 1], delay: 0.2 }}
         style={{
           position: 'relative',
           zIndex: 10,
-          fontFamily: 'var(--font-display)',
-          fontSize: 'clamp(96px, 18vw, 220px)',
-          lineHeight: 0.95,
-          letterSpacing: '0.005em',
-          textShadow: '0 4px 0 rgba(0,0,0,0.5), 0 0 60px var(--angel-accent-soft)',
+          width: 'min(72vw, 720px)',
+          height: 'auto',
+          filter: 'drop-shadow(0 6px 0 rgba(0,0,0,0.35)) drop-shadow(0 0 60px var(--angel-accent-soft))',
         }}
-      >
-        angel
-        <span style={{ color: 'var(--angel-accent)' }}>.</span>
-      </motion.div>
+      />
 
       {/* tag chip — chapter title vibe */}
       <motion.div
@@ -127,14 +159,14 @@ export function TitleScreen() {
           padding: '0 24px',
         }}
       >
-        she's a presence, not an app. converge on her by swiping —
+        she&rsquo;s a presence, not an app. converge on her by swiping —
         twelve choices is all it takes.
       </motion.div>
 
-      {/* CTA — chunky persona-accent pill, MiSide-coded retro button */}
+      {/* CTA — chunky persona-accent pill, kawaii strawberry flank */}
       <motion.button
         type="button"
-        onClick={beginSwipe}
+        onClick={onBegin}
         initial={{ opacity: 0, y: 12, scale: 0.94 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1], delay: 1.3 }}
@@ -164,13 +196,17 @@ export function TitleScreen() {
           transition: 'box-shadow 200ms ease',
         }}
       >
-        <svg viewBox="0 0 24 24" style={{ width: 22, height: 22 }} fill="currentColor">
-          <path d="M12 21 C 12 21 2 14 2 8 C 2 5 4 3 7 3 C 9 3 11 4 12 6 C 13 4 15 3 17 3 C 20 3 22 5 22 8 C 22 14 12 21 12 21 Z" />
-        </svg>
+        <img
+          src="/kawaii/cute-strawberry-t.png"
+          alt=""
+          style={{ width: 28, height: 28, objectFit: 'contain' }}
+        />
         discover your angel
-        <svg viewBox="0 0 24 24" style={{ width: 22, height: 22 }} fill="currentColor">
-          <path d="M12 21 C 12 21 2 14 2 8 C 2 5 4 3 7 3 C 9 3 11 4 12 6 C 13 4 15 3 17 3 C 20 3 22 5 22 8 C 22 14 12 21 12 21 Z" />
-        </svg>
+        <img
+          src="/kawaii/cute-bow-t.png"
+          alt=""
+          style={{ width: 28, height: 28, objectFit: 'contain' }}
+        />
       </motion.button>
 
       {/* small print */}

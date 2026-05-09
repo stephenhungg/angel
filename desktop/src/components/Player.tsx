@@ -116,10 +116,19 @@ export function Player({
     };
   }, []);
 
-  // mouse look (only when pointer is locked)
+  // mouse look (only when pointer is locked AND no input is focused)
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
       if (!document.pointerLockElement) return;
+      // pause camera pan while the user is typing in the chat (or any
+      // other input) — otherwise the camera spins under the cursor while
+      // they type and they lose orientation.
+      const ae = document.activeElement;
+      if (
+        ae &&
+        (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || (ae as HTMLElement).isContentEditable)
+      )
+        return;
       yawRef.current -= e.movementX * MOUSE_SENSITIVITY;
       pitchRef.current -= e.movementY * MOUSE_SENSITIVITY;
       // clamp pitch so we never look straight up/down (cursed)
@@ -190,17 +199,26 @@ export function Player({
   useFrame((_, dt) => {
     const dtClamped = Math.min(dt, 0.05); // avoid huge jumps after a stutter
 
-    // input intent (zeroed while seated or calibrating)
+    // input intent (zeroed while seated, calibrating, or typing in chat)
     const k = keysRef.current;
     let intentX = 0;
     let intentZ = 0;
-    if (locked && !seated && !calibrating) {
+    // gate movement on input focus too — when the chat bar (or any other
+    // <input>) has focus, WASD goes to the field as text, not as movement.
+    // Without this, pressing W while typing both writes a 'w' and walks
+    // the avatar forward.
+    const ae = typeof document !== 'undefined' ? document.activeElement : null;
+    const typing = !!(
+      ae &&
+      (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA' || (ae as HTMLElement).isContentEditable)
+    );
+    if (locked && !seated && !calibrating && !typing) {
       if (KEYS.forward.some((c) => k[c])) intentZ -= 1;
       if (KEYS.back.some((c) => k[c])) intentZ += 1;
       if (KEYS.left.some((c) => k[c])) intentX -= 1;
       if (KEYS.right.some((c) => k[c])) intentX += 1;
     }
-    const sprinting = locked && !seated && !calibrating && KEYS.sprint.some((c) => k[c]);
+    const sprinting = locked && !seated && !calibrating && !typing && KEYS.sprint.some((c) => k[c]);
     const intentLen = Math.hypot(intentX, intentZ);
     if (intentLen > 0) {
       intentX /= intentLen;

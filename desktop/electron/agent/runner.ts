@@ -1351,7 +1351,7 @@ export async function runOrchestrator(input: {
       // delegate → verify → say chain.
       turn += 1;
       const resp = await c.messages.create({
-        model: 'claude-sonnet-4-5-20250929',
+        model: 'claude-sonnet-4-6',
         max_tokens: 1024,
         system: builtSystemPrompt,
         tools: TOOLS,
@@ -1535,7 +1535,7 @@ export async function runBootGreeting(input: {
   const builtSystemPrompt = buildSystemPrompt(memCtx);
   try {
     const resp = await c.messages.create({
-      model: 'claude-sonnet-4-5-20250929',
+      model: 'claude-sonnet-4-6',
       max_tokens: 1024,
       system: builtSystemPrompt,
       tools: TOOLS,

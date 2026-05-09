@@ -223,9 +223,10 @@ export function Reveal() {
       exp: Math.floor(Date.now() / 1000) + 3600,
     };
     // pass vrmMatch.vrmUrl explicitly so we load the actual matched
-    // character body. Bind-pose drift on the abison pool is normalized
-    // at VRM load (vrm-load.ts#normalizeHumanoidToTPose), so every
-    // matched body now reads cleanly during idle.
+    // character body. The abison pool's baked 180°-Y root flip is
+    // canonicalized by an inner wrapper rotation in `Avatar.tsx`
+    // (driven by the `angelBakedFlip` flag stamped at vrm-load), so
+    // every matched body now faces -Z at rotation.y=0 like the placeholder.
     applyClaim(claim, vrmMatch.vrmUrl);
     // mark onboarding complete — the Onboarding root component switches
     // out of the reveal screen and into the 3D room

@@ -14,6 +14,7 @@ export function ChatOverlay() {
   const chat = useAngelStore((s) => s.chat);
   const appendChat = useAngelStore((s) => s.appendChat);
   const persona = useAngelStore((s) => s.persona);
+  const pointerLocked = useAngelStore((s) => s.pointerLocked);
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
   const [focused, setFocused] = useState(false);
@@ -21,35 +22,50 @@ export function ChatOverlay() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const hasText = draft.trim().length > 0;
 
+  // input bar is ALWAYS visible — it's the primary way to talk to her,
+  // not a modal. History scrollback is still chrome-only (it'd clutter
+  // the immersive view). Pointer-lock is never released by the chat —
+  // T just focuses the input; Player.tsx ignores WASD + mouse-look while
+  // an <input> is focused so typing doesn't move the camera/avatar.
+  const showHistory = !pointerLocked;
+
   useEffect(() => {
     // auto-scroll to most recent
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [chat.length]);
 
-  // global "T to talk" — releases pointer lock and focuses the chat input.
-  // standard quake/cs convention. only fires if no input/textarea is focused
-  // so it doesn't hijack typing.
+  // global "T to talk" — focuses the chat input WITHOUT releasing
+  // pointer-lock (so no esc menu pops up; user just starts typing).
+  // Skips when any input/textarea is already focused so the user can
+  // type the letter "t" inside the chat itself.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.code !== 'KeyT') return;
       const el = document.activeElement as HTMLElement | null;
       if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
       e.preventDefault();
-      if (document.pointerLockElement) document.exitPointerLock();
-      // wait a tick so the lock release lands first, then focus
-      window.setTimeout(() => inputRef.current?.focus(), 16);
+      // also stop the keypress so the 't' character doesn't get typed
+      // into the input we're about to focus on the next tick.
+      e.stopPropagation();
+      window.setTimeout(() => inputRef.current?.focus(), 0);
     };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
   }, []);
 
   async function submit(e?: React.FormEvent) {
     e?.preventDefault();
     const text = draft.trim();
     if (!text || busy) return;
-    setBusy(true);
+
     setDraft('');
+    // blur the input so Player.tsx's "is an input focused" gate releases
+    // and WASD/mouse-look resume immediately. submit fires async; the
+    // reply lands as a Subtitle (always-visible) regardless of focus.
+    inputRef.current?.blur();
+
+    setBusy(true);
     appendChat({ id: randomMessageId('u'), role: 'user', text, done: true });
     void unlockAudio(); // user gesture path
 
@@ -64,14 +80,13 @@ export function ChatOverlay() {
       });
     } finally {
       setBusy(false);
-      // refocus to keep the conversation flowing
-      inputRef.current?.focus();
     }
   }
 
   return (
     <>
-      {/* history (top-right, dim, fades old) */}
+      {/* history (top-right, dim, fades old) — esc-menu only */}
+      {showHistory && (
       <div
         ref={scrollRef}
         data-no-lock
@@ -144,13 +159,13 @@ export function ChatOverlay() {
           </div>
         ))}
       </div>
+      )}
 
-      {/* input docked bottom-center — liquid-glass apple style.
-          frosted-white tint + heavy backdrop blur reads as "panel of glass
-          floating on top of the room". top-edge inset highlight is the
-          specular pop apple's vibranced controls always have. data-no-lock
-          stops the global click-to-pointer-lock from firing when the user
-          clicks into the input. */}
+      {/* input docked bottom-center — always visible. liquid-glass apple
+          style; frosted-white tint + heavy backdrop blur reads as "panel
+          of glass floating on top of the room". data-no-lock stops the
+          global click-to-pointer-lock from firing when the user clicks
+          into the input. Movement is gated on input focus in Player.tsx. */}
       <form
         onSubmit={submit}
         data-no-lock
@@ -254,7 +269,17 @@ export function ChatOverlay() {
             boxShadow: 'none',
           }}
           onKeyDown={(e) => {
-            if (e.key === 'Enter') void submit();
+            if (e.key === 'Enter') {
+              void submit();
+            } else if (e.key === 'Escape') {
+              // bail out without sending — drop draft + return focus to
+              // the canvas so movement resumes. Stops the keypress here
+              // so we don't trigger the global Esc → cancel-action path.
+              e.preventDefault();
+              e.stopPropagation();
+              setDraft('');
+              inputRef.current?.blur();
+            }
           }}
         />
 

@@ -9,30 +9,44 @@ import { ipc } from '@/lib/ipc';
 import { unlockAudio } from '@/lib/animalese';
 import { setupConversationLayer } from '@/lib/conversationLayer';
 import { setupPersonaPersist } from '@/lib/personaPersist';
+import { TitleScreen } from '@/components/onboarding/TitleScreen';
 import { OnboardingPage } from '@/components/onboarding/OnboardingPage';
 import { RevealOverlay } from '@/components/onboarding/RevealOverlay';
+import { useSwipeStore } from '@/stores/swipe';
 import type { SceneAction } from '@angel/shared';
 
-type Phase = 'onboarding' | 'reveal' | 'room';
+type Phase = 'title' | 'onboarding' | 'reveal' | 'room';
 
-/** Composition root. Renders the swipe + reveal flow as the cold-boot
+/** Composition root. Renders the title → swipe → reveal flow as the cold-boot
  *  experience, then transitions into the existing 3D <Room> tree once the
- *  persona is applied. Skips onboarding if a persona already exists in the
- *  store (e.g., from a deep-link claim or a previous session). */
+ *  persona is applied. Skips straight to 'room' if a persona already exists in
+ *  the store (e.g., from a deep-link claim or a previous session). */
 export function App() {
   const persona = useAngelStore((s) => s.persona);
   const [phase, setPhase] = useState<Phase>(() =>
-    useAngelStore.getState().persona ? 'room' : 'onboarding',
+    useAngelStore.getState().persona ? 'room' : 'title',
   );
 
-  // If a persona arrives via claim:received while we're in onboarding/reveal
-  // (e.g. external angel:// deep link), jump straight to room.
+  // If a persona arrives via claim:received while pre-room (deep link), jump
+  // straight to room. If a persona DISAPPEARS while in room (rediscover button
+  // wiped it), bounce back to the title screen + reset the swipe deck so the
+  // user can run the flow again from scratch.
   useEffect(() => {
-    if (persona && phase !== 'room') setPhase('room');
+    if (persona && phase !== 'room') {
+      setPhase('room');
+    } else if (!persona && phase === 'room') {
+      try {
+        useSwipeStore.getState().reset();
+      } catch {
+        /* ignore — store may not be hydrated yet */
+      }
+      setPhase('title');
+    }
   }, [persona, phase]);
 
   return (
     <>
+      {phase === 'title' && <TitleScreen onBegin={() => setPhase('onboarding')} />}
       {phase === 'onboarding' && (
         <OnboardingPage onComplete={() => setPhase('reveal')} />
       )}
@@ -180,7 +194,12 @@ function RoomShell() {
 
         {/* chrome — hide during gameplay for an immersive view */}
         {showChrome && <StateBars />}
-        {showChrome && <ChatOverlay />}
+
+        {/* chat overlay always mounted — its T-key handler needs to be
+            live during gameplay (press T from anywhere → open chat). The
+            overlay self-hides input + history while the pointer is locked,
+            and reveals the input when chat is explicitly opened via T. */}
+        <ChatOverlay />
       </div>
     </>
   );
