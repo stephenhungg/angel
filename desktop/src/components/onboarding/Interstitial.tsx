@@ -1,16 +1,12 @@
 /**
- * Interstitial — between-round 2.2s beat.
- * Cliffhanger copy that sells the math viscerally before round 2 + 3.
- *
- * Ported from web/components/Interstitial.tsx — same copy, restyled to use
- * persona accent + display font instead of sakura tokens.
+ * Interstitial — between-round 2.2s beat. Ported from web/components/Interstitial.tsx.
  */
 
 import { motion } from 'framer-motion';
 import { useEffect } from 'react';
 
 const COPY: Record<1 | 2, string[]> = {
-  1: ['wait.', "i'm seeing something."],
+  1: ['wait.', 'i&rsquo;m seeing something.'],
   2: ['closer.', 'one more.'],
 };
 
@@ -30,15 +26,7 @@ export function Interstitial({ round, onComplete }: InterstitialProps) {
   return (
     <motion.div
       key={`int-${round}`}
-      style={{
-        position: 'absolute',
-        inset: 0,
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 12,
-      }}
+      className="absolute inset-0 flex flex-col items-center justify-center gap-3"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
@@ -46,8 +34,8 @@ export function Interstitial({ round, onComplete }: InterstitialProps) {
     >
       <motion.svg
         viewBox="0 0 24 24"
+        className="w-8 h-8 text-sakura-400"
         fill="currentColor"
-        style={{ width: 36, height: 36, color: 'var(--angel-accent)', filter: 'drop-shadow(0 0 12px var(--angel-accent))' }}
         initial={{ opacity: 0, scale: 0, rotate: 0 }}
         animate={{ opacity: 1, scale: 1, rotate: 360 }}
         transition={{ duration: 0.6, ease: 'easeOut' }}
@@ -57,21 +45,12 @@ export function Interstitial({ round, onComplete }: InterstitialProps) {
       {lines.map((line, i) => (
         <motion.div
           key={i}
-          style={{
-            fontFamily: 'var(--font-display)',
-            fontSize: 56,
-            lineHeight: 1,
-            letterSpacing: '0.005em',
-            color: 'var(--angel-fg)',
-            textAlign: 'center',
-            textShadow: '0 0 28px var(--angel-accent-soft)',
-          }}
+          className="font-display italic text-[48px] leading-none tracking-tight text-sakura-700 kawaii-text-glow text-center"
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 + i * 0.7, duration: 0.5, ease: 'easeOut' }}
-        >
-          {line}
-        </motion.div>
+          dangerouslySetInnerHTML={{ __html: line }}
+        />
       ))}
     </motion.div>
   );

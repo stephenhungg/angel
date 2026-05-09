@@ -1,26 +1,23 @@
 /**
- * SwipeDeck — orchestrates the 3-round swipe flow.
- *
- * Reads from useSwipeStore. Drives round transitions + interstitials. On
- * flow-complete (round 3 finished), bumps store.phase from 'swipe' → 'reveal'
- * — the parent (Onboarding) renders the right screen for each phase.
- *
- * Ported from web/components/SwipeDeck.tsx — removed router.push (we use
- * store-driven phases, not routes) and styled with inline rules to match the
- * desktop HUD pattern.
+ * SwipeDeck — orchestrates the 3-round flow. Ported from web/components/SwipeDeck.tsx.
+ * onComplete callback replaces next/navigation router.push('/reveal').
  */
 
 import { AnimatePresence, motion } from 'framer-motion';
 import { useEffect, useState } from 'react';
 import type { LibraryEntry } from '@angel/shared';
-import { useSwipeStore } from '@/lib/swipeStore';
+import { useSwipeStore } from '@/stores/swipe';
 import { SwipeCard } from './SwipeCard';
 import { Interstitial } from './Interstitial';
-import { playChime, playVoiceTease } from '@/lib/swipeAudio';
+import { playChime, playVoiceTease } from '@/lib/animalese';
 
-export function SwipeDeck() {
-  const { round, cards, cursor, swipe, advanceRound, init, setPhase } = useSwipeStore();
-  const [phase, setLocalPhase] = useState<'cards' | 'interstitial' | 'gone'>('cards');
+interface SwipeDeckProps {
+  onComplete: () => void;
+}
+
+export function SwipeDeck({ onComplete }: SwipeDeckProps) {
+  const { round, cards, cursor, swipe, advanceRound, init } = useSwipeStore();
+  const [phase, setPhase] = useState<'cards' | 'interstitial' | 'gone'>('cards');
 
   useEffect(() => {
     init();
@@ -33,41 +30,31 @@ export function SwipeDeck() {
     }
     const result = swipe(decision);
     if (result === 'round-complete') {
-      setLocalPhase('interstitial');
+      setPhase('interstitial');
     } else if (result === 'flow-complete') {
-      setLocalPhase('gone');
-      // brief beat then jump to the reveal screen (store-driven)
-      window.setTimeout(() => setPhase('reveal'), 400);
+      setPhase('gone');
+      setTimeout(() => onComplete(), 400);
     }
   }
 
   function handleInterstitialComplete() {
     advanceRound();
-    setLocalPhase('cards');
+    setPhase('cards');
   }
 
   function handleHover(entry: LibraryEntry) {
     playVoiceTease(entry);
   }
 
-  // visible stack: top card + 2 behind for depth
   const stack = cards.slice(cursor, cursor + 3);
 
   return (
-    <div
-      style={{
-        position: 'relative',
-        width: '100%',
-        maxWidth: 420,
-        aspectRatio: '3 / 4',
-        margin: '0 auto',
-      }}
-    >
+    <div className="relative w-full max-w-[420px] aspect-[3/4] mx-auto">
       <AnimatePresence mode="wait">
         {phase === 'cards' && cards.length > 0 && (
           <motion.div
             key={`r${round}-c${cursor}`}
-            style={{ position: 'absolute', inset: 0 }}
+            className="absolute inset-0"
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -4 }}
@@ -93,26 +80,13 @@ export function SwipeDeck() {
         {phase === 'gone' && (
           <motion.div
             key="gone"
-            style={{
-              position: 'absolute',
-              inset: 0,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
+            className="absolute inset-0 flex items-center justify-center"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.3 }}
           >
-            <div
-              style={{
-                fontFamily: 'var(--font-display)',
-                fontSize: 40,
-                color: 'var(--angel-fg)',
-                textShadow: '0 0 24px var(--angel-accent-soft)',
-              }}
-            >
-              she's deciding…
+            <div className="font-display italic text-[36px] text-ink-near">
+              she&rsquo;s deciding…
             </div>
           </motion.div>
         )}

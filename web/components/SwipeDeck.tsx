@@ -13,21 +13,31 @@ import type { LibraryEntry } from '@angel/shared';
 import { useSwipeStore } from '@/lib/swipe-store';
 import { SwipeCard } from './SwipeCard';
 import { Interstitial } from './Interstitial';
+import { HeartBurst } from './HeartBurst';
 import { playChime, playVoiceTease } from '@/lib/audio';
 
 export function SwipeDeck() {
   const router = useRouter();
   const { round, cards, cursor, swipe, advanceRound, init } = useSwipeStore();
   const [phase, setPhase] = useState<'cards' | 'interstitial' | 'gone'>('cards');
+  const [burst, setBurst] = useState<{ key: number; x: number; y: number }>({
+    key: 0,
+    x: 0,
+    y: 0,
+  });
 
   useEffect(() => {
     init();
   }, [init]);
 
-  function handleSwipe(decision: 'yes' | 'no') {
+  function handleSwipe(decision: 'yes' | 'no', burstOrigin?: { x: number; y: number }) {
     if (decision === 'yes') {
       const card = cards[cursor];
       if (card) playChime(card);
+      // fire heart burst at the card's center
+      if (burstOrigin) {
+        setBurst((b) => ({ key: b.key + 1, x: burstOrigin.x, y: burstOrigin.y }));
+      }
     }
     const result = swipe(decision);
     if (result === 'round-complete') {
@@ -94,6 +104,8 @@ export function SwipeDeck() {
           </motion.div>
         )}
       </AnimatePresence>
+      {/* heart burst on yes-swipe — gsap-driven 10-heart explosion */}
+      <HeartBurst triggerKey={burst.key} originX={burst.x} originY={burst.y} />
     </div>
   );
 }

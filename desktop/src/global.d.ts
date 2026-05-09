@@ -5,6 +5,10 @@ import type {
   SceneActionComplete,
   AgentState,
   ClaimTokenPayload,
+  AestheticArchetype,
+  NumericTraits,
+  PersonaTraits,
+  VoiceConfig,
 } from '@angel/shared';
 
 export type ToolName =
@@ -42,6 +46,49 @@ declare global {
       onVerifyResult: (cb: (e: VerifyResultEvent) => void) => Unsubscribe;
       reportActionComplete: (result: SceneActionComplete) => void;
       getInitialClaim: () => Promise<ClaimTokenPayload | null>;
+
+      /* onboarding (swipe + reveal) */
+      embed: (args: {
+        picks: Array<{ vroid_id: string; decision: 'yes' | 'no'; round: 1 | 2 | 3 }>;
+      }) => Promise<{
+        numericTraits: NumericTraits;
+        voiceConfig: VoiceConfig;
+        traits: PersonaTraits;
+        archetype: AestheticArchetype;
+        vrmUrl: string;
+        paletteHex: string;
+        dialogueSamples: string[];
+        heroCard: {
+          id: string;
+          name: string;
+          thumbnailUrl: string;
+          vibePhrase: string;
+          personalityBlurb: string;
+          energyDescriptor: string;
+          dialogueSamples: string[];
+          voiceConfig: VoiceConfig;
+          palette: [string, string, string];
+          aesthetic: string;
+          hairColor: string;
+        };
+        yesIds: string[];
+      }>;
+      synthesize: (
+        args: {
+          numericTraits: NumericTraits;
+          traits: PersonaTraits;
+          archetype: AestheticArchetype;
+          dialogueSamples: string[];
+        },
+        onToken: (token: string) => void,
+      ) => Promise<{ ok: boolean; fallback?: boolean }>;
+      namingResponse: (args: {
+        typedName: string;
+        personalityMd?: string;
+        dialogueSamples?: string[];
+      }) => Promise<{ response: string }>;
+      completeOnboarding: (persona: ClaimTokenPayload) => Promise<{ ok: boolean }>;
+
       platform: NodeJS.Platform;
     };
   }

@@ -263,6 +263,31 @@ export default defineSchema({
     numericTraits: v.optional(v.any()),
     voiceConfig: v.optional(v.any()),
     personalityMd: v.optional(v.string()),
+    /** E.164 phone number — populated when the user opts into the SMS surface. */
+    phoneNumber: v.optional(v.string()),
     updatedAt: v.number(),
-  }).index('by_authId', ['authId']),
+  })
+    .index('by_authId', ['authId'])
+    .index('by_phoneNumber', ['phoneNumber']),
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // SMS surface — angel's thinnest body. always-on, lid-closed, txt only.
+  // ──────────────────────────────────────────────────────────────────────────
+
+  /**
+   * smsTurns — transcript log of every inbound + outbound SMS turn. paired
+   * with nia for memory; this is the ordered conversational record (faster
+   * to query for the orchestrator's "last N turns" context).
+   */
+  smsTurns: defineTable({
+    userId: v.string(),
+    direction: v.union(v.literal('inbound'), v.literal('outbound')),
+    body: v.string(),
+    phoneNumber: v.string(),
+    timestamp: v.number(),
+    providerMessageId: v.optional(v.string()),
+  })
+    .index('by_user', ['userId', 'timestamp'])
+    .index('by_phone', ['phoneNumber', 'timestamp'])
+    .index('by_time', ['timestamp']),
 });

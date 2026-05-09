@@ -9,6 +9,7 @@ import { motion } from 'framer-motion';
 import { useSwipeStore } from '@/lib/swipe-store';
 import { SwipeDeck } from '@/components/SwipeDeck';
 import { SparkleField } from '@/components/SparkleField';
+import { DopamineBar } from '@/components/DopamineBar';
 
 export default function SwipePage() {
   const round = useSwipeStore((s) => s.round);
@@ -69,7 +70,11 @@ export default function SwipePage() {
 
         <SwipeDeck />
 
-        <div className="mt-10 flex items-center gap-8 font-mono uppercase tracking-[0.2em] text-[10px] text-sakura-700">
+        <div className="mt-6">
+          <DopamineBar />
+        </div>
+
+        <div className="mt-6 flex items-center gap-8 font-mono uppercase tracking-[0.2em] text-[10px] text-sakura-700">
           <div className="flex items-center gap-2">
             <span className="inline-block w-4 h-px bg-current" />
             not her

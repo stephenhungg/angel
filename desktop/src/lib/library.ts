@@ -1,25 +1,20 @@
 /**
  * library.ts — load + filter the vision-tagged library, compose swipe rounds.
+ * Ported from web/lib/library.ts.
  *
- * Ported from web/lib/library.ts so the electron app drives the swipe flow
- * locally. Source data is the same library.json (426 entries, vision-tagged
- * vroid-hub anime girls). We bundle it into the renderer at build time.
- *
- * Filtering: vroid hub origins (numeric IDs) + art_quality >= 6 +
- *            aesthetic !== 'other' → ~280 demo-eligible candidates.
+ * source of truth: desktop/src/data/library.json (synced from web/data/library.json)
+ * filtering: vroid hub origins only (numeric IDs) + art_quality >= 6 + aesthetic !== 'other'
  */
 
-import libraryRaw from '@/data/library.json';
+import libraryRaw from '../data/library.json';
 import type { LibraryEntry, NumericTraits, AestheticArchetype } from '@angel/shared';
 
 const ALL: LibraryEntry[] = libraryRaw as unknown as LibraryEntry[];
 
-/** Vroid hub IDs are 19-digit numeric strings. Oss-avatars use uuids. */
 function isVroidHubId(id: string): boolean {
   return /^\d{15,20}$/.test(id);
 }
 
-/** Demo-eligible deck: vroid hub anime girls with q>=6, no 'other' aesthetic. */
 export const DEMO_LIBRARY: LibraryEntry[] = ALL.filter(
   (e) =>
     e.tags &&
@@ -28,7 +23,6 @@ export const DEMO_LIBRARY: LibraryEntry[] = ALL.filter(
     e.tags.aesthetic !== 'other',
 );
 
-/** Map an aesthetic enum to the A1-A4 archetype slot the contract uses. */
 const AESTHETIC_TO_ARCHETYPE: Record<LibraryEntry['tags']['aesthetic'], AestheticArchetype> = {
   cottagecore: 'A1',
   kawaii: 'A1',
@@ -39,14 +33,13 @@ const AESTHETIC_TO_ARCHETYPE: Record<LibraryEntry['tags']['aesthetic'], Aestheti
   y2k: 'A3',
   goth: 'A3',
   dark_academia: 'A4',
-  other: 'A1', // fallback
+  other: 'A1',
 };
 
 export function archetypeOf(entry: LibraryEntry): AestheticArchetype {
   return AESTHETIC_TO_ARCHETYPE[entry.tags.aesthetic] ?? 'A1';
 }
 
-/** 5d numeric trait vector from a single library entry. */
 export function vectorOf(entry: LibraryEntry): NumericTraits {
   return {
     warmth: entry.tags.warmth,
@@ -57,7 +50,6 @@ export function vectorOf(entry: LibraryEntry): NumericTraits {
   };
 }
 
-/** Euclidean distance between two 5d trait vectors. */
 function distance(a: NumericTraits, b: NumericTraits): number {
   const d2 =
     (a.warmth - b.warmth) ** 2 +
@@ -68,13 +60,6 @@ function distance(a: NumericTraits, b: NumericTraits): number {
   return Math.sqrt(d2);
 }
 
-/**
- * Pick 4 cards for a round.
- *   round 1: max-variance — one card per A1/A2/A3/A4 slot
- *   round 2-3: 4 cards near the current centroid, deterministic shuffle
- *
- * Deterministic per (round, sessionId) so reloads see the same deck.
- */
 export function composeRound(
   round: 1 | 2 | 3,
   seed: string,
@@ -99,7 +84,6 @@ export function composeRound(
     return picks;
   }
 
-  // round 2 + 3: cards near current centroid, prefer variety
   const ranked = pool
     .map((e) => ({ e, d: distance(centroid, vectorOf(e)) }))
     .sort((a, b) => a.d - b.d);
@@ -112,7 +96,6 @@ export function composeRound(
   return out;
 }
 
-/** Centroid of yes-swipes only. Defaults to neutral 5/5/5/5/5 if empty. */
 export function centroidOf(yesPicks: LibraryEntry[]): NumericTraits {
   if (yesPicks.length === 0) {
     return { warmth: 5, energy: 5, edge: 5, sophistication: 5, playfulness: 5 };
@@ -160,10 +143,7 @@ export function nearestArchetype(centroid: NumericTraits): AestheticArchetype {
   return best;
 }
 
-/* ------------------------------------------------------------------ */
-/* tiny seeded prng — deterministic round composition per session id   */
-/* ------------------------------------------------------------------ */
-
+/* tiny seeded prng */
 function hashSeed(s: string): number {
   let h = 2166136261;
   for (let i = 0; i < s.length; i++) {

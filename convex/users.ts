@@ -37,6 +37,7 @@ export const saveOnboarding = mutation({
     numericTraits: v.optional(v.any()),
     voiceConfig: v.optional(v.any()),
     personalityMd: v.optional(v.string()),
+    phoneNumber: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const now = Date.now();
@@ -77,6 +78,7 @@ export const saveOnboarding = mutation({
       numericTraits: args.numericTraits,
       voiceConfig: args.voiceConfig,
       personalityMd: args.personalityMd,
+      phoneNumber: args.phoneNumber,
       updatedAt: now,
     };
     if (existingExtras) {

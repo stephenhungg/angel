@@ -15,9 +15,16 @@
 
 import type { ClaimTokenPayload, PersonaTraits } from '@angel/shared';
 import { useAngelStore } from '@/stores/angel';
-import { useSwipeStore } from './swipeStore';
+import { useSwipeStore } from '@/stores/swipe';
 
 const STORAGE_KEY = 'angel-persona-v1';
+
+/** The single working VRM body the room loads — see vrmMatcher.ts for the
+ *  bind-pose-drift caveat. Any persisted persona that points elsewhere is
+ *  silently rewritten to this on hydrate so old saves can't keep an
+ *  arms-up VRM alive across reloads. Keep in sync with
+ *  vrmMatcher.ts#WORKING_VRM and Scene.tsx#FALLBACK_VRM. */
+const WORKING_VRM = '/vrm/2068967230566994300.vrm';
 
 interface SavedPersona {
   userId: string;
@@ -51,13 +58,40 @@ function write(p: SavedPersona | null): void {
   }
 }
 
+/** Sync hydrate from disk — call before React mounts so App phase init sees persona. */
+export function hydratePersonaFromStorageOnce(): void {
+  if (typeof window === 'undefined') return;
+  if (useAngelStore.getState().persona) return;
+
+  const saved = read();
+  if (!saved) return;
+
+  const claim: ClaimTokenPayload = {
+    userId: saved.userId,
+    vrmId: saved.traits.aesthetic,
+    paletteHex: saved.paletteHex,
+    name: saved.name,
+    traits: saved.traits,
+    iat: Math.floor(saved.savedAt / 1000),
+    exp: Math.floor(saved.savedAt / 1000) + 60 * 60 * 24 * 365,
+  };
+  try {
+    const sanitized = saved.vrmUrl && saved.vrmUrl !== WORKING_VRM ? WORKING_VRM : saved.vrmUrl;
+    if (sanitized !== saved.vrmUrl) {
+      console.info('[personaPersist] sanitized stale vrmUrl', saved.vrmUrl, '→', sanitized);
+      write({ ...saved, vrmUrl: sanitized });
+    }
+    useAngelStore.getState().applyClaim(claim, sanitized);
+  } catch (err) {
+    console.warn('[personaPersist] hydrate threw:', err);
+  }
+}
+
 /** Drop the saved persona — used by the "rediscover" path if we add one. */
 export function clearSavedPersona(): void {
   write(null);
-  // also reset onboarding phase back to title so the user lands on the
-  // discover screen on next refresh
   try {
-    useSwipeStore.getState().setPhase('title');
+    useSwipeStore.getState().reset();
   } catch {
     /* ignore */
   }
@@ -65,28 +99,21 @@ export function clearSavedPersona(): void {
 
 /**
  * Full re-onboarding: wipe the saved persona AND the in-memory one AND the
- * swipe deck state. App.tsx's `if (!persona)` gate flips and the title
- * screen mounts. Useful during development/demo rehearsal — bind to a button
- * or call from devtools as `window.__angel.rediscover()`.
+ * swipe deck state. Useful during development/demo rehearsal — bind to a
+ * button or call from devtools as `window.__angel.rediscover()`.
  */
 export function rediscoverAngel(): void {
-  // 1. clear localStorage
   write(null);
-  // 2. clear the in-memory persona slice → App.tsx unmounts the room
   try {
     useAngelStore.setState({ persona: null });
   } catch (err) {
     console.warn('[personaPersist] clear persona threw:', err);
   }
-  // 3. reset the swipe store: fresh session, empty history, phase=title
   try {
-    const swipe = useSwipeStore.getState();
-    swipe.reset();
-    swipe.setPhase('title');
+    useSwipeStore.getState().reset();
   } catch (err) {
     console.warn('[personaPersist] reset swipe store threw:', err);
   }
-  // 4. release pointer lock so the user can interact with the title screen
   if (typeof document !== 'undefined' && document.pointerLockElement) {
     try {
       document.exitPointerLock();
@@ -102,28 +129,8 @@ export function rediscoverAngel(): void {
  * persona changes so any new commit lands in storage too.
  */
 export function setupPersonaPersist(): () => void {
-  // 1. hydrate from storage
-  const saved = read();
-  if (saved) {
-    const claim: ClaimTokenPayload = {
-      userId: saved.userId,
-      vrmId: saved.traits.aesthetic, // matches what Reveal builds
-      paletteHex: saved.paletteHex,
-      name: saved.name,
-      traits: saved.traits,
-      iat: Math.floor(saved.savedAt / 1000),
-      exp: Math.floor(saved.savedAt / 1000) + 60 * 60 * 24 * 365, // 1y — local cache
-    };
-    try {
-      useAngelStore.getState().applyClaim(claim, saved.vrmUrl);
-      // mark onboarding done so any logic gated on phase agrees with persona
-      useSwipeStore.getState().setPhase('done');
-    } catch (err) {
-      console.warn('[personaPersist] hydrate threw:', err);
-    }
-  }
+  hydratePersonaFromStorageOnce();
 
-  // 2. subscribe to future commits
   const unsub = useAngelStore.subscribe(
     (s) => s.persona,
     (p) => {
@@ -140,7 +147,6 @@ export function setupPersonaPersist(): () => void {
     },
   );
 
-  // 3. expose dev helpers on window so you can fire rediscover from devtools
   if (typeof window !== 'undefined') {
     const w = window as unknown as { __angel?: Record<string, unknown> };
     w.__angel = {

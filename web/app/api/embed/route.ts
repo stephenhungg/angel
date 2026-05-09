@@ -87,11 +87,31 @@ export async function POST(request: Request) {
     voice_cluster: voiceCluster,
   };
 
-  // hero card = highest-art-quality yes-swipe. her vibe phrase + dialogue + face
-  // become her actual identity in the reveal — not 1-of-4 hardcoded labels.
-  const heroCard = [...yesEntries].sort(
-    (a, b) => b.tags.art_quality - a.tags.art_quality,
-  )[0]!;
+  // mystery match — the parasocial pull move. instead of "you swiped on her",
+  // we find the closest-to-centroid card the user DID NOT see during swiping.
+  // judges feel "she found me" not "i picked her."
+  const seenIds = new Set(picks.map((p) => p.vroid_id));
+  const distance = (e: LibraryEntry) => {
+    const t = e.tags;
+    return Math.sqrt(
+      (numericTraits.warmth - t.warmth) ** 2 +
+        (numericTraits.energy - t.energy) ** 2 +
+        (numericTraits.edge - t.edge) ** 2 +
+        (numericTraits.sophistication - t.sophistication) ** 2 +
+        (numericTraits.playfulness - t.playfulness) ** 2,
+    );
+  };
+  const unseen = DEMO_LIBRARY.filter(
+    (e) => !seenIds.has(e.id) && e.tags.art_quality >= 7,
+  );
+  // pick closest-to-centroid OR fall back to highest-art-quality yes-swipe if pool empty
+  const heroCard =
+    unseen.length > 0
+      ? [...unseen].sort((a, b) => distance(a) - distance(b))[0]!
+      : [...yesEntries].sort(
+          (a, b) => b.tags.art_quality - a.tags.art_quality,
+        )[0]!;
+
   const heroVoiceConfig = voiceConfigFromTraits(
     {
       warmth: heroCard.tags.warmth,

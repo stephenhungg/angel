@@ -1,19 +1,50 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 import { Scene } from '@/components/Scene';
 import { ChatOverlay } from '@/components/ChatOverlay';
 import { Subtitle } from '@/components/Subtitle';
 import { StateBars } from '@/components/StateBars';
-import { Onboarding } from '@/components/onboarding/Onboarding';
 import { useAngelStore } from '@/stores/angel';
 import { ipc } from '@/lib/ipc';
 import { unlockAudio } from '@/lib/animalese';
 import { setupConversationLayer } from '@/lib/conversationLayer';
 import { setupPersonaPersist } from '@/lib/personaPersist';
+import { OnboardingPage } from '@/components/onboarding/OnboardingPage';
+import { RevealOverlay } from '@/components/onboarding/RevealOverlay';
 import type { SceneAction } from '@angel/shared';
 
-/** Composition root. Wires the IPC bridge → store, mounts 3D + HUD. */
+type Phase = 'onboarding' | 'reveal' | 'room';
+
+/** Composition root. Renders the swipe + reveal flow as the cold-boot
+ *  experience, then transitions into the existing 3D <Room> tree once the
+ *  persona is applied. Skips onboarding if a persona already exists in the
+ *  store (e.g., from a deep-link claim or a previous session). */
 export function App() {
+  const persona = useAngelStore((s) => s.persona);
+  const [phase, setPhase] = useState<Phase>(() =>
+    useAngelStore.getState().persona ? 'room' : 'onboarding',
+  );
+
+  // If a persona arrives via claim:received while we're in onboarding/reveal
+  // (e.g. external angel:// deep link), jump straight to room.
+  useEffect(() => {
+    if (persona && phase !== 'room') setPhase('room');
+  }, [persona, phase]);
+
+  return (
+    <>
+      {phase === 'onboarding' && (
+        <OnboardingPage onComplete={() => setPhase('reveal')} />
+      )}
+      {phase === 'reveal' && <RevealOverlay onComplete={() => setPhase('room')} />}
+      {phase === 'room' && <RoomShell />}
+    </>
+  );
+}
+
+/** Original App body — the existing room tree + IPC bridge + chrome. Untouched
+ *  beyond extraction; mounts only when phase === 'room'. */
+function RoomShell() {
   const enqueue = useAngelStore((s) => s.enqueue);
   const setStoreState = useAngelStore((s) => s.setState);
   const appendChat = useAngelStore((s) => s.appendChat);
@@ -86,15 +117,6 @@ export function App() {
       disposePersist();
     };
   }, [enqueue, appendChat, patchChat, setStoreState, applyClaim]);
-
-  // Pre-room overlay: until the user has committed a persona (either via
-  // the swipe flow or a saved one from a previous launch), skip the 3D
-  // scene entirely and run the onboarding flow. Loading the room costs an
-  // expensive VRM + glb fetch, so gating it here also makes first-launch
-  // feel snappy.
-  if (!persona) {
-    return <Onboarding />;
-  }
 
   return (
     <>

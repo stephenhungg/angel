@@ -1,88 +1,218 @@
-import Link from "next/link";
-import { Reveal } from "./Reveal";
+"use client";
 
-// footer — DOM-driven mirror of moment's footer stack:
-//   1. socials + legal strip (light bg, small text)
-//   2. dark band: email lockup + giant wordmark — both on near-ink surface
-//
-// moment's verified ground-truth via headed playwright probe:
-//   email-lockup:  45px Manrope 500 lineHeight 45px (locked = font-size, no
-//                  letter-spacing, color rgb(251,251,251) — paper text on dark)
-//   wordmark-h2:   160px Manrope 500 lineHeight 1.0 letterSpacing -3.2px
-//                  color rgb(251,251,251) — paper text on dark
+import Link from "next/link";
+import Image from "next/image";
+import { useRef } from "react";
+import gsap from "gsap";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
+import { useGSAP } from "@gsap/react";
+import { MaskedLine } from "./MaskedLine";
+import { SparkleField } from "./SparkleField";
+
+if (typeof window !== "undefined") {
+  gsap.registerPlugin(ScrollTrigger, useGSAP);
+}
+
+/**
+ * Footer — full-viewport closing band, ported from portfolio-temp pattern.
+ *
+ *   min-h-screen — when you scroll all the way down it fills the viewport.
+ *   flex column with justify-between → top socials, middle tagline + cta,
+ *   bottom 3-col legal row, all distributed evenly across full height.
+ *
+ *   gsap ScrollTrigger drives parallax on the mascot + sparkle field as the
+ *   user scrolls into the section, so the layers move at different speeds.
+ */
 export function Footer() {
+  const sectionRef = useRef<HTMLElement | null>(null);
+  const mascotRef = useRef<HTMLDivElement | null>(null);
+  const sparklesRef = useRef<HTMLDivElement | null>(null);
+  const taglineRef = useRef<HTMLDivElement | null>(null);
+
+  useGSAP(
+    () => {
+      const section = sectionRef.current;
+      const mascot = mascotRef.current;
+      const sparkles = sparklesRef.current;
+      const tagline = taglineRef.current;
+      if (!section) return;
+
+      if (mascot) {
+        gsap.fromTo(
+          mascot,
+          { yPercent: 30 },
+          {
+            yPercent: -10,
+            ease: "none",
+            scrollTrigger: {
+              trigger: section,
+              start: "top bottom",
+              end: "bottom top",
+              scrub: 1,
+            },
+          },
+        );
+      }
+      if (sparkles) {
+        gsap.fromTo(
+          sparkles,
+          { yPercent: 50 },
+          {
+            yPercent: -25,
+            ease: "none",
+            scrollTrigger: {
+              trigger: section,
+              start: "top bottom",
+              end: "bottom top",
+              scrub: 1,
+            },
+          },
+        );
+      }
+      if (tagline) {
+        gsap.fromTo(
+          tagline,
+          { yPercent: 25, opacity: 0.4 },
+          {
+            yPercent: 0,
+            opacity: 1,
+            ease: "expo.out",
+            scrollTrigger: {
+              trigger: section,
+              start: "top 75%",
+              end: "top 30%",
+              scrub: 1,
+            },
+          },
+        );
+      }
+    },
+    { scope: sectionRef },
+  );
+
   return (
-    <footer>
-      {/* socials + legal strip (light bg) */}
-      <div className="bg-paper">
-        <div className="hairline gutter flex flex-col-reverse gap-4 border-t pt-[60px] pb-8 tablet:flex-row tablet:items-center tablet:justify-between">
-          <div className="font-sans text-[12px] text-muted-tertiary">
-            © 2026 angel · she&apos;d rather be honest than impressive.
-          </div>
-          <ul className="flex gap-6 font-sans text-[14px] font-medium text-ink-near">
-            <li>
-              <a
-                href="https://github.com/stephenhungg/angel"
-                target="_blank"
-                rel="noreferrer"
-                className="transition-colors duration-200 ease-linear hover:text-muted-deep"
-              >
-                github
-              </a>
-            </li>
-            <li>
-              <Link
-                href="/about"
-                className="transition-colors duration-200 ease-linear hover:text-muted-deep"
-              >
-                about
-              </Link>
-            </li>
-            <li>
-              <Link
-                href="/privacy"
-                className="transition-colors duration-200 ease-linear hover:text-muted-deep"
-              >
-                privacy
-              </Link>
-            </li>
-          </ul>
-        </div>
+    <footer
+      ref={sectionRef}
+      className="relative flex min-h-screen flex-col overflow-hidden"
+      style={{
+        // tiled kawaii cherry pattern wallpaper, color-matched to sakura palette
+        backgroundImage: "url(/kawaii/cherry-pattern.png)",
+        backgroundRepeat: "repeat",
+        backgroundSize: "640px auto",
+      }}
+    >
+      {/* soft white wash so the tagline + cta read clean over the pattern */}
+      <div
+        aria-hidden
+        className="absolute inset-0"
+        style={{
+          background:
+            "radial-gradient(ellipse at 30% 30%, rgba(255,255,255,0.55) 0%, rgba(255,245,250,0.35) 45%, rgba(255,235,245,0.5) 100%)",
+        }}
+      />
+      <div ref={sparklesRef} className="absolute inset-0">
+        <SparkleField variant="ambient" density={48} />
       </div>
 
-      {/* dark band — softer dusty rose. email lockup + giant closing wordmark. */}
-      <div className="text-paper" style={{ background: "#5e2640" }}>
-        <div className="gutter flex flex-col gap-12 pt-[80px] pb-12 tablet:flex-row tablet:items-end tablet:justify-between">
-          <Reveal>
-            {/* matches moment email lockup: 45px / Manrope 500 / lineHeight
-                45px (=font-size) / letterSpacing normal / color paper */}
-            <Link
-              href="/discover"
-              className="group inline-flex items-baseline gap-3 font-sans text-[36px] font-medium tracking-normal text-paper transition-colors duration-200 ease-linear hover:text-muted-tertiary tablet:text-[45px]"
-              style={{ lineHeight: "1" }}
-            >
-              <span>meet your angel</span>
-              <span className="font-sans transition-transform duration-200 ease-linear group-hover:translate-x-1">
-                →
-              </span>
-            </Link>
-          </Reveal>
+      <div
+        ref={mascotRef}
+        className="pointer-events-none absolute right-[5%] top-1/2 hidden -translate-y-1/2 select-none tablet:block"
+      >
+        <Image
+          src="/kawaii/mascot-wave.png"
+          alt=""
+          aria-hidden
+          width={620}
+          height={620}
+          className="h-auto w-[280px] desktop:w-[420px]"
+          style={{ filter: "drop-shadow(0 16px 0 rgba(155, 58, 95, 0.22))" }}
+        />
+      </div>
 
-          <div className="font-mono text-[12px] text-muted-tertiary">
-            <div>nozomio hackathon · always-on agents</div>
-            <div>ef office, san francisco · 2026-05-09</div>
+      <div className="relative z-10 flex flex-1 flex-col justify-between gutter py-10 tablet:py-14">
+        {/* top row: secondary links right-aligned */}
+        <div className="flex justify-end gap-6 font-sans text-[15px] font-medium text-ink-near">
+          <a
+            href="https://github.com/stephenhungg/angel"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex min-h-11 min-w-11 items-center justify-center px-2 transition-colors hover:text-sakura-600"
+            data-cursor-grow
+          >
+            github
+          </a>
+          <Link
+            href="/about"
+            className="inline-flex min-h-11 min-w-11 items-center justify-center px-2 transition-colors hover:text-sakura-600"
+            data-cursor-grow
+          >
+            about
+          </Link>
+          <Link
+            href="/privacy"
+            className="inline-flex min-h-11 min-w-11 items-center justify-center px-2 transition-colors hover:text-sakura-600"
+            data-cursor-grow
+          >
+            privacy
+          </Link>
+        </div>
+
+        {/* middle: big tagline + cta + status */}
+        <div ref={taglineRef} className="flex flex-col gap-8 tablet:gap-12">
+          <div className="max-w-4xl">
+            <MaskedLine duration={1.1} ease="expo.out">
+              <p className="font-bagel text-[40px] font-normal leading-[1.05] tracking-[-0.01em] text-sakura-700 tablet:text-[64px] desktop:text-[88px]">
+                thank u for
+              </p>
+            </MaskedLine>
+            <MaskedLine duration={1.1} ease="expo.out" delay={0.15}>
+              <p className="font-bagel text-[40px] font-normal leading-[1.05] tracking-[-0.01em] text-sakura-500 tablet:text-[64px] desktop:text-[88px]">
+                finding her ♡
+              </p>
+            </MaskedLine>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-4">
+            <Link
+              href="/download"
+              className="inline-flex h-14 items-center gap-2 rounded-pill bg-sakura-500 px-8 font-sans text-[16px] font-semibold tracking-[-0.005em] text-cloud transition-colors duration-200 ease-linear hover:bg-sakura-600"
+              data-cursor-grow
+            >
+              <span>download angel</span>
+              <span aria-hidden>↓</span>
+            </Link>
+            <span className="inline-flex items-center gap-2 px-3 py-4 font-sans text-[15px] text-muted-deep">
+              <span className="relative inline-flex h-[7px] w-[7px]">
+                <span className="absolute inset-0 animate-ping rounded-full bg-sakura-500 opacity-75" />
+                <span className="relative inline-flex h-[7px] w-[7px] rounded-full bg-sakura-500" />
+              </span>
+              she&apos;s online
+            </span>
           </div>
         </div>
 
-        <Reveal>
-          <div className="gutter pb-[60px]">
-            {/* matches moment closing wordmark: 160px / Manrope 500 / line
-                height 1.0 / letterSpacing -3.2px / color paper / w-fit */}
-            <h2 className="m-0 w-fit font-sans text-[100px] font-medium leading-[1] tracking-[-0.02em] text-paper tablet:text-[140px] desktop:text-[160px]">
-              angel
-            </h2>
+        {/* bottom: 3-col row */}
+        <div className="grid grid-cols-1 gap-6 font-sans text-[14px] leading-[1.5] text-muted-deep tablet:grid-cols-3 tablet:gap-10">
+          <div className="flex flex-col gap-1">
+            <span className="text-muted-secondary">Made with</span>
+            <span className="font-medium text-ink-near">
+              love · 天使 · sonnet 4.6 · convex
+            </span>
           </div>
-        </Reveal>
+          <div className="flex flex-col gap-1">
+            <span className="text-muted-secondary">Built at</span>
+            <span className="font-medium text-ink-near">
+              nozomio hackathon · ef office, sf
+            </span>
+            <span className="text-muted-tertiary">2026-05-09</span>
+          </div>
+          <div className="flex flex-col gap-1 tablet:items-end tablet:text-right">
+            <span className="text-muted-secondary">© 2026 angel</span>
+            <span className="text-muted-tertiary">
+              she&apos;d rather be honest than impressive.
+            </span>
+          </div>
+        </div>
       </div>
     </footer>
   );

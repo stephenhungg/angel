@@ -1,0 +1,164 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+  Kawaii onboarding styles — ported from web/app/globals.css.
+  Scoped to .onboarding-root so it doesn't bleed into the 3D scene.
+*/
+
+:root {
+  --paper: #fffafc;
+  --cloud: #ffffff;
+  --soft: #fff0f5;
+  --hairline: #ffd6e3;
+
+  --sakura-100: #fff0f6;
+  --sakura-200: #ffd9e6;
+  --sakura-300: #ffbcd0;
+  --sakura-400: #ffa1bd;
+  --sakura-500: #ff85a8;
+  --sakura-600: #ec6592;
+  --sakura-700: #c84e7a;
+  --sakura-800: #9b3a5f;
+  --sakura-900: #5e2640;
+}
+
+/* page-edge gutter scaling — matches web */
+.gutter {
+  padding-left: 16px;
+  padding-right: 16px;
+}
+
+@media (min-width: 940px) {
+  .gutter {
+    padding-left: 40px;
+    padding-right: 40px;
+  }
+}
+
+@media (min-width: 1440px) {
+  .gutter {
+    padding-left: 100px;
+    padding-right: 100px;
+  }
+}
+
+/* ----------------------------------------------------------------- */
+/* kawaii utilities — sparkles, glows, twinkle keyframes              */
+/* ----------------------------------------------------------------- */
+
+@keyframes twinkle {
+  0%,
+  100% {
+    transform: scale(1) rotate(0deg);
+    opacity: 0.9;
+  }
+  50% {
+    transform: scale(0.4) rotate(180deg);
+    opacity: 0.2;
+  }
+}
+
+@keyframes float-up {
+  0% {
+    transform: translateY(0) scale(0.5);
+    opacity: 0;
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-120vh) scale(1.1);
+    opacity: 0;
+  }
+}
+
+@keyframes kawaii-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.kawaii-bg {
+  background: radial-gradient(ellipse at top, #ffe5ee 0%, var(--paper) 50%, var(--cloud) 100%);
+}
+
+.kawaii-bg-deep {
+  background: linear-gradient(135deg, var(--sakura-100) 0%, var(--paper) 35%, #fff0f7 100%);
+}
+
+.kawaii-card-shadow {
+  box-shadow:
+    0 4px 0 var(--sakura-200),
+    0 14px 40px -8px rgba(255, 79, 139, 0.25),
+    0 30px 80px -16px rgba(255, 79, 139, 0.15);
+}
+
+.kawaii-glow {
+  box-shadow:
+    0 0 0 2px var(--sakura-200),
+    0 0 24px 4px rgba(255, 79, 139, 0.4);
+}
+
+.kawaii-glow-soft {
+  box-shadow: 0 0 32px 8px rgba(255, 183, 197, 0.45);
+}
+
+.kawaii-text-glow {
+  text-shadow: 0 0 16px rgba(255, 79, 139, 0.4);
+}
+
+.kawaii-shimmer {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 79, 139, 0.15) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: kawaii-shimmer 2.5s ease-in-out infinite;
+}
+
+/* onboarding-root reset — overrides the dark hud styling from styles.css
+   while the onboarding/reveal flow is mounted */
+.onboarding-root,
+.onboarding-root * {
+  box-sizing: border-box;
+}
+.onboarding-root {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: var(--paper);
+  color: var(--ink-near, #1a0a12);
+  font-family: 'Manrope', system-ui, sans-serif;
+  overflow: hidden;
+}
+.onboarding-root button,
+.onboarding-root input {
+  font-family: inherit;
+  background: transparent;
+  border: none;
+  color: inherit;
+  padding: 0;
+}
+.onboarding-root .font-display {
+  font-family: 'Instrument Serif', Georgia, serif;
+}
+.onboarding-root .font-mono {
+  font-family: 'Fragment Mono', 'DM Mono', ui-monospace, monospace;
+}
+
+/* fade-out — used when transitioning into the room */
+.onboarding-fade-out {
+  animation: onboarding-fade-out 700ms ease forwards;
+}
+@keyframes onboarding-fade-out {
+  to {
+    opacity: 0;
+  }
+}

@@ -31,6 +31,7 @@ import {
   setObservationMemoryWriter,
   type BgObservation,
 } from './agent/tensorlake/bg-jobs';
+import { registerSwipeIpc, setPersonaApplier } from './swipe-ipc';
 
 /**
  * Tiny .env.local loader — reads desktop/.env.local before any module that
@@ -373,6 +374,19 @@ if (!gotLock) {
   app.whenReady().then(async () => {
     registerProtocolHandler();
     registerMockHandlers();
+
+    // Onboarding (swipe + reveal) IPC: embed, synthesize, naming_response, complete.
+    // The complete handler hands the persona to claim:received so applyClaim
+    // fires through the existing personaApply cascade (boot greeting +2s, etc).
+    registerSwipeIpc(() => mainWindow);
+    setPersonaApplier((persona) => {
+      const win = mainWindow;
+      if (!win) {
+        pendingClaim = persona;
+        return;
+      }
+      win.webContents.send('claim:received', persona);
+    });
 
     // boot-time claim from initial argv (windows/linux deep link)
     const bootClaim = parseClaimFromArgs(process.argv);

@@ -222,10 +222,12 @@ export function Reveal() {
       iat: Math.floor(Date.now() / 1000),
       exp: Math.floor(Date.now() / 1000) + 3600,
     };
-    // pass vrmMatch.vrmUrl explicitly so the room loads the chosen body
-    // regardless of how shared/persona.ts maps archetypes (it currently
-    // routes everything to the placeholder for bind-pose reasons; the
-    // explicit override bypasses that and uses one of the 5 curated VRMs).
+    // pass vrmMatch.vrmUrl explicitly. NOTE: until the abison pool's
+    // arms-up bind pose is normalized in the retargeter, vrmMatcher
+    // itself routes every `vrmUrl` to the working placeholder VRM (see
+    // vrmMatcher.ts#WORKING_VRM). The character's identity (id, name,
+    // portrait, blurb, palette) still flows through the reveal — only
+    // the loaded body is shared.
     applyClaim(claim, vrmMatch.vrmUrl);
     // mark onboarding complete — the Onboarding root component switches
     // out of the reveal screen and into the 3D room

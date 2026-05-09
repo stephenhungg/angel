@@ -2,8 +2,8 @@
  * vrmMatcher.ts — pick the avatar body the user matched into.
  *
  * The swipe deck draws from 426 library cards (vroid hub portraits) for the
- * personality/centroid math. The room only ships 5 actual VRM models on
- * disk — abison's curated set (manifest.json):
+ * personality/centroid math. The room ships 5 abison-curated VRM bodies
+ * + the original placeholder (manifest.json):
  *   - cottagecore.vrm     (A1, soft warm)
  *   - tech-minimal.vrm    (A2, precise + sleek)
  *   - cyber.vrm           (A3, electric edge)
@@ -11,8 +11,17 @@
  *   - alt-abison-5.vrm    (alt, casual hangout)
  *
  * After the swipe centroid lands, we pick the VRM whose authored "trait
- * fingerprint" is closest to the user's numeric centroid. This is the body
- * that gets loaded into the room AND the portrait shown in the reveal.
+ * fingerprint" is closest to the user's numeric centroid. The MATCH (id,
+ * name, blurb, previewUrl, fingerprint) drives the reveal cascade.
+ *
+ * KNOWN BUG — bind-pose drift on abison's pool. All five curated VRMs ship
+ * with arms-up bind poses that bleed through whenever the active idle clip
+ * doesn't drive every shoulder/upper-arm bone — so the avatar reads as a
+ * T-pose-ish "arms in the air" stance until a richer clip fires. Until we
+ * ship a bind-pose normalization pass on top of the retargeter, every
+ * `vrmUrl` field below points to the original placeholder so the body the
+ * room actually loads survives our pipeline cleanly. The portrait (`previewUrl`)
+ * still shows the matched character — only the loaded body is shared.
  *
  * Personality (voice, dialogue, vibe phrase, palette) still comes from the
  * heroCard the user actually swiped on — those two sources are deliberately
@@ -35,11 +44,16 @@ export interface VrmMatch {
   fingerprint: NumericTraits;
 }
 
+/** The single VRM body the room loads regardless of swipe match — see file
+ *  header for the bind-pose-drift caveat. Keep in sync with
+ *  `shared/src/persona.ts#WORKING_VRM` and `desktop/src/components/Scene.tsx#FALLBACK_VRM`. */
+const WORKING_VRM = '/vrm/2068967230566994300.vrm';
+
 const VRMS: VrmMatch[] = [
   {
     id: 'cottagecore',
     slot: 'A1',
-    vrmUrl: '/vrm/cottagecore.vrm',
+    vrmUrl: WORKING_VRM,
     previewUrl: '/vrm/cottagecore.png',
     name: 'cecil',
     blurb: 'soft warmth + quiet attention.',
@@ -50,7 +64,7 @@ const VRMS: VrmMatch[] = [
   {
     id: 'tech-minimal',
     slot: 'A2',
-    vrmUrl: '/vrm/tech-minimal.vrm',
+    vrmUrl: WORKING_VRM,
     previewUrl: '/vrm/tech-minimal.png',
     name: 'ayu',
     blurb: 'precision + late-night softness.',
@@ -61,7 +75,7 @@ const VRMS: VrmMatch[] = [
   {
     id: 'cyber',
     slot: 'A3',
-    vrmUrl: '/vrm/cyber.vrm',
+    vrmUrl: WORKING_VRM,
     previewUrl: '/vrm/cyber.png',
     name: 'sample',
     blurb: 'electric edge + watchful calm.',
@@ -72,7 +86,7 @@ const VRMS: VrmMatch[] = [
   {
     id: 'academia',
     slot: 'A4',
-    vrmUrl: '/vrm/academia.vrm',
+    vrmUrl: WORKING_VRM,
     previewUrl: '/vrm/academia.png',
     name: 'izumi',
     blurb: 'measured restraint + quiet care.',
@@ -83,7 +97,7 @@ const VRMS: VrmMatch[] = [
   {
     id: 'alt-abison-5',
     slot: 'alt',
-    vrmUrl: '/vrm/alt-abison-5.vrm',
+    vrmUrl: WORKING_VRM,
     previewUrl: '/vrm/alt-abison-5.png',
     name: 'ikuno',
     blurb: 'casual cozy + just hanging out.',

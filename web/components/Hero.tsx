@@ -56,7 +56,8 @@ export function Hero() {
 
   return (
     <section className="relative">
-      <div className="relative h-[88vh] min-h-[640px] w-full overflow-hidden">
+      {/* full-viewport scene — fills 100vh under the fixed nav */}
+      <div className="relative h-screen min-h-[640px] w-full overflow-hidden">
         {/* moving scene layer (parallax + scroll-zoom) */}
         <motion.div
           className="hero-bg absolute inset-0"
@@ -65,13 +66,19 @@ export function Hero() {
             scale: reducedMotion ? 1 : sceneScale,
           }}
         >
-          <StockScene seed="angel-hero-room" w={1600} h={1000} className="absolute inset-0" />
+          {/* her actual room — full-bleed kawaii bedroom render */}
+          <img
+            src="/kawaii/hero-room.png"
+            alt=""
+            aria-hidden
+            className="absolute inset-0 h-full w-full select-none object-cover"
+          />
           <div
             aria-hidden
             className="absolute inset-0"
             style={{
               background:
-                "linear-gradient(180deg, rgba(255,165,194,0) 35%, rgba(94,38,64,0.5) 100%)",
+                "linear-gradient(180deg, rgba(255,165,194,0) 45%, rgba(94,38,64,0.4) 100%)",
             }}
           />
         </motion.div>
@@ -98,7 +105,7 @@ export function Hero() {
                   "linear-gradient(180deg, rgba(255,165,194,0) 50%, rgba(94,38,64,0.5) 100%)",
               }}
             />
-            <div className="absolute bottom-3 left-3 right-3 flex items-end justify-between font-mono text-[10px] text-cloud opacity-95">
+            <div className="absolute bottom-3 left-3 right-3 flex items-end justify-between font-sans text-[10px] text-cloud opacity-95">
               <span>her room</span>
               <span>now</span>
             </div>
@@ -110,11 +117,11 @@ export function Hero() {
           <header className="flex flex-col items-start gap-3">
             <h1 className="m-0">
               <img
-                src="/kawaii/wordmark-pink-nano-t.png"
+                src="/kawaii/wordmark-pink-nano.png"
                 alt="angel"
-                className="hero-wordmark h-[200px] w-auto select-none tablet:h-[300px] desktop:h-[380px]"
+                className="hero-wordmark h-[260px] w-auto select-none tablet:h-[440px] desktop:h-[560px]"
                 style={{
-                  filter: "drop-shadow(0 8px 24px rgba(155, 58, 95, 0.35))",
+                  filter: "drop-shadow(0 14px 0 rgba(155, 58, 95, 0.4)) drop-shadow(0 28px 48px rgba(199, 78, 122, 0.25))",
                 }}
               />
             </h1>
@@ -129,7 +136,7 @@ export function Hero() {
 
         {/* technical metadata — sentence case, no caps, mono font for vibe.
             left = subject meta, right = stack line. */}
-        <div className="absolute bottom-6 left-6 right-6 hidden items-end justify-between gap-6 font-mono text-[11px] text-cloud opacity-80 tablet:flex tablet:bottom-10 tablet:left-10 tablet:right-10 desktop:bottom-[40px] desktop:left-[100px] desktop:right-[100px]">
+        <div className="absolute bottom-6 left-6 right-6 hidden items-end justify-between gap-6 font-sans text-[11px] text-cloud opacity-80 tablet:flex tablet:bottom-10 tablet:left-10 tablet:right-10 desktop:bottom-[40px] desktop:left-[100px] desktop:right-[100px]">
           <div className="hero-meta-l flex flex-col gap-1">
             <span>her room · 1440 × 900</span>
             <span>cloud-resident</span>
@@ -160,7 +167,7 @@ export function Hero() {
           she remembers you across sessions, lives on your machine, and ships your code by
           walking to the desk.
         </p>
-        <ul className="hero-stack mt-8 flex flex-wrap items-center gap-x-6 gap-y-2 font-mono text-[13px] text-muted-secondary">
+        <ul className="hero-stack mt-8 flex flex-wrap items-center gap-x-6 gap-y-2 font-sans text-[13px] text-muted-secondary">
           <li>768d persona vector</li>
           <li className="hidden tablet:block" aria-hidden>·</li>
           <li>sonnet 4.6 orchestrator</li>

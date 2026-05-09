@@ -28,6 +28,9 @@ interface Body {
   numericTraits?: NumericTraits;
   voiceConfig?: VoiceConfig;
   personalityMd?: string;
+  /** Optional E.164 phone number. When provided, the user becomes reachable
+   *  via the SMS surface (text → angel replies via twilio/sendblue). */
+  phoneNumber?: string;
 }
 
 export async function POST(request: Request) {
@@ -92,6 +95,7 @@ export async function POST(request: Request) {
     numericTraits: body.numericTraits,
     voiceConfig: body.voiceConfig,
     personalityMd: body.personalityMd,
+    phoneNumber: normalizePhone(body.phoneNumber),
   }).catch(() => {
     /* never block the claim response */
   });
@@ -100,4 +104,18 @@ export async function POST(request: Request) {
     claimUrl: `${PROTOCOL}://claim?token=${encodeURIComponent(token)}`,
     payload,
   });
+}
+
+/** Best-effort E.164 normalization (server side). Mirrors shared/sms.toE164
+ *  but kept inline so this route doesn't import the shared package at build. */
+function normalizePhone(raw: string | undefined): string | undefined {
+  if (!raw) return undefined;
+  const trimmed = raw.trim();
+  if (!trimmed) return undefined;
+  if (trimmed.startsWith('+')) return trimmed;
+  const digits = trimmed.replace(/\D+/g, '');
+  if (digits.length === 10) return `+1${digits}`;
+  if (digits.length === 11 && digits.startsWith('1')) return `+${digits}`;
+  if (digits.length === 0) return undefined;
+  return `+${digits}`;
 }

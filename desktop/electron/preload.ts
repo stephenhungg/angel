@@ -46,5 +46,63 @@ contextBridge.exposeInMainWorld('angel', {
   getInitialClaim: (): Promise<ClaimTokenPayload | null> =>
     ipcRenderer.invoke('claim:get-initial'),
 
+  /* ---- onboarding (swipe + reveal) ---- */
+
+  embed: (args: { picks: Array<{ vroid_id: string; decision: 'yes' | 'no'; round: 1 | 2 | 3 }> }) =>
+    ipcRenderer.invoke('swipe:embed', args),
+
+  synthesize: (
+    args: {
+      numericTraits: { warmth: number; energy: number; edge: number; sophistication: number; playfulness: number };
+      traits: { aesthetic: string; disposition: string; style: string; voice_cluster: number };
+      archetype: string;
+      dialogueSamples: string[];
+    },
+    onToken: (token: string) => void,
+  ): Promise<{ ok: boolean; fallback?: boolean }> => {
+    const streamId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const onTokenEvent = (
+      _e: Electron.IpcRendererEvent,
+      data: { streamId: string; token: string },
+    ) => {
+      if (data.streamId === streamId) onToken(data.token);
+    };
+    ipcRenderer.on('swipe:synthesize_token', onTokenEvent);
+    const cleanup = () => {
+      ipcRenderer.removeListener('swipe:synthesize_token', onTokenEvent);
+      ipcRenderer.removeListener('swipe:synthesize_done', onDoneEvent);
+    };
+    let resolveDone: (v: { ok: boolean; fallback?: boolean }) => void = () => {};
+    const donePromise = new Promise<{ ok: boolean; fallback?: boolean }>((r) => {
+      resolveDone = r;
+    });
+    const onDoneEvent = (
+      _e: Electron.IpcRendererEvent,
+      data: { streamId: string; fallback?: boolean },
+    ) => {
+      if (data.streamId !== streamId) return;
+      cleanup();
+      resolveDone({ ok: true, fallback: data.fallback });
+    };
+    ipcRenderer.on('swipe:synthesize_done', onDoneEvent);
+
+    return ipcRenderer
+      .invoke('swipe:synthesize', { ...args, streamId })
+      .then(() => donePromise)
+      .catch((err) => {
+        cleanup();
+        throw err;
+      });
+  },
+
+  namingResponse: (args: {
+    typedName: string;
+    personalityMd?: string;
+    dialogueSamples?: string[];
+  }): Promise<{ response: string }> => ipcRenderer.invoke('swipe:naming_response', args),
+
+  completeOnboarding: (persona: ClaimTokenPayload): Promise<{ ok: boolean }> =>
+    ipcRenderer.invoke('swipe:complete', persona),
+
   platform: process.platform,
 });

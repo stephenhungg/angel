@@ -40,6 +40,24 @@ body {
   text-rendering: optimizeLegibility;
 }
 
+/* hide native cursor on fine pointers — only the white-dot Cursor remains.
+   inputs/textareas keep their text caret because cursor: auto wins in those. */
+@media (pointer: fine) {
+  html,
+  body,
+  a,
+  button,
+  [role="button"],
+  [data-cursor-grow] {
+    cursor: none !important;
+  }
+  input,
+  textarea,
+  [contenteditable] {
+    cursor: text !important;
+  }
+}
+
 ::selection {
   background: var(--sakura-500);
   color: var(--cloud);

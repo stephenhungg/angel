@@ -1,24 +1,15 @@
 /**
- * SparkleField — ambient kawaii twinkle layer.
- *
- * Three variants:
- *   ambient — sparse twinkles, pulsing in place (default — title + swipe bg)
- *   burst   — radial burst from center (use on big reveals)
- *   shower  — heart + sparkle rain falling top→bottom
- *
- * Pure SVG + CSS keyframes (`angel-twinkle`, `angel-drift`). No GSAP — the
- * web version used it but we already have a CSS pipeline for the rest of the
- * HUD. Persona accent is read from CSS var so the field tints itself per
- * archetype once the persona is loaded.
+ * SparkleField — ambient kawaii twinkle layer. Ported from web/components/SparkleField.tsx.
+ * Pure svg + gsap, zero binaries.
  */
 
-import { useMemo } from 'react';
+import { useRef } from 'react';
+import { gsap } from 'gsap';
+import { useGSAP } from '@gsap/react';
 
 interface SparkleFieldProps {
   variant?: 'ambient' | 'burst' | 'shower';
   density?: number;
-  /** stack-z; pass higher to float over content */
-  zIndex?: number;
   className?: string;
 }
 
@@ -31,111 +22,123 @@ const SPARKLE_PATHS = [
 const HEART_PATH =
   'M12 21 C 12 21 2 14 2 8 C 2 5 4 3 7 3 C 9 3 11 4 12 6 C 13 4 15 3 17 3 C 20 3 22 5 22 8 C 22 14 12 21 12 21 Z';
 
+const COLORS = ['#ff4f8b', '#ffb7c5', '#ff95b3', '#ff6f9d', '#ffffff', '#ffe5ee'];
+
 export function SparkleField({
   variant = 'ambient',
   density = 30,
-  zIndex = 1,
-  className,
+  className = '',
 }: SparkleFieldProps) {
-  const items = useMemo(() => {
-    return Array.from({ length: density }, (_, i) => {
-      const seed = i / Math.max(1, density);
-      // golden-ratio spread keeps the field even without overlap clusters
-      const left = (seed * 137.5) % 100;
-      const top = (seed * 41.7) % 100;
-      const isHeart = variant === 'shower' && i % 3 === 0;
-      const path = isHeart ? HEART_PATH : SPARKLE_PATHS[i % SPARKLE_PATHS.length]!;
-      const size = 8 + Math.floor((i * 7) % 16);
-      const delay = (i * 0.13) % 3;
-      const duration =
-        variant === 'shower'
-          ? 3 + ((i * 0.31) % 3)
-          : 1.4 + ((i * 0.21) % 1.6);
-      const xJitter = ((i * 113) % 100) - 50; // -50..50
-      return { i, left, top, path, size, delay, duration, xJitter };
-    });
-  }, [density, variant]);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useGSAP(
+    () => {
+      if (!ref.current) return;
+      const sparkles = ref.current.querySelectorAll<SVGSVGElement>('.sparkle-svg');
+
+      sparkles.forEach((el) => {
+        gsap.set(el, { opacity: 0, scale: 0.2, rotation: 0 });
+
+        if (variant === 'burst') {
+          const angle = Math.random() * Math.PI * 2;
+          const dist = 80 + Math.random() * 280;
+          gsap.to(el, {
+            x: Math.cos(angle) * dist,
+            y: Math.sin(angle) * dist,
+            opacity: 1,
+            scale: 0.6 + Math.random() * 1.4,
+            rotation: 360,
+            duration: 0.9 + Math.random() * 0.8,
+            delay: Math.random() * 0.4,
+            ease: 'power2.out',
+          });
+          gsap.to(el, {
+            opacity: 0,
+            scale: 0.2,
+            duration: 0.6,
+            delay: 0.8 + Math.random() * 0.6,
+            ease: 'power1.in',
+          });
+        } else if (variant === 'shower') {
+          gsap.fromTo(
+            el,
+            {
+              y: -100,
+              x: Math.random() * window.innerWidth,
+              opacity: 0,
+              scale: 0.4 + Math.random() * 0.8,
+              rotation: 0,
+            },
+            {
+              y: window.innerHeight + 100,
+              opacity: 1,
+              rotation: 360 * (Math.random() > 0.5 ? 1 : -1),
+              duration: 3 + Math.random() * 3,
+              delay: Math.random() * 4,
+              ease: 'none',
+              repeat: -1,
+            },
+          );
+        } else {
+          gsap.fromTo(
+            el,
+            {
+              opacity: 0,
+              scale: 0.2 + Math.random() * 0.5,
+              rotation: 0,
+            },
+            {
+              opacity: 0.7 + Math.random() * 0.3,
+              scale: 0.5 + Math.random() * 1.0,
+              rotation: 360,
+              duration: 1.4 + Math.random() * 1.4,
+              delay: Math.random() * 2.5,
+              ease: 'sine.inOut',
+              repeat: -1,
+              yoyo: true,
+            },
+          );
+        }
+      });
+    },
+    { scope: ref, dependencies: [variant, density] },
+  );
+
+  const items = Array.from({ length: density }, (_, i) => {
+    const seed = i / density;
+    const left = (seed * 137.5) % 100;
+    const top = (seed * 41.7) % 100;
+    const isHeart = variant === 'shower' && Math.random() < 0.3;
+    const path = isHeart ? HEART_PATH : SPARKLE_PATHS[i % SPARKLE_PATHS.length]!;
+    const color = COLORS[i % COLORS.length]!;
+    const size = 8 + Math.floor((i * 7) % 16);
+
+    return (
+      <svg
+        key={i}
+        className="sparkle-svg absolute pointer-events-none"
+        style={{
+          left: variant === 'shower' ? undefined : `${left}%`,
+          top: variant === 'shower' ? undefined : `${top}%`,
+          width: size,
+          height: size,
+          color,
+        }}
+        viewBox="0 0 24 24"
+        fill="currentColor"
+      >
+        <path d={path} />
+      </svg>
+    );
+  });
 
   return (
     <div
+      ref={ref}
+      className={`absolute inset-0 overflow-hidden pointer-events-none ${className}`}
       aria-hidden
-      className={className}
-      style={{
-        position: 'absolute',
-        inset: 0,
-        overflow: 'hidden',
-        pointerEvents: 'none',
-        zIndex,
-      }}
     >
-      {items.map((s) => {
-        const baseStyle: React.CSSProperties = {
-          position: 'absolute',
-          width: s.size,
-          height: s.size,
-          color: 'var(--angel-accent)',
-          filter: 'drop-shadow(0 0 6px var(--angel-accent-soft))',
-        };
-
-        if (variant === 'shower') {
-          return (
-            <svg
-              key={s.i}
-              viewBox="0 0 24 24"
-              fill="currentColor"
-              style={{
-                ...baseStyle,
-                left: `${s.left}%`,
-                top: -40,
-                animation: `angel-drift ${s.duration}s linear ${s.delay}s infinite`,
-                transform: `translateX(${s.xJitter}px)`,
-              }}
-            >
-              <path d={s.path} />
-            </svg>
-          );
-        }
-
-        if (variant === 'burst') {
-          // radial burst — distribute around center using a polar layout
-          const angle = (s.i / Math.max(1, density)) * Math.PI * 2;
-          const dist = 80 + ((s.i * 31) % 220);
-          return (
-            <svg
-              key={s.i}
-              viewBox="0 0 24 24"
-              fill="currentColor"
-              style={{
-                ...baseStyle,
-                left: '50%',
-                top: '50%',
-                transform: `translate(${Math.cos(angle) * dist}px, ${Math.sin(angle) * dist}px)`,
-                animation: `angel-twinkle ${s.duration}s ease-in-out ${s.delay}s infinite`,
-              }}
-            >
-              <path d={s.path} />
-            </svg>
-          );
-        }
-
-        // ambient
-        return (
-          <svg
-            key={s.i}
-            viewBox="0 0 24 24"
-            fill="currentColor"
-            style={{
-              ...baseStyle,
-              left: `${s.left}%`,
-              top: `${s.top}%`,
-              opacity: 0.7,
-              animation: `angel-twinkle ${s.duration}s ease-in-out ${s.delay}s infinite`,
-            }}
-          >
-            <path d={s.path} />
-          </svg>
-        );
-      })}
+      {items}
     </div>
   );
 }
