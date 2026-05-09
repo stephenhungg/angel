@@ -1,68 +1,185 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import Image from "next/image";
+import { useEffect, useRef, useState } from "react";
+import gsap from "gsap";
 
-// moment's nav: wordmark + © glyph left, single 'menu' button right, hairline border below.
-// no inline page links. menu is an overlay.
+/**
+ * Nav — ported verbatim from portfolio-temp/portfolio/components/Nav.tsx,
+ * then adapted: kawaii sticker wordmark instead of the "stpn." text, sakura
+ * pink hover instead of muted-medium gray.
+ *
+ * Pattern: dot-grid icon rotates 45° to cross on open. Drawer height 0 → auto
+ * via paused gsap timeline, links stagger in via opacity + y. drawerVisible
+ * state drives the bg-white flip (stays white during the entire close anim
+ * so it doesn't pop transparent mid-collapse).
+ */
+
+const NAV_LINKS = [
+  { href: "/discover", label: "discover" },
+  { href: "#origin", label: "origin" },
+  { href: "#what-she-is", label: "what she is" },
+  { href: "#archetypes", label: "archetypes" },
+  { href: "/about", label: "about" },
+];
+
+function DotIcon({ open }: { open: boolean }) {
+  return (
+    <span
+      aria-hidden
+      className={`grid grid-cols-2 gap-[3px] transition-transform duration-500 ${
+        open ? "rotate-45" : "rotate-0"
+      }`}
+      style={{ transitionTimingFunction: "cubic-bezier(0.42, 0.21, 0, 1)" }}
+    >
+      {Array.from({ length: 6 }).map((_, i) => (
+        <span key={i} className="block h-[5px] w-[5px] rounded-full bg-current" />
+      ))}
+    </span>
+  );
+}
+
 export function Nav() {
   const [open, setOpen] = useState(false);
+  const [drawerVisible, setDrawerVisible] = useState(false);
+  const drawerRef = useRef<HTMLDivElement>(null);
+  const linksRef = useRef<HTMLUListElement>(null);
+  const tlRef = useRef<gsap.core.Timeline | null>(null);
+
+  useEffect(() => {
+    const drawer = drawerRef.current;
+    const links = linksRef.current;
+    if (!drawer || !links) return;
+
+    const tl = gsap
+      .timeline({
+        paused: true,
+        onStart: () => setDrawerVisible(true),
+        onReverseComplete: () => setDrawerVisible(false),
+      })
+      .to(drawer, { duration: 0.9, height: "auto", ease: "power4.out" })
+      .to(
+        links.querySelectorAll("li"),
+        {
+          duration: 0.7,
+          opacity: 1,
+          y: 0,
+          ease: "power3.out",
+          stagger: 0.05,
+        },
+        0.15,
+      )
+      .reverse();
+
+    tlRef.current = tl;
+    return () => {
+      tl.kill();
+    };
+  }, []);
+
+  useEffect(() => {
+    const tl = tlRef.current;
+    if (!tl) return;
+    tl.reversed(!open);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open]);
 
   return (
-    <>
-      <header className="hairline gutter sticky top-0 z-40 flex h-[90px] items-center justify-between border-b bg-paper/90 backdrop-blur">
-        <Link href="/" className="flex items-baseline gap-1">
-          <span className="font-sans text-[24px] font-medium leading-none tracking-[-0.02em] text-ink-primary">
-            angel
-          </span>
-          <span className="font-sans text-[14px] font-medium text-muted-deep">©</span>
-        </Link>
-
-        {/* matches moment menu computed: 12px Manrope 400 lineHeight normal
-            tracking normal color rgb(0,0,0) */}
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          className="font-sans text-[12px] font-normal tracking-normal text-black transition-colors duration-200 ease-linear hover:text-muted-deep"
-          style={{ lineHeight: "normal" }}
-          aria-expanded={open}
-          aria-label="toggle menu"
-        >
-          {open ? "close" : "menu"}
-        </button>
-      </header>
-
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            initial={{ opacity: 0.001 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0.001 }}
-            transition={{ duration: 0.4, ease: [0, 0, 0, 1] }}
-            className="fixed inset-0 z-30 flex flex-col items-start justify-center gutter"
-            style={{ background: "rgba(0,0,0,0.8)" }}
+    <header
+      className={`absolute inset-x-0 top-0 z-30 ${
+        drawerVisible ? "bg-paper" : "bg-transparent"
+      }`}
+      style={{ transition: "background-color 200ms linear" }}
+    >
+      <div className="w-full px-6 tablet:px-9">
+        <nav className="flex items-center justify-between py-[18px] desktop:py-[26px]">
+          {/* kawaii sticker wordmark replaces "stpn." text */}
+          <Link
+            href="/"
+            onClick={() => setOpen(false)}
+            className="inline-flex min-h-11 items-center"
+            data-cursor-grow
           >
-            <nav className="flex flex-col gap-4 text-cloud">
-              {[
-                { label: "discover", href: "/discover" },
-                { label: "origin", href: "#origin" },
-                { label: "voices", href: "#voices" },
-                { label: "begin", href: "/discover" },
-              ].map((it) => (
-                <Link
-                  key={it.label}
-                  href={it.href}
-                  onClick={() => setOpen(false)}
-                  className="font-sans text-[48px] font-medium leading-none tracking-[-0.02em] transition-colors duration-200 ease-linear hover:text-muted-tertiary tablet:text-[64px]"
+            <Image
+              src="/kawaii/wordmark-pink-nano-t.png"
+              alt="angel"
+              width={400}
+              height={200}
+              className="h-12 w-auto select-none tablet:h-14 desktop:h-16"
+              style={{
+                filter: "drop-shadow(0 4px 0 rgba(155, 58, 95, 0.25))",
+              }}
+              priority
+            />
+          </Link>
+          <button
+            type="button"
+            aria-label={open ? "close menu" : "open menu"}
+            aria-expanded={open}
+            onClick={() => setOpen((v) => !v)}
+            className="inline-flex h-11 w-11 items-center justify-center text-ink-near transition-colors hover:text-sakura-600"
+            data-cursor-grow
+          >
+            <DotIcon open={open} />
+          </button>
+        </nav>
+
+        {/* drawer */}
+        <div ref={drawerRef} aria-hidden={!open} style={{ height: 0, overflow: "hidden" }}>
+          <div className="border-t border-hairline pb-12 pt-10 tablet:pb-16 tablet:pt-14">
+            <ul ref={linksRef} className="flex flex-col gap-3 tablet:gap-4">
+              {NAV_LINKS.map((item) => (
+                <li
+                  key={item.href}
+                  style={{ opacity: 0, transform: "translateY(20px)" }}
                 >
-                  {it.label}
-                </Link>
+                  <Link
+                    href={item.href}
+                    onClick={() => setOpen(false)}
+                    className="block font-bagel text-[44px] leading-[0.95] tracking-[-0.02em] text-ink-near transition-colors duration-300 hover:text-sakura-500 tablet:text-[72px] desktop:text-[96px]"
+                  >
+                    {item.label}
+                  </Link>
+                </li>
               ))}
-            </nav>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </>
+            </ul>
+
+            <div className="mt-12 flex items-end justify-between gap-6 font-sans text-[15px] font-medium text-muted-deep tablet:mt-16 tablet:text-[16px]">
+              <div className="flex flex-col gap-1">
+                <a
+                  href="mailto:founders@kalilabs.ai"
+                  className="inline-flex min-h-11 items-center hover:text-sakura-600"
+                >
+                  founders@kalilabs.ai
+                </a>
+                <span className="text-muted-tertiary">berkeley, ca · 天使</span>
+              </div>
+              <div className="flex flex-col items-end gap-1 text-right">
+                <a
+                  href="https://github.com/stephenhungg/angel"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex min-h-11 items-center hover:text-sakura-600"
+                >
+                  github →
+                </a>
+                <Link href="/discover" className="inline-flex min-h-11 items-center hover:text-sakura-600">
+                  begin discovery →
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
   );
 }

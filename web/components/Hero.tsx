@@ -112,9 +112,9 @@ export function Hero() {
               <img
                 src="/kawaii/wordmark-pink-nano-t.png"
                 alt="angel"
-                className="hero-wordmark h-[200px] w-auto select-none tablet:h-[300px] desktop:h-[380px]"
+                className="hero-wordmark h-[260px] w-auto select-none tablet:h-[440px] desktop:h-[560px]"
                 style={{
-                  filter: "drop-shadow(0 8px 24px rgba(155, 58, 95, 0.35))",
+                  filter: "drop-shadow(0 14px 0 rgba(155, 58, 95, 0.4)) drop-shadow(0 28px 48px rgba(199, 78, 122, 0.25))",
                 }}
               />
             </h1>
