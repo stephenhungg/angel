@@ -94,22 +94,38 @@ async function uploadOne({ filepath, slug, dirName, memory_type }) {
     return { id: 'dry-run', title: body.title };
   }
 
-  const res = await fetch('https://apigcp.trynia.ai/v2/contexts', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${NIA_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    const t = await res.text();
-    return { error: `${res.status} ${t.slice(0, 200)}` };
+  // truncate aggressively to avoid timeouts on huge files
+  if (body.content.length > 12000) body.content = body.content.slice(0, 12000) + '\n\n[truncated]';
+
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), 30_000);
+    try {
+      const res = await fetch('https://apigcp.trynia.ai/v2/contexts', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${NIA_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+        signal: ac.signal,
+      });
+      clearTimeout(timer);
+      if (!res.ok) {
+        const t = await res.text();
+        return { error: `${res.status} ${t.slice(0, 200)}` };
+      }
+      return await res.json();
+    } catch (e) {
+      clearTimeout(timer);
+      if (attempt === 3) return { error: `network: ${e.message || e}` };
+      await sleep(500 * attempt);
+    }
   }
-  return await res.json();
+  return { error: 'exhausted retries' };
 }
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
 async function main() {
   console.log(`[gbrain→nia] start. dry=${DRY_RUN} brain=${BRAIN_DIR}`);

@@ -385,6 +385,55 @@ export default function RevealPage() {
         )}
       </AnimatePresence>
 
+      {/* mystery card — "?" placeholder during gravity, before portrait flips in */}
+      <AnimatePresence>
+        {visible('gravity') && !visible('fidelity') && (
+          <motion.div
+            key="mystery-card"
+            className="absolute inset-0 flex items-center justify-center pointer-events-none z-10"
+            initial={{ opacity: 0, scale: 0.7, rotateY: 0 }}
+            animate={{ opacity: 1, scale: 1, rotateY: [0, 8, -8, 0] }}
+            exit={{ opacity: 0, scale: 1.1, rotateY: 90 }}
+            transition={{ duration: 1.2, ease: 'easeOut' }}
+          >
+            <div className="relative w-[280px] h-[380px] rounded-[28px] bg-gradient-to-br from-sakura-200 via-sakura-300 to-sakura-400 ring-2 ring-sakura-300 kawaii-card-shadow flex items-center justify-center overflow-hidden">
+              {/* sparkle field inside card */}
+              <div className="absolute inset-0 opacity-60">
+                {[...Array(12)].map((_, i) => (
+                  <svg
+                    key={i}
+                    viewBox="0 0 24 24"
+                    className="absolute w-4 h-4 text-cloud"
+                    style={{
+                      left: `${(i * 31.5) % 100}%`,
+                      top: `${(i * 47.3) % 100}%`,
+                      animation: `twinkle 1.6s ease-in-out infinite ${i * 0.15}s`,
+                    }}
+                    fill="currentColor"
+                  >
+                    <path d="M12 0 L14 10 L24 12 L14 14 L12 24 L10 14 L0 12 L10 10 Z" />
+                  </svg>
+                ))}
+              </div>
+              {/* the giant ? */}
+              <motion.div
+                className="font-display italic text-[200px] leading-none text-cloud kawaii-text-glow"
+                animate={{ scale: [1, 1.05, 1] }}
+                transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut' }}
+              >
+                ?
+              </motion.div>
+              {/* "she found you" caption */}
+              <div className="absolute bottom-6 left-0 right-0 text-center">
+                <div className="font-mono uppercase tracking-[0.3em] text-[10px] text-cloud/90">
+                  she found you
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* portrait — hero card (her actual face from the swipe) */}
       <AnimatePresence>
         {visible('fidelity') && phase !== 'download' && (

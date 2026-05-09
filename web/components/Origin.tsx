@@ -52,15 +52,6 @@ export function Origin() {
         </div>
       </div>
 
-      {/* matches moment h2: 64px Manrope 600 lineHeight 1.2 (76.8px) letter-
-          spacing -1.28px color rgb(0,0,0) — max-width 560px to match section h2 */}
-      <Reveal delay={0.4} className="mt-16 tablet:mt-24">
-        <blockquote className="max-w-[560px] font-sans text-[40px] font-semibold leading-[1.2] tracking-[-0.02em] text-black tablet:text-[64px]">
-          “she&apos;s not designed.
-          <br />
-          she&apos;s discovered.”
-        </blockquote>
-      </Reveal>
     </section>
   );
 }

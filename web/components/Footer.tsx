@@ -46,11 +46,11 @@ export function Footer() {
             <Reveal delay={0.3}>
               <div className="mt-10 flex flex-wrap items-center gap-5">
                 <Link
-                  href="/swipe"
+                  href="/download"
                   className="inline-flex h-14 items-center gap-2 rounded-pill bg-sakura-500 px-8 font-sans text-[16px] font-semibold tracking-[-0.005em] text-cloud transition-colors duration-200 ease-linear hover:bg-sakura-600"
                   data-cursor-grow
                 >
-                  <span>begin discovery</span>
+                  <span>download angel</span>
                   <span aria-hidden>→</span>
                 </Link>
                 <span className="font-mono text-[12px] text-muted-secondary">

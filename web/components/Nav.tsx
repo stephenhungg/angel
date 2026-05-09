@@ -17,7 +17,7 @@ import gsap from "gsap";
  */
 
 const NAV_LINKS = [
-  { href: "/swipe", label: "discover" },
+  { href: "/download", label: "download" },
   { href: "#origin", label: "origin" },
   { href: "#what-she-is", label: "what she is" },
   { href: "#archetypes", label: "archetypes" },
@@ -178,8 +178,8 @@ export function Nav() {
                 >
                   github →
                 </a>
-                <Link href="/swipe" className="inline-flex min-h-11 items-center hover:text-sakura-600">
-                  begin discovery →
+                <Link href="/download" className="inline-flex min-h-11 items-center hover:text-sakura-600">
+                  download angel ↓
                 </Link>
               </div>
             </div>

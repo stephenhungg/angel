@@ -131,11 +131,11 @@ export function Archetypes() {
         <div className="gutter relative pb-[80px] desktop:pb-[120px]">
           <Reveal delay={0.2}>
             <Link
-              href="/swipe"
+              href="/download"
               className="group inline-flex items-baseline gap-3 font-sans text-[20px] font-medium tracking-[-0.005em] text-ink-near transition-colors duration-200 ease-linear hover:text-sakura-600"
               data-cursor-grow
             >
-              <span>explore all paths</span>
+              <span>see all archetypes</span>
               <span className="transition-transform duration-200 ease-linear group-hover:translate-x-1">
                 →
               </span>
