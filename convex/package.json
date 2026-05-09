@@ -3,6 +3,11 @@
   "version": "0.0.1",
   "private": true,
   "description": "convex realtime spine — schema, mutations, queries, scheduled bg jobs",
+  "exports": {
+    "./api": "./_generated/api.js",
+    "./api.js": "./_generated/api.js",
+    "./dataModel": "./_generated/dataModel.d.ts"
+  },
   "scripts": {
     "dev": "convex dev",
     "deploy": "convex deploy",

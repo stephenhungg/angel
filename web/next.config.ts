@@ -2,7 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
-  transpilePackages: ["@angel/shared"],
+  transpilePackages: ["@angel/shared", "@angel/convex"],
   experimental: {
     optimizePackageImports: ["framer-motion"],
   },
