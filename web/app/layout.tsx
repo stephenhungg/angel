@@ -95,8 +95,8 @@ export const metadata: Metadata = {
     "nia memory",
   ],
   applicationName: "angel",
-  authors: [{ name: "Stephen Hung" }, { name: "Matthew" }],
-  creator: "Stephen Hung & Matthew",
+  authors: [{ name: "Stephen Hung" }, { name: "Matthew Kim" }],
+  creator: "Stephen Hung & Matthew Kim",
   publisher: "angel",
   category: "ai-companions",
   alternates: {

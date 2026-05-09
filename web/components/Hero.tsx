@@ -58,7 +58,7 @@ export function Hero() {
               className="pl-[10px] font-sans text-[14px] font-normal text-muted-deep"
               style={{ lineHeight: "normal" }}
             >
-              By Stephen Hung &amp; Matthew · 天使
+              By Stephen Hung &amp; Matthew Kim · 天使
             </p>
 
             <TransitionLink
