@@ -1,8 +1,8 @@
 import { ImageResponse } from "next/og";
 
-// next.js conventional file: served at /opengraph-image
-// rebuilds on every deploy, cached by vercel CDN.
-// also auto-wires the og:image / og:image:width / og:image:height meta tags.
+// next.js conventional file: served at /opengraph-image.png and auto-wires
+// og:image / og:image:width / og:image:height in <head>. rebuilt per deploy,
+// cached by vercel CDN.
 
 export const runtime = "edge";
 export const alt = "angel — kawaii AI coworker. discovered, not designed.";
@@ -12,23 +12,14 @@ export const contentType = "image/png";
 const SITE = "https://angel-swipe.vercel.app";
 
 export default async function OGImage() {
-  // load Bagel Fat One from google fonts — next/og needs the raw font buffer
-  const bagel = await fetch(
-    "https://fonts.gstatic.com/s/bagelfatone/v3/hYkPPucsQOr5dy02WmQr5Zkd0DA.woff",
-  ).then((r) => r.arrayBuffer());
-
-  // load the kawaii wordmark sticker from our own deploy
-  const wordmarkData = await fetch(`${SITE}/kawaii/wordmark-pink-nano.png`).then((r) =>
-    r.arrayBuffer(),
-  );
-  const wordmarkB64 = Buffer.from(wordmarkData).toString("base64");
-  const wordmark = `data:image/png;base64,${wordmarkB64}`;
-
-  const cherryData = await fetch(`${SITE}/kawaii/cherry-pattern.png`).then((r) =>
-    r.arrayBuffer(),
-  );
-  const cherryB64 = Buffer.from(cherryData).toString("base64");
-  const cherry = `data:image/png;base64,${cherryB64}`;
+  // load assets from our own deploy as base64 so they inline into the SVG
+  // that ImageResponse renders (no external fetches at view time)
+  const [wordmarkBuf, cherryBuf] = await Promise.all([
+    fetch(`${SITE}/kawaii/wordmark-pink-nano.png`).then((r) => r.arrayBuffer()),
+    fetch(`${SITE}/kawaii/cherry-pattern.png`).then((r) => r.arrayBuffer()),
+  ]);
+  const wordmark = `data:image/png;base64,${Buffer.from(wordmarkBuf).toString("base64")}`;
+  const cherry = `data:image/png;base64,${Buffer.from(cherryBuf).toString("base64")}`;
 
   return new ImageResponse(
     (
@@ -40,15 +31,15 @@ export default async function OGImage() {
           flexDirection: "column",
           alignItems: "flex-start",
           justifyContent: "space-between",
-          padding: "72px 80px",
-          fontFamily: '"Bagel"',
+          padding: "64px 76px",
           backgroundImage: `url(${cherry})`,
           backgroundSize: "440px auto",
           backgroundRepeat: "repeat",
           color: "#0a0507",
+          position: "relative",
         }}
       >
-        {/* soft white wash so text reads cleanly over the pattern */}
+        {/* soft white wash so text reads cleanly over the cherry pattern */}
         <div
           style={{
             position: "absolute",
@@ -59,21 +50,21 @@ export default async function OGImage() {
           }}
         />
 
-        {/* top: small kicker label */}
+        {/* top kicker */}
         <div
           style={{
             display: "flex",
             alignItems: "center",
             gap: 14,
-            fontFamily: "sans-serif",
             fontSize: 22,
             color: "#7a3e58",
+            fontWeight: 500,
             zIndex: 2,
           }}
         >
           <span
             style={{
-              display: "inline-block",
+              display: "flex",
               width: 12,
               height: 12,
               borderRadius: 999,
@@ -83,13 +74,12 @@ export default async function OGImage() {
           <span>angel · 天使 · discovered, not designed</span>
         </div>
 
-        {/* middle: wordmark + tagline */}
+        {/* center: wordmark sticker (already in bagel typography) */}
         <div
           style={{
             display: "flex",
-            flexDirection: "column",
-            alignItems: "flex-start",
-            gap: 28,
+            alignItems: "center",
+            justifyContent: "flex-start",
             zIndex: 2,
           }}
         >
@@ -106,23 +96,24 @@ export default async function OGImage() {
           />
         </div>
 
-        {/* bottom: tagline (bagel) + url */}
+        {/* bottom: tagline + url + cta pill */}
         <div
           style={{
             display: "flex",
             flexDirection: "column",
-            gap: 18,
+            gap: 22,
             zIndex: 2,
-            maxWidth: 920,
+            maxWidth: 1000,
           }}
         >
           <div
             style={{
               display: "flex",
-              fontSize: 56,
+              fontSize: 52,
               lineHeight: 1.05,
-              letterSpacing: "-0.01em",
+              letterSpacing: "-0.02em",
               color: "#5e2640",
+              fontWeight: 700,
             }}
           >
             she sits at the desk with you. you don&apos;t feel alone.
@@ -132,15 +123,14 @@ export default async function OGImage() {
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
-              fontFamily: "sans-serif",
               fontSize: 22,
               color: "#9b3a5f",
             }}
           >
-            <span>angel-swipe.vercel.app</span>
+            <span style={{ fontWeight: 500 }}>angel-swipe.vercel.app</span>
             <span
               style={{
-                display: "inline-flex",
+                display: "flex",
                 alignItems: "center",
                 gap: 10,
                 background: "#ff85a8",
@@ -156,16 +146,6 @@ export default async function OGImage() {
         </div>
       </div>
     ),
-    {
-      ...size,
-      fonts: [
-        {
-          name: "Bagel",
-          data: bagel,
-          style: "normal",
-          weight: 400,
-        },
-      ],
-    },
+    { ...size },
   );
 }
