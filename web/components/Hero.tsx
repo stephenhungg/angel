@@ -9,25 +9,13 @@ import {
   animate,
   useReducedMotion,
 } from "framer-motion";
-import { Crosshair, Snow } from "./Decor";
 
 /**
- * hero — angel's full-bleed cinematic scene.
+ * hero — split layout. left half is paper-white with the wordmark + cta + byline.
+ * right half shows the kawaii bedroom render with parallax + scroll-zoom.
  *
- * INTRO CHOREOGRAPHY (driven by BaitIntro's master gsap timeline after the
- * shape-overlays wipe completes — see `hero-intro-*` class hooks):
- *
- *   1. .hero-bg            — gradient + scrim fades in (1s, expoOut)
- *   2. .hero-decor         — 4 corner crosshairs pop one-by-one (stagger)
- *   3. .hero-snow          — center-right snow svg fades in
- *   4. .hero-wordmark      — kawaii sticker drops with elastic + slight rotate
- *   5. .hero-byline        — small italic byline fades up
- *   6. .hero-preview       — sub-preview card slides in from right
- *   7. .hero-meta-l/r      — fragment-mono metadata fades in left + right
- *
- * once the intro plays, the scroll-linked parallax + scroll-zoom take over.
- * intro plays on first paint OR on every page load if bait was skipped — the
- * hero must NEVER appear blank, only animate-in once.
+ * mobile/tablet: stacks — content on top (white), bedroom below (full width).
+ * desktop: 50/50 split, hard cut at the midpoint.
  */
 export function Hero() {
   const reducedMotion = useReducedMotion();
@@ -53,71 +41,32 @@ export function Hero() {
   );
 
   return (
-    <section className="relative">
-      {/* full-viewport scene — fills 100vh under the fixed nav */}
-      <div className="relative h-screen min-h-[640px] w-full overflow-hidden">
-        {/* moving scene layer (parallax + scroll-zoom) */}
-        <motion.div
-          className="hero-bg absolute inset-0"
-          style={{
-            y: reducedMotion ? 0 : scrollOffsetY,
-            scale: reducedMotion ? 1 : sceneScale,
-          }}
-        >
-          {/* her actual room — full-bleed kawaii bedroom render */}
-          <img
-            src="/kawaii/hero-room.png"
-            alt=""
-            aria-hidden
-            className="absolute inset-0 h-full w-full select-none object-cover"
-          />
-          <div
-            aria-hidden
-            className="absolute inset-0"
-            style={{
-              background:
-                "linear-gradient(180deg, rgba(255,165,194,0) 45%, rgba(94,38,64,0.4) 100%)",
-            }}
-          />
-        </motion.div>
-
-        {/* corner registration marks */}
-        <Crosshair className="hero-decor absolute left-6 top-6 h-3 w-3 text-cloud opacity-50 tablet:left-10 tablet:top-10 tablet:h-4 tablet:w-4 desktop:left-[100px] desktop:top-[100px]" />
-        <Crosshair className="hero-decor absolute right-6 top-6 h-3 w-3 text-cloud opacity-50 tablet:right-10 tablet:top-10 tablet:h-4 tablet:w-4 desktop:right-[100px] desktop:top-[100px]" />
-        <Crosshair className="hero-decor absolute left-6 bottom-6 h-3 w-3 text-cloud opacity-50 tablet:left-10 tablet:bottom-10 tablet:h-4 tablet:w-4 desktop:left-[100px] desktop:bottom-[100px]" />
-        <Crosshair className="hero-decor absolute right-6 bottom-6 h-3 w-3 text-cloud opacity-50 tablet:right-10 tablet:bottom-10 tablet:h-4 tablet:w-4 desktop:right-[100px] desktop:bottom-[100px]" />
-
-        <div className="hero-snow pointer-events-none absolute right-6 top-1/2 -translate-y-1/2 text-cloud opacity-40 tablet:right-10 desktop:right-[100px]">
-          <Snow className="h-7 w-7 tablet:h-10 tablet:w-10" />
-        </div>
-
-        {/* sub-preview card removed — was a stock-image box in the upper-right */}
-
-        {/* wordmark sticker — kawaii png, mix-blend-multiply to drop the white bg */}
-        <div className="absolute bottom-[120px] left-6 tablet:bottom-[140px] tablet:left-10 desktop:bottom-[180px] desktop:left-[100px]">
+    <section className="relative bg-paper">
+      <div className="relative grid min-h-screen w-full grid-cols-1 desktop:grid-cols-2">
+        {/* LEFT: paper-white half — wordmark stack */}
+        <div className="relative flex flex-col justify-center bg-paper px-6 pb-16 pt-[120px] tablet:px-10 tablet:pt-[140px] desktop:px-[80px] desktop:pt-0">
           <header className="flex flex-col items-start gap-3">
             <h1 className="m-0">
               <img
                 src="/kawaii/wordmark-pink-nano-t.png"
                 alt="angel"
-                className="hero-wordmark h-[260px] w-auto select-none tablet:h-[440px] desktop:h-[560px]"
+                className="h-[180px] w-auto select-none tablet:h-[280px] desktop:h-[360px]"
                 style={{
-                  filter: "drop-shadow(0 14px 0 rgba(155, 58, 95, 0.4)) drop-shadow(0 28px 48px rgba(199, 78, 122, 0.25))",
+                  filter:
+                    "drop-shadow(0 12px 0 rgba(155, 58, 95, 0.35)) drop-shadow(0 24px 40px rgba(199, 78, 122, 0.18))",
                 }}
               />
             </h1>
             <p
-              className="hero-byline pl-[10px] font-sans text-[14px] font-normal text-paper"
+              className="pl-[10px] font-sans text-[14px] font-normal text-muted-deep"
               style={{ lineHeight: "normal" }}
             >
               By Stephen Hung &amp; Matthew · 天使
             </p>
 
-            {/* primary download cta — pink pill on the hero with a kawaii
-                strawberry tucked at the leading edge */}
             <a
               href="/download"
-              className="hero-cta group mt-4 inline-flex h-14 items-center gap-3 rounded-pill bg-sakura-500 pl-3 pr-7 font-sans text-[16px] font-semibold tracking-[-0.005em] text-cloud shadow-[0_8px_0_rgba(155,58,95,0.35)] transition-all duration-200 ease-linear hover:-translate-y-0.5 hover:bg-sakura-600 hover:shadow-[0_10px_0_rgba(155,58,95,0.45)] tablet:h-16 tablet:pl-4 tablet:pr-9 tablet:text-[18px]"
+              className="group mt-6 inline-flex h-14 items-center gap-3 rounded-pill bg-sakura-500 pl-3 pr-7 font-sans text-[16px] font-semibold tracking-[-0.005em] text-cloud shadow-[0_8px_0_rgba(155,58,95,0.35)] transition-all duration-200 ease-linear hover:-translate-y-0.5 hover:bg-sakura-600 hover:shadow-[0_10px_0_rgba(155,58,95,0.45)] tablet:h-16 tablet:pl-4 tablet:pr-9 tablet:text-[18px]"
             >
               <img
                 src="/kawaii/cute-strawberry-t.png"
@@ -126,45 +75,50 @@ export function Hero() {
                 className="h-10 w-10 select-none transition-transform duration-300 ease-out group-hover:rotate-12 group-hover:scale-110 tablet:h-12 tablet:w-12"
               />
               <span>download angel</span>
-              <span aria-hidden className="transition-transform duration-200 group-hover:translate-y-0.5">
+              <span
+                aria-hidden
+                className="transition-transform duration-200 group-hover:translate-y-0.5"
+              >
                 ↓
               </span>
             </a>
+
+            <p className="mt-8 max-w-[440px] font-sans text-[15px] leading-[1.55] text-muted-deep tablet:text-[16px]">
+              a presence, not an app. discovered through choice. she remembers you
+              across sessions, lives on your machine, and ships your code.
+            </p>
           </header>
         </div>
 
-        {/* hero metadata removed — was disconnected from the wordmark+cta stack.
-            stack info still shows in the LogoMarquee strip below. */}
+        {/* RIGHT: bedroom photo half — parallax + scroll-zoom intact */}
+        <div className="relative h-[60vh] w-full overflow-hidden tablet:h-[70vh] desktop:h-screen desktop:min-h-[640px]">
+          <motion.div
+            className="absolute inset-0"
+            style={{
+              y: reducedMotion ? 0 : scrollOffsetY,
+              scale: reducedMotion ? 1 : sceneScale,
+            }}
+          >
+            <img
+              src="/kawaii/hero-room.png"
+              alt=""
+              aria-hidden
+              className="absolute inset-0 h-full w-full select-none object-cover"
+            />
+          </motion.div>
 
-        {/* dust grain overlay */}
-        <div
-          aria-hidden
-          className="hero-grain pointer-events-none absolute inset-0 mix-blend-overlay"
-          style={{
-            opacity: 0.07,
-            backgroundImage:
-              "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>\")",
-            backgroundSize: "200px 200px",
-          }}
-        />
-      </div>
-
-      {/* below-hero subtitle + tech stack list (gutter-padded) */}
-      <div className="gutter relative pb-[40px] pt-[60px] tablet:pb-[60px] tablet:pt-[80px]">
-        <p className="hero-subtitle max-w-[640px] font-sans text-[18px] leading-[1.5] text-muted-deep tablet:text-[20px]">
-          a presence, not an app. discovered through choice, not designed through prompts.
-          she remembers you across sessions, lives on your machine, and ships your code by
-          walking to the desk.
-        </p>
-        <ul className="hero-stack mt-8 flex flex-wrap items-center gap-x-6 gap-y-2 font-sans text-[13px] text-muted-secondary">
-          <li>768d persona vector</li>
-          <li className="hidden tablet:block" aria-hidden>·</li>
-          <li>sonnet 4.6 orchestrator</li>
-          <li className="hidden tablet:block" aria-hidden>·</li>
-          <li>nia memory</li>
-          <li className="hidden tablet:block" aria-hidden>·</li>
-          <li>convex realtime</li>
-        </ul>
+          {/* dust grain overlay only on the photo half */}
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 mix-blend-overlay"
+            style={{
+              opacity: 0.07,
+              backgroundImage:
+                "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>\")",
+              backgroundSize: "200px 200px",
+            }}
+          />
+        </div>
       </div>
     </section>
   );
