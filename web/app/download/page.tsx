@@ -50,7 +50,7 @@ export default function DownloadPage() {
 
         <div className="mt-12 flex flex-col items-center text-center">
           <Image
-            src="/kawaii/wordmark-pink-nano.png"
+            src="/kawaii/wordmark-pink-nano-t.png"
             alt="angel"
             width={800}
             height={400}

@@ -14,25 +14,25 @@ const cards = [
   {
     no: "i",
     title: "presence",
-    asset: "/kawaii/presence-pink.png",
+    asset: "/kawaii/presence-pink-t.png",
     body: "she lives in a room on your machine. you summon her, she walks to the desk, the monitor lights up. she's not a chat — she's somewhere.",
   },
   {
     no: "ii",
     title: "memory",
-    asset: "/kawaii/memory-pink.png",
+    asset: "/kawaii/memory-pink-t.png",
     body: "every conversation, every commit, every walk you took her on — recorded in nia. she opens with 'how'd that portfolio thing land?' because she remembers.",
   },
   {
     no: "iii",
     title: "agency",
-    asset: "/kawaii/agency-pink.png",
+    asset: "/kawaii/agency-pink-t.png",
     body: "she ships your code. claude sonnet 4.6 orchestrates, codex executes, a verifier confirms. she narrates honestly — including when she fails.",
   },
   {
     no: "iv",
     title: "continuity",
-    asset: "/kawaii/continuity-pink.png",
+    asset: "/kawaii/continuity-pink-t.png",
     body: "close the laptop, text her from your phone — she replies. her substrate is the cloud; the room and the sms are surfaces. one being, many bodies.",
   },
 ];

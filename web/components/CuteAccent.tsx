@@ -14,14 +14,14 @@ import Image from "next/image";
  */
 
 const ASSETS = {
-  bow: "/kawaii/cute-bow.png",
-  boba: "/kawaii/cute-boba.png",
-  strawberry: "/kawaii/cute-strawberry.png",
-  cake: "/kawaii/cute-cake.png",
-  blossom: "/kawaii/cute-blossom.png",
-  cloud: "/kawaii/cute-cloud.png",
-  hearts: "/kawaii/cute-hearts.png",
-  moon: "/kawaii/cute-moon.png",
+  bow: "/kawaii/cute-bow-t.png",
+  boba: "/kawaii/cute-boba-t.png",
+  strawberry: "/kawaii/cute-strawberry-t.png",
+  cake: "/kawaii/cute-cake-t.png",
+  blossom: "/kawaii/cute-blossom-t.png",
+  cloud: "/kawaii/cute-cloud-t.png",
+  hearts: "/kawaii/cute-hearts-t.png",
+  moon: "/kawaii/cute-moon-t.png",
 } as const;
 
 type Kind = keyof typeof ASSETS;
