@@ -1,6 +1,5 @@
 import { BaitIntro } from "@/components/BaitIntro";
 import { SmoothScroll } from "@/components/SmoothScroll";
-import { Cursor } from "@/components/Cursor";
 import { Nav } from "@/components/Nav";
 import { Hero } from "@/components/Hero";
 import { Origin } from "@/components/Origin";
@@ -103,7 +102,6 @@ export default function HomePage() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
       <SmoothScroll />
-      <Cursor />
       <BaitIntro>
         <main className="min-h-screen bg-paper">
           <Nav />

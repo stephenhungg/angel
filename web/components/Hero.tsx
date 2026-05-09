@@ -9,9 +9,7 @@ import {
   animate,
   useReducedMotion,
 } from "framer-motion";
-import { ImageCard } from "./ImageCard";
 import { Crosshair, Snow } from "./Decor";
-import { StockScene } from "./StockScene";
 
 /**
  * hero — angel's full-bleed cinematic scene.
@@ -93,24 +91,7 @@ export function Hero() {
           <Snow className="h-7 w-7 tablet:h-10 tablet:w-10" />
         </div>
 
-        {/* sub-preview card top-right (desktop only) */}
-        <div className="hero-preview absolute right-6 top-1/4 hidden w-[180px] tablet:right-10 tablet:block tablet:w-[220px] desktop:right-[140px] desktop:w-[260px]">
-          <ImageCard className="aspect-[4/3] rounded-sm shadow-2xl">
-            <StockScene seed="angel-room-preview" w={520} h={390} className="absolute inset-0" />
-            <div
-              aria-hidden
-              className="absolute inset-0"
-              style={{
-                background:
-                  "linear-gradient(180deg, rgba(255,165,194,0) 50%, rgba(94,38,64,0.5) 100%)",
-              }}
-            />
-            <div className="absolute bottom-3 left-3 right-3 flex items-end justify-between font-sans text-[10px] text-cloud opacity-95">
-              <span>her room</span>
-              <span>now</span>
-            </div>
-          </ImageCard>
-        </div>
+        {/* sub-preview card removed — was a stock-image box in the upper-right */}
 
         {/* wordmark sticker — kawaii png, mix-blend-multiply to drop the white bg */}
         <div className="absolute bottom-[120px] left-6 tablet:bottom-[140px] tablet:left-10 desktop:bottom-[180px] desktop:left-[100px]">
@@ -131,6 +112,18 @@ export function Hero() {
             >
               By Stephen Hung &amp; Matthew · 天使
             </p>
+
+            {/* primary download cta — pink pill on the hero */}
+            <a
+              href="/download"
+              className="hero-cta group mt-4 inline-flex h-14 items-center gap-2 rounded-pill bg-sakura-500 px-8 font-sans text-[16px] font-semibold tracking-[-0.005em] text-cloud shadow-[0_8px_0_rgba(155,58,95,0.35)] transition-all duration-200 ease-linear hover:-translate-y-0.5 hover:bg-sakura-600 hover:shadow-[0_10px_0_rgba(155,58,95,0.45)] tablet:h-16 tablet:px-10 tablet:text-[18px]"
+              data-cursor-grow
+            >
+              <span>download angel</span>
+              <span aria-hidden className="transition-transform duration-200 group-hover:translate-y-0.5">
+                ↓
+              </span>
+            </a>
           </header>
         </div>
 

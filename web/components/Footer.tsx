@@ -118,9 +118,11 @@ export function Footer() {
         <SparkleField variant="ambient" density={48} />
       </div>
 
+      {/* mascot anchored at ~42% (slight upper-center) so she lines up with
+          the tagline area when the footer fills viewport. */}
       <div
         ref={mascotRef}
-        className="pointer-events-none absolute right-[5%] top-1/2 hidden -translate-y-1/2 select-none tablet:block"
+        className="pointer-events-none absolute right-[5%] top-[42%] hidden -translate-y-1/2 select-none tablet:block"
       >
         <Image
           src="/kawaii/mascot-wave-t.png"
@@ -128,7 +130,7 @@ export function Footer() {
           aria-hidden
           width={620}
           height={620}
-          className="h-auto w-[280px] desktop:w-[420px]"
+          className="h-auto w-[260px] desktop:w-[380px]"
           style={{ filter: "drop-shadow(0 16px 0 rgba(155, 58, 95, 0.22))" }}
         />
       </div>
