@@ -433,7 +433,7 @@ export function useSynthesisLog(): SynthesisRecord[] {
     if (!haveConvex) return sim;
     if (!live || live.length === 0) return sim;
     return live.map(
-      (r): SynthesisRecord => ({
+      (r: any): SynthesisRecord => ({
         _id: r._id,
         userId: r.userId,
         inputSignals: (r.inputSignals as SynthesisRecord['inputSignals']) ?? {

@@ -18,15 +18,14 @@
       "@/*": ["./*"],
       "@angel/shared": ["./lib/shared/index.ts"],
       "@angel/shared/*": ["./lib/shared/*"],
-      "@angel/convex/*": ["../convex/_generated/*"]
+      "@angel/convex/*": ["./lib/convex-generated/*"]
     }
   },
   "include": [
     "next-env.d.ts",
     "**/*.ts",
     "**/*.tsx",
-    ".next/types/**/*.ts",
-    "../convex/_generated/**/*.ts"
+    ".next/types/**/*.ts"
   ],
   "exclude": ["node_modules", "scripts/**"]
 }
