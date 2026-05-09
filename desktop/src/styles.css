@@ -1,0 +1,99 @@
+/* angel — global styles. dominant warm pink accent on charcoal-violet bg.
+   chunky display font for subtitles, mono for UI chrome. */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  font-family: var(--font-ui);
+}
+
+button {
+  font-family: var(--font-ui);
+  background: transparent;
+  color: var(--angel-fg);
+  border: 1px solid var(--angel-accent-soft);
+  padding: 0.5rem 0.9rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, transform 120ms ease;
+}
+
+button:hover {
+  background: var(--angel-accent-soft);
+  border-color: var(--angel-accent);
+}
+
+button:active {
+  transform: translateY(1px);
+}
+
+input,
+textarea {
+  font-family: var(--font-ui);
+  color: var(--angel-fg);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--angel-accent-soft);
+  border-radius: 8px;
+  padding: 0.6rem 0.9rem;
+  outline: none;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+input:focus,
+textarea:focus {
+  border-color: var(--angel-accent);
+  box-shadow: var(--angel-glow);
+}
+
+.scene-root {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+}
+
+.hud {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.hud > * {
+  pointer-events: auto;
+}
+
+@keyframes angel-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.85;
+    transform: scale(1.03);
+  }
+}
+
+@keyframes angel-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes angel-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}

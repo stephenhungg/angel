@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "noEmit": true,
+    "isolatedModules": true,
+    "types": ["node", "electron"],
+    "baseUrl": ".",
+    "paths": {
+      "@angel/shared": ["../shared/src"],
+      "@angel/shared/*": ["../shared/src/*"]
+    }
+  },
+  "include": ["electron/**/*.ts", "electron.vite.config.ts", "../shared/src/**/*.ts"]
+}

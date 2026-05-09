@@ -39,6 +39,9 @@ convex/_generated/
 # tests
 coverage/
 
+# typescript incremental
+*.tsbuildinfo
+
 # misc
 .cache/
 .parcel-cache/
