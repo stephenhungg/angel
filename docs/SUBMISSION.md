@@ -13,7 +13,7 @@ https://forms.gle/fkoFXRo3L2MVkkz87
 always-on agents (nia + tensorlake)
 
 **deployed url:**
-https://angel-swipe-k0kqhid0c-stephen-hungs-projects-d01c13ef.vercel.app
+https://angel-swipe-djvhgfzim-stephen-hungs-projects-d01c13ef.vercel.app
 
 (or whatever the latest vercel deploy URL is — check `vercel ls --prod` if unsure)
 
