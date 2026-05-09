@@ -59,9 +59,28 @@ export type InteractableVerb =
   | 'open'
   | 'lay_down';
 
+export type Vec3 = [number, number, number];
+
 export type SceneAction =
-  | { id: string; type: 'walk_to'; anchor: AnchorId; speed?: 'slow' | 'normal' | 'urgent' }
-  | { id: string; type: 'sit_at'; anchor: AnchorId }
+  | {
+      id: string;
+      type: 'walk_to';
+      anchor: AnchorId | 'user';
+      speed?: 'slow' | 'normal' | 'urgent';
+      /** explicit world position to walk to. When set, ActionRunner uses
+       *  this instead of resolveAnchor — populated by the interact_with
+       *  macro so calibrated approach coords are honored. */
+      posOverride?: Vec3;
+      /** explicit yaw (radians) to face on arrival */
+      yawOverride?: number;
+    }
+  | {
+      id: string;
+      type: 'sit_at';
+      anchor: AnchorId;
+      posOverride?: Vec3;
+      yawOverride?: number;
+    }
   | { id: string; type: 'stand' }
   | { id: string; type: 'play_clip'; clip: AnimationClip; loop?: boolean; durationMs?: number }
   | { id: string; type: 'face'; target: 'user' | AnchorId }
@@ -74,7 +93,11 @@ export type SceneAction =
   /** macro: walk to an interactable's approach anchor and execute its verb.
    * The renderer handles the underlying choreography (walk → face → sit →
    * typing flow etc.) so the brain only needs to name the prop + verb. */
-  | { id: string; type: 'interact_with'; interactableId: string; verb: InteractableVerb; durationMs?: number };
+  | { id: string; type: 'interact_with'; interactableId: string; verb: InteractableVerb; durationMs?: number }
+  /** walk to where the player currently is, stopping at `stopDistance` and
+   * facing them. Resolved at execution time so the avatar uses the player's
+   * live position, not a stale snapshot. */
+  | { id: string; type: 'walk_to_user'; stopDistance?: number; speed?: 'slow' | 'normal' | 'urgent' };
 
 export type SceneActionComplete = {
   id: string;

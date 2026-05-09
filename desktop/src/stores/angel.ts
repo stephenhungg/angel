@@ -104,6 +104,10 @@ export type AngelStore = {
   // one-shot teleport-toward target for the look_out verb (Player consumes it)
   lookOutTarget: [number, number, number] | null;
   setLookOutTarget: (p: [number, number, number] | null) => void;
+
+  // calibration mode (K) — releases pointer lock + freezes player movement
+  calibrationOpen: boolean;
+  setCalibrationOpen: (v: boolean) => void;
 };
 
 const initialState: AgentLiveState = {
@@ -196,6 +200,9 @@ export const useAngelStore = create<AngelStore>()(
 
     lookOutTarget: null,
     setLookOutTarget: (p) => set({ lookOutTarget: p }),
+
+    calibrationOpen: false,
+    setCalibrationOpen: (v) => set({ calibrationOpen: v }),
   })),
 );
 

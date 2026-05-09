@@ -111,26 +111,86 @@ export function ActionRunner({ avatarRef, roomRoot }: Props) {
 
     switch (current.type) {
       case 'walk_to': {
-        const anchor = resolveAnchor(current.anchor, roomRoot);
-        ctx.toPos = anchor.position.clone();
-        ctx.toRotY = anchor.rotationY;
+        // Priority order for resolving the target:
+        //   1. posOverride — emitted by interact_with macro, honors calibrated coords
+        //   2. anchor === 'user' — live player position (legacy compatibility)
+        //   3. anchor name → resolveAnchor (legacy room empty / fallback)
+        if (current.posOverride) {
+          ctx.toPos.set(...current.posOverride);
+          ctx.toRotY = current.yawOverride ?? ctx.toRotY;
+        } else if (current.anchor === 'user') {
+          const player = useAngelStore.getState().player;
+          const dx = player.x - root.position.x;
+          const dz = player.z - root.position.z;
+          const distToPlayer = Math.hypot(dx, dz);
+          const STOP_SHORT = 1.0;
+          if (distToPlayer > STOP_SHORT + ARRIVE_EPS) {
+            const t = (distToPlayer - STOP_SHORT) / distToPlayer;
+            ctx.toPos.set(
+              root.position.x + dx * t,
+              root.position.y,
+              root.position.z + dz * t,
+            );
+          } else {
+            ctx.toPos.copy(root.position);
+          }
+          ctx.toRotY = Math.atan2(player.x - ctx.toPos.x, player.z - ctx.toPos.z);
+        } else {
+          const anchor = resolveAnchor(current.anchor, roomRoot);
+          ctx.toPos = anchor.position.clone();
+          ctx.toRotY = anchor.rotationY;
+        }
         const dist = ctx.fromPos.distanceTo(ctx.toPos);
         const speed = SPEED_M_S[current.speed ?? 'normal'];
-        // budget is generous — actual completion uses arrival check + timeout
         ctx.totalDuration = Math.max(WALK_TIMEOUT_S, (dist / speed) * 1.6);
         avatarRef.current?.play('walking', 200);
         setClip('walking');
-        setStoreState({ isWalking: true, walkTarget: current.anchor });
+        setStoreState({
+          isWalking: true,
+          walkTarget: current.anchor === 'user' ? null : current.anchor,
+        });
+        break;
+      }
+      case 'walk_to_user': {
+        // resolve LIVE — not at queue time. The player may have moved
+        // between when the brain emitted the action and when it executes.
+        const player = useAngelStore.getState().player;
+        const stopShort = current.stopDistance ?? 1.4;
+        const dx = player.x - root.position.x;
+        const dz = player.z - root.position.z;
+        const distToPlayer = Math.hypot(dx, dz);
+        if (distToPlayer > stopShort + ARRIVE_EPS) {
+          const t = (distToPlayer - stopShort) / distToPlayer;
+          ctx.toPos.set(
+            root.position.x + dx * t,
+            root.position.y,
+            root.position.z + dz * t,
+          );
+        } else {
+          ctx.toPos.copy(root.position);
+        }
+        ctx.toRotY = Math.atan2(player.x - ctx.toPos.x, player.z - ctx.toPos.z);
+        const dist = ctx.fromPos.distanceTo(ctx.toPos);
+        const speed = SPEED_M_S[current.speed ?? 'normal'];
+        ctx.totalDuration = Math.max(WALK_TIMEOUT_S, (dist / speed) * 1.6);
+        avatarRef.current?.play('walking', 200);
+        setClip('walking');
+        setStoreState({ isWalking: true, walkTarget: null });
         break;
       }
       case 'sit_at': {
         // chair guard — refuse to sit on non-chair anchors (window, door,
-        // bookshelf...). Logs and degrades to a face-and-stand pose.
+        // bookshelf...). Logs and degrades to an idle pose.
         if (!isChairAnchor(current.anchor)) {
           console.warn('[scene] refused sit_at on non-chair anchor', current.anchor);
-          const anchor = resolveAnchor(current.anchor, roomRoot);
-          root.position.copy(anchor.position);
-          root.rotation.y = anchor.rotationY;
+          if (current.posOverride) {
+            root.position.set(...current.posOverride);
+            if (current.yawOverride != null) root.rotation.y = current.yawOverride;
+          } else {
+            const anchor = resolveAnchor(current.anchor, roomRoot);
+            root.position.copy(anchor.position);
+            root.rotation.y = anchor.rotationY;
+          }
           avatarRef.current?.play('idle', 250);
           setClip('idle');
           setStoreState({ isWalking: false, location: current.anchor });
@@ -138,17 +198,22 @@ export function ActionRunner({ avatarRef, roomRoot }: Props) {
           ctx.totalDuration = 0.3;
           break;
         }
-        const anchor = resolveAnchor(current.anchor, roomRoot);
-        // snap position + rotation
-        root.position.copy(anchor.position);
-        root.rotation.y = anchor.rotationY;
+        // snap to the override position (preferred — calibrated coords)
+        // or fall back to the legacy anchor system.
+        if (current.posOverride) {
+          root.position.set(...current.posOverride);
+          if (current.yawOverride != null) root.rotation.y = current.yawOverride;
+        } else {
+          const anchor = resolveAnchor(current.anchor, roomRoot);
+          root.position.copy(anchor.position);
+          root.rotation.y = anchor.rotationY;
+        }
         ctx.fromPos.copy(root.position);
         ctx.toPos.copy(root.position);
         avatarRef.current?.play('sitting', 250);
         setClip('sitting');
         setStoreState({ isWalking: false, location: current.anchor });
         currentLocationRef.current = current.anchor;
-        // sitting completes after 0.4s — long enough to crossfade
         ctx.totalDuration = 0.4;
         break;
       }
@@ -190,11 +255,16 @@ export function ActionRunner({ avatarRef, roomRoot }: Props) {
         break;
       }
       case 'face': {
-        const anchor =
-          current.target === 'user'
-            ? null
-            : resolveAnchor(current.target as AnchorId, roomRoot);
-        const targetWorldPos = anchor ? anchor.position : new THREE.Vector3(0, 1.6, 5); // user direction = +Z
+        let targetWorldPos: THREE.Vector3;
+        if (current.target === 'user') {
+          // read live player position so face(user) tracks WASD movement
+          // instead of pointing at the old hardcoded +Z spawn assumption
+          const player = useAngelStore.getState().player;
+          targetWorldPos = new THREE.Vector3(player.x, player.y, player.z);
+        } else {
+          const anchor = resolveAnchor(current.target as AnchorId, roomRoot);
+          targetWorldPos = anchor.position;
+        }
         const dx = targetWorldPos.x - root.position.x;
         const dz = targetWorldPos.z - root.position.z;
         ctx.toRotY = Math.atan2(dx, dz);
@@ -296,7 +366,24 @@ export function ActionRunner({ avatarRef, roomRoot }: Props) {
     const t = ctx.totalDuration > 0 ? Math.min(1, elapsed / ctx.totalDuration) : 1;
 
     switch (current.type) {
-      case 'walk_to': {
+      case 'walk_to':
+      case 'walk_to_user': {
+        // For walk_to_user we ALSO want the target to track the player live
+        // (they may have moved since action began). Recompute toPos every
+        // frame for that case.
+        if (current.type === 'walk_to_user') {
+          const player = useAngelStore.getState().player;
+          const stopShort = current.stopDistance ?? 1.4;
+          const dxP = player.x - root.position.x;
+          const dzP = player.z - root.position.z;
+          const distP = Math.hypot(dxP, dzP);
+          if (distP > stopShort + ARRIVE_EPS) {
+            const t2 = (distP - stopShort) / distP;
+            ctx.toPos.set(root.position.x + dxP * t2, root.position.y, root.position.z + dzP * t2);
+          }
+          ctx.toRotY = Math.atan2(player.x - ctx.toPos.x, player.z - ctx.toPos.z);
+        }
+
         // velocity-driven walk with capsule collision. moves toward the
         // target each frame, slides along walls if blocked, and rotates to
         // face the direction of motion.
@@ -308,8 +395,9 @@ export function ActionRunner({ avatarRef, roomRoot }: Props) {
         const arrived = distToTarget < ARRIVE_EPS;
         const timedOut = elapsed >= ctx.totalDuration;
         if (arrived || timedOut) {
-          console.info('[walk_to] done', {
-            anchor: current.anchor,
+          console.info('[walk] done', {
+            type: current.type,
+            anchor: current.type === 'walk_to' ? current.anchor : 'user',
             arrived,
             timedOut,
             elapsed: elapsed.toFixed(2),
@@ -317,8 +405,6 @@ export function ActionRunner({ avatarRef, roomRoot }: Props) {
             to: ctx.toPos.toArray().map((n) => n.toFixed(2)),
             final: root.position.toArray().map((n) => n.toFixed(2)),
           });
-          // snap to anchor position only on real arrival; on timeout, just
-          // stop where collision left us so we don't pop through a wall.
           if (arrived) {
             root.position.x = ctx.toPos.x;
             root.position.z = ctx.toPos.z;
@@ -326,8 +412,12 @@ export function ActionRunner({ avatarRef, roomRoot }: Props) {
           root.rotation.y = ctx.toRotY;
           avatarRef.current?.play('idle', 200);
           setClip('idle');
-          setStoreState({ isWalking: false, walkTarget: null, location: current.anchor });
-          currentLocationRef.current = current.anchor;
+          if (current.type === 'walk_to_user' || current.anchor === 'user') {
+            setStoreState({ isWalking: false, walkTarget: null });
+          } else {
+            setStoreState({ isWalking: false, walkTarget: null, location: current.anchor });
+            currentLocationRef.current = current.anchor;
+          }
           finish(current);
           break;
         }
@@ -361,7 +451,9 @@ export function ActionRunner({ avatarRef, roomRoot }: Props) {
         // doesn't moon-walk against a wall
         const motionLen = Math.hypot(moveDx, moveDz);
         const motionDir = motionLen > 0.05 ? Math.atan2(moveDx, moveDz) : lookDir;
-        const targetYaw = lookDir * 0.6 + motionDir * 0.4;
+        // blend look-at and motion-direction in shortest-angle space so we
+        // never get a 180° flip when the two angles straddle ±π
+        const targetYaw = lookDir + shortestAngleDelta(lookDir, motionDir) * 0.4;
         const yawDelta = shortestAngleDelta(root.rotation.y, targetYaw);
         root.rotation.y += yawDelta * Math.min(1, dt * 8);
         break;
@@ -429,50 +521,88 @@ function expandInteract(
 ): SceneAction[] {
   const verb = src.verb;
   const out: SceneAction[] = [];
-  // every chain wants to walk to the approach anchor first. We use the
-  // legacy AnchorId so resolveAnchor() can use room-empties when present.
-  // Fall back to 'center' if no anchor mapping (caller will telecommute).
-  const approachAnchor: AnchorId = anchorId ?? 'center';
+  const fallbackAnchor: AnchorId = anchorId ?? 'center';
+
+  /** Read the calibrated approach anchor (or worldPos fallback) off an
+   *  interactable. This is the single source of truth — the legacy
+   *  resolveAnchor system is bypassed entirely so calibrated overrides
+   *  always win. */
+  function approachOf(id: string): { pos: [number, number, number]; yaw: number } | null {
+    const it = getInteractable(id);
+    if (!it) return null;
+    if (it.approachAnchor) {
+      return {
+        pos: [it.approachAnchor.pos.x, it.approachAnchor.pos.y, it.approachAnchor.pos.z],
+        yaw: it.approachAnchor.yaw,
+      };
+    }
+    return { pos: [it.worldPos.x, 0, it.worldPos.z], yaw: 0 };
+  }
 
   if (verb === 'sit_and_type') {
-    const chair = pairedChairId ? getInteractable(pairedChairId) : undefined;
-    const chairAnchor = (chair?.anchorId ?? approachAnchor) as AnchorId;
+    const chairId = pairedChairId ?? interactableId;
+    const a = approachOf(chairId);
+    const chair = getInteractable(chairId);
+    const chairAnchor = (chair?.anchorId ?? fallbackAnchor) as AnchorId;
     out.push(
-      { id: newId('walk'), type: 'walk_to', anchor: chairAnchor, speed: 'normal' },
-      { id: newId('face'), type: 'face', target: chairAnchor },
-      { id: newId('sit'), type: 'sit_at', anchor: chairAnchor },
-      // typing flow expands itself inside play_clip handler
+      {
+        id: newId('walk'),
+        type: 'walk_to',
+        anchor: chairAnchor,
+        speed: 'normal',
+        ...(a ? { posOverride: a.pos, yawOverride: a.yaw } : {}),
+      },
+      {
+        id: newId('sit'),
+        type: 'sit_at',
+        anchor: chairAnchor,
+        ...(a ? { posOverride: a.pos, yawOverride: a.yaw } : {}),
+      },
       { id: newId('type'), type: 'play_clip', clip: 'typing', durationMs: src.durationMs ?? 8000 },
     );
-  } else if (verb === 'sit') {
+  } else if (verb === 'sit' || verb === 'sit_playful') {
+    const a = approachOf(interactableId);
     out.push(
-      { id: newId('walk'), type: 'walk_to', anchor: approachAnchor, speed: 'normal' },
-      { id: newId('sit'), type: 'sit_at', anchor: approachAnchor },
+      {
+        id: newId('walk'),
+        type: 'walk_to',
+        anchor: fallbackAnchor,
+        speed: 'normal',
+        ...(a ? { posOverride: a.pos, yawOverride: a.yaw } : {}),
+      },
+      {
+        id: newId('sit'),
+        type: 'sit_at',
+        anchor: fallbackAnchor,
+        ...(a ? { posOverride: a.pos, yawOverride: a.yaw } : {}),
+      },
     );
-  } else if (verb === 'sit_playful') {
-    out.push(
-      { id: newId('walk'), type: 'walk_to', anchor: approachAnchor, speed: 'normal' },
-      { id: newId('sit'), type: 'sit_at', anchor: approachAnchor },
-      { id: newId('clip'), type: 'play_clip', clip: 'sitting_playful', durationMs: 4000 },
-    );
-  } else if (verb === 'look_out') {
-    out.push(
-      { id: newId('walk'), type: 'walk_to', anchor: approachAnchor, speed: 'normal' },
-      { id: newId('face'), type: 'face', target: approachAnchor },
-      { id: newId('thk'), type: 'play_clip', clip: 'thinking', durationMs: 2400 },
-    );
-  } else if (verb === 'browse') {
-    out.push(
-      { id: newId('walk'), type: 'walk_to', anchor: approachAnchor, speed: 'normal' },
-      { id: newId('face'), type: 'face', target: approachAnchor },
-      { id: newId('read'), type: 'play_clip', clip: 'reading', durationMs: 4000 },
-    );
+    if (verb === 'sit_playful') {
+      out.push({ id: newId('clip'), type: 'play_clip', clip: 'sitting_playful', durationMs: 4000 });
+    }
+  } else if (verb === 'look_out' || verb === 'browse') {
+    const a = approachOf(interactableId);
+    out.push({
+      id: newId('walk'),
+      type: 'walk_to',
+      anchor: fallbackAnchor,
+      speed: 'normal',
+      ...(a ? { posOverride: a.pos, yawOverride: a.yaw } : {}),
+    });
+    if (verb === 'browse') {
+      out.push({ id: newId('read'), type: 'play_clip', clip: 'reading', durationMs: 4000 });
+    } else {
+      out.push({ id: newId('thk'), type: 'play_clip', clip: 'thinking', durationMs: 2400 });
+    }
   } else if (verb === 'open' || verb === 'lay_down') {
-    // door / bed — minimal: walk + face + speak. The brain can layer a `speak`.
-    out.push(
-      { id: newId('walk'), type: 'walk_to', anchor: approachAnchor, speed: 'normal' },
-      { id: newId('face'), type: 'face', target: approachAnchor },
-    );
+    const a = approachOf(interactableId);
+    out.push({
+      id: newId('walk'),
+      type: 'walk_to',
+      anchor: fallbackAnchor,
+      speed: 'normal',
+      ...(a ? { posOverride: a.pos, yawOverride: a.yaw } : {}),
+    });
   }
 
   console.info('[interact_with] expanded', interactableId, kind, verb, '→', out.length, 'actions');

@@ -56,6 +56,7 @@ export function Player({
   const seated = useAngelStore((s) => s.playerSeated);
   const lookOutTarget = useAngelStore((s) => s.lookOutTarget);
   const setLookOutTarget = useAngelStore((s) => s.setLookOutTarget);
+  const calibrating = useAngelStore((s) => s.calibrationOpen);
 
   const positionRef = useRef(new THREE.Vector3(spawn[0], spawn[1], spawn[2]));
   // horizontal velocity in xz; vyRef tracks vertical velocity separately
@@ -189,17 +190,17 @@ export function Player({
   useFrame((_, dt) => {
     const dtClamped = Math.min(dt, 0.05); // avoid huge jumps after a stutter
 
-    // input intent (zeroed while seated; mouse-look still works)
+    // input intent (zeroed while seated or calibrating)
     const k = keysRef.current;
     let intentX = 0;
     let intentZ = 0;
-    if (locked && !seated) {
+    if (locked && !seated && !calibrating) {
       if (KEYS.forward.some((c) => k[c])) intentZ -= 1;
       if (KEYS.back.some((c) => k[c])) intentZ += 1;
       if (KEYS.left.some((c) => k[c])) intentX -= 1;
       if (KEYS.right.some((c) => k[c])) intentX += 1;
     }
-    const sprinting = locked && !seated && KEYS.sprint.some((c) => k[c]);
+    const sprinting = locked && !seated && !calibrating && KEYS.sprint.some((c) => k[c]);
     const intentLen = Math.hypot(intentX, intentZ);
     if (intentLen > 0) {
       intentX /= intentLen;

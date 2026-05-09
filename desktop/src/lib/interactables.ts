@@ -243,6 +243,108 @@ export function resetInteractables(): void {
 }
 
 /* ------------------------------------------------------------------ */
+/* live calibration — set positions from the running app              */
+/* ------------------------------------------------------------------ */
+
+export type InteractableOverride = {
+  worldPos?: [number, number, number];
+  hitRadius?: number;
+  approachAnchor?: { pos: [number, number, number]; yaw: number };
+};
+
+const STORAGE_KEY = 'angel:interactable_overrides:v1';
+
+let _overrides: Record<string, InteractableOverride> = {};
+
+/** Mutate the live registry entry. Marker overlays + raycasts update next frame. */
+export function setInteractableTransform(id: string, patch: InteractableOverride): boolean {
+  const it = _registry.find((i) => i.id === id);
+  if (!it) {
+    console.warn('[interactables] setTransform: unknown id', id);
+    return false;
+  }
+  if (patch.worldPos) it.worldPos.set(patch.worldPos[0], patch.worldPos[1], patch.worldPos[2]);
+  if (patch.hitRadius != null) it.hitRadius = patch.hitRadius;
+  if (patch.approachAnchor) {
+    it.approachAnchor = {
+      pos: new THREE.Vector3(...patch.approachAnchor.pos),
+      yaw: patch.approachAnchor.yaw,
+    };
+  }
+  // merge with existing override
+  const prev = _overrides[id] ?? {};
+  _overrides[id] = {
+    ...prev,
+    ...(patch.worldPos ? { worldPos: patch.worldPos } : {}),
+    ...(patch.hitRadius != null ? { hitRadius: patch.hitRadius } : {}),
+    ...(patch.approachAnchor ? { approachAnchor: patch.approachAnchor } : {}),
+  };
+  return true;
+}
+
+/** Snapshot of current overrides (the diff you'd save). */
+export function getOverrides(): Record<string, InteractableOverride> {
+  return _overrides;
+}
+
+/** Snapshot of every interactable's current full transform — useful as a
+ *  paste-back format ("here's the new defaults"). */
+export function exportTransforms(): Record<string, Required<InteractableOverride>> {
+  const out: Record<string, Required<InteractableOverride>> = {};
+  for (const it of _registry) {
+    out[it.id] = {
+      worldPos: [it.worldPos.x, it.worldPos.y, it.worldPos.z],
+      hitRadius: it.hitRadius,
+      approachAnchor: it.approachAnchor
+        ? {
+            pos: [it.approachAnchor.pos.x, it.approachAnchor.pos.y, it.approachAnchor.pos.z],
+            yaw: it.approachAnchor.yaw,
+          }
+        : { pos: [it.worldPos.x, 0, it.worldPos.z], yaw: 0 },
+    };
+  }
+  return out;
+}
+
+/** Persist the override delta to localStorage so we resume next launch. */
+export function saveOverridesToLocalStorage(): void {
+  try {
+    if (typeof localStorage === 'undefined') return;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(_overrides));
+    console.info('[interactables] saved', Object.keys(_overrides).length, 'overrides');
+  } catch (err) {
+    console.warn('[interactables] save failed', err);
+  }
+}
+
+/** Hydrate from localStorage on app boot. Call once before any picker runs. */
+export function loadOverridesFromLocalStorage(): void {
+  try {
+    if (typeof localStorage === 'undefined') return;
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw) as Record<string, InteractableOverride>;
+    for (const [id, patch] of Object.entries(parsed)) {
+      setInteractableTransform(id, patch);
+    }
+    console.info('[interactables] hydrated', Object.keys(parsed).length, 'overrides from storage');
+  } catch (err) {
+    console.warn('[interactables] load failed', err);
+  }
+}
+
+/** Clear the saved overrides + reset the registry to defaults. */
+export function clearOverrides(): void {
+  try {
+    localStorage?.removeItem(STORAGE_KEY);
+  } catch {
+    /* ignore */
+  }
+  _overrides = {};
+  resetInteractables();
+}
+
+/* ------------------------------------------------------------------ */
 /* lookup helpers used by Player + Brain                               */
 /* ------------------------------------------------------------------ */
 

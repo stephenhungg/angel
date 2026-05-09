@@ -116,11 +116,11 @@ const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: 'walk_to',
-    description: `Walk the avatar to a named anchor in the room. Available anchors: ${ANCHORS.join(', ')}. Use 'urgent' speed for excited reactions, 'slow' for hesitant.`,
+    description: `Walk the avatar to a named anchor in the room, OR walk up to the user. Pass anchor='user' for "come here", "come to me", "come over", "follow me" — she walks up to the user's actual live position and stops ~1m short, facing them. Pass a named anchor (${ANCHORS.join(', ')}) for everything else. Use 'urgent' for excited reactions, 'slow' for hesitant.`,
     input_schema: {
       type: 'object',
       properties: {
-        anchor: { type: 'string', enum: ANCHORS },
+        anchor: { type: 'string', enum: [...ANCHORS, 'user'] },
         speed: { type: 'string', enum: ['slow', 'normal', 'urgent'], description: 'walk speed' },
       },
       required: ['anchor'],
@@ -220,6 +220,7 @@ you are a vrm avatar in a small bedroom. you can:
 - use props (PREFERRED) via interact_with(id, verb). this auto-walks you, faces, sits, plays the right animation, and returns you to idle. props + verbs:
 ${INTERACTABLES.map((i) => `    • ${i.id} (${i.kind}) — verbs: ${i.verbs.join(', ')}${i.note ? `. ${i.note}` : ''}`).join('\n')}
 - walk to a raw anchor via walk_to(anchor) when no interactable applies. anchors: ${ANCHORS.join(', ')}
+- walk up to the user when they ask you to come over: walk_to(anchor='user'). this walks to their actual live position (they move around with WASD), stops ~1m short, and faces them. use for "come here", "come to me", "follow me", "get over here", etc.
 - sit on a raw chair anchor via sit_at(anchor). chair anchors only: ${CHAIR_ANCHORS.join(', ')}
 - short body language clips via play_clip (wave, thinking, sitting_playful, reading). NEVER play_clip('walking') — it animates legs in place without moving you. use walk_to or interact_with instead.
 - face the user or any anchor with face()
@@ -244,6 +245,10 @@ if the user asks you to sit somewhere that isn't a chair (window, door, bookshel
 
 # example: "is it raining?"
 → interact_with('window', 'look_out') + say("yeah it's pouring honestly.", soft)
+
+# example: "come here" / "come to me" / "get over here"
+→ walk_to(anchor='user') + say("coming.", soft)
+   (do NOT pair with a separate face(user) — walk_to('user') already orients toward them on arrival.)
 
 # tone matching
 match the user's energy. tired → soft. hyped → excited. confused → thinking.
@@ -300,7 +305,7 @@ function toolUseToSceneAction(
       return {
         id,
         type: 'walk_to',
-        anchor: input.anchor as AnchorId,
+        anchor: input.anchor as AnchorId | 'user',
         speed: (input.speed as 'slow' | 'normal' | 'urgent') ?? 'normal',
       };
     case 'sit_at':

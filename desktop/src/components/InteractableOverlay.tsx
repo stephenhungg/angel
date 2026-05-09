@@ -99,13 +99,25 @@ const KIND_COLORS: Record<string, { idle: string; focus: string }> = {
 
 /**
  * Per-frame: shoot a ray from the camera forward, find the nearest interactable
- * in range, and write the result to the angel store. Throttled to 6 Hz to avoid
- * thrashing react renders for the prompt HUD.
+ * in your aim cone, then ALSO check that the player is physically close enough
+ * to it (the "reach"). Without this gate you could highlight + interact with
+ * a chair across the room. Throttled to 12 Hz.
  */
-export function InteractablePicker({ maxDist = 3.5 }: { maxDist?: number }) {
+export function InteractablePicker({
+  /** how far the aim ray reaches (meters) */
+  maxAimDist = 4.0,
+  /** straight-line distance from player feet to the interactable, beyond
+   *  which you can no longer focus / E-interact. Tighter than the aim ray
+   *  so reach feels physical, not optical. */
+  reach = 2.0,
+}: {
+  maxAimDist?: number;
+  reach?: number;
+} = {}) {
   const { camera } = useThree();
   const setFocused = useAngelStore((s) => s.setFocusedInteractable);
   const dirRef = useRef(new THREE.Vector3());
+  const playerPosRef = useRef(new THREE.Vector3());
   const tickRef = useRef(0);
 
   useFrame((_, dt) => {
@@ -114,8 +126,26 @@ export function InteractablePicker({ maxDist = 3.5 }: { maxDist?: number }) {
     tickRef.current = 0;
 
     camera.getWorldDirection(dirRef.current);
-    const hit = pickInteractable(camera.position, dirRef.current, maxDist);
-    setFocused(hit?.id ?? null);
+    const hit = pickInteractable(camera.position, dirRef.current, maxAimDist);
+    if (!hit) {
+      setFocused(null);
+      return;
+    }
+    // proximity gate — feet position lives in store
+    const p = useAngelStore.getState().player;
+    playerPosRef.current.set(p.x, p.y - 1.5, p.z); // approx feet
+    const dist = playerPosRef.current.distanceTo(hit.worldPos);
+    // big props (workstation, window, bookshelf) get a slightly longer reach
+    // since their hitbox center is up high or behind the interactable
+    const kindReach =
+      hit.kind === 'window' || hit.kind === 'bookshelf' || hit.kind === 'desk' || hit.kind === 'door'
+        ? reach + 0.8
+        : reach;
+    if (dist > kindReach) {
+      setFocused(null);
+      return;
+    }
+    setFocused(hit.id);
   });
   return null;
 }

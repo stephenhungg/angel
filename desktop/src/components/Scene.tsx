@@ -1,6 +1,6 @@
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { ContactShadows } from '@react-three/drei';
-import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 
 import { Room } from '@/components/Room';
@@ -15,6 +15,7 @@ import {
   InteractablePromptHUD,
   PlayerInteractKeyHandler,
 } from '@/components/InteractableOverlay';
+import { CalibrationOverlay, CalibrationRaycaster } from '@/components/CalibrationOverlay';
 import { useAngelStore } from '@/stores/angel';
 
 const FALLBACK_VRM = '/vrm/2068967230566994300.vrm';
@@ -142,6 +143,7 @@ function PointerLockBridge({ canvasParentRef }: { canvasParentRef: React.RefObje
 export function Scene({ debug = true }: SceneProps) {
   const persona = useAngelStore((s) => s.persona);
   const pointerLocked = useAngelStore((s) => s.pointerLocked);
+  const calibrationOpen = useAngelStore((s) => s.calibrationOpen);
   const avatarRef = useRef<AvatarHandle | null>(null);
   const sceneWrapRef = useRef<HTMLDivElement | null>(null);
   const [roomRoot, setRoomRoot] = useState<THREE.Object3D | null>(null);
@@ -153,6 +155,17 @@ export function Scene({ debug = true }: SceneProps) {
     setRoomRoot(r);
     setDebugInfo((d) => (d.room ? d : { ...d, room: true }));
   }, []);
+
+  // flat list of room mesh colliders, recomputed only when the room scene
+  // root changes. Shared between Player physics and the calibration raycaster.
+  const colliders = useMemo<THREE.Object3D[]>(() => {
+    if (!roomRoot) return [];
+    const list: THREE.Object3D[] = [];
+    roomRoot.traverse((o) => {
+      if ((o as THREE.Mesh).isMesh) list.push(o);
+    });
+    return list;
+  }, [roomRoot]);
 
   return (
     <div ref={sceneWrapRef} style={{ width: '100%', height: '100%', position: 'relative' }}>
@@ -222,9 +235,12 @@ export function Scene({ debug = true }: SceneProps) {
         <AvatarLookAtPlayer avatarRef={avatarRef} />
         <Player roomRoot={roomRoot} locked={pointerLocked} />
 
-        {/* interactables */}
+        {/* interactables — only render the wireframe markers while the
+            calibration HUD is open. During normal play, in-world prompts
+            are enough; the orbs were too noisy. */}
         <InteractablePicker />
-        <InteractableDebugMarkers visible={debug} />
+        <InteractableDebugMarkers visible={calibrationOpen} />
+        <CalibrationRaycaster colliders={colliders} />
 
         {/* desk monitor — codex stdout streams here when angel is delegating
             (the 30% bg-execution rubric). position is rough; tune live or
@@ -241,6 +257,7 @@ export function Scene({ debug = true }: SceneProps) {
       <Crosshair />
       <InteractablePromptHUD />
       <PlayerInteractKeyHandler />
+      <CalibrationOverlay />
       {debug && <SceneDebugBadge {...debugInfo} />}
       {debug && <AnimationTestPanel avatarRef={avatarRef} />}
     </div>
@@ -294,7 +311,7 @@ function PointerLockPrompt() {
             color: 'var(--angel-fg-muted)',
           }}
         >
-          wasd · move &nbsp;·&nbsp; mouse · look &nbsp;·&nbsp; shift · run &nbsp;·&nbsp; t · talk &nbsp;·&nbsp; r · respawn &nbsp;·&nbsp; esc · release
+          wasd · move &nbsp;·&nbsp; mouse · look &nbsp;·&nbsp; shift · run &nbsp;·&nbsp; e · interact &nbsp;·&nbsp; t · talk &nbsp;·&nbsp; k · calibrate &nbsp;·&nbsp; r · respawn &nbsp;·&nbsp; esc · release
         </div>
       </div>
     </div>

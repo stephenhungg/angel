@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
-import { autoDiscoverFromRoom, resetInteractables } from '../lib/interactables';
+import { autoDiscoverFromRoom, resetInteractables, loadOverridesFromLocalStorage } from '../lib/interactables';
 
 type RoomProps = {
   url?: string;
@@ -87,9 +87,13 @@ export function Room({ url = '/room.glb', scale, targetFootprint = DEFAULT_TARGE
     console.info('[room] loaded', { meshes, size: `${size.x.toFixed(2)}×${size.y.toFixed(2)}×${size.z.toFixed(2)}` });
 
     // re-bind interactables to room geometry. resets to defaults first so HMR
-    // / asset swaps don't leave stale meshName tags around.
+    // / asset swaps don't leave stale meshName tags around. Order matters:
+    //   1. reset to hardcoded defaults
+    //   2. auto-discover from mesh names (overrides default positions)
+    //   3. apply user-saved overrides last (manual calibration always wins)
     resetInteractables();
     autoDiscoverFromRoom(root);
+    loadOverridesFromLocalStorage();
 
     onLoadRef.current?.(root);
   }, [scene, scale, targetFootprint]);
