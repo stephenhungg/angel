@@ -42,18 +42,30 @@ export default async function OGImage() {
             justifyContent: "center",
           }}
         >
-          {/* wordmark sticker centered on the cherry side */}
-          <img
-            src={wordmark}
-            width={360}
-            height={360}
-            alt=""
+          {/* white sticker card holding the wordmark — pops against cherry bg */}
+          <div
             style={{
-              width: 360,
-              height: "auto",
-              filter: "drop-shadow(0 14px 0 rgba(155, 58, 95, 0.4))",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 380,
+              height: 380,
+              background: "#ffffff",
+              borderRadius: 36,
+              border: "6px solid #ffffff",
+              boxShadow:
+                "0 16px 0 rgba(155, 58, 95, 0.35), 0 30px 60px rgba(155, 58, 95, 0.25)",
+              transform: "rotate(-4deg)",
             }}
-          />
+          >
+            <img
+              src={wordmark}
+              width={300}
+              height={300}
+              alt=""
+              style={{ width: 300, height: "auto" }}
+            />
+          </div>
         </div>
 
         {/* LEFT: white panel with the copy */}
