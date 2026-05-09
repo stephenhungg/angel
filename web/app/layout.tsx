@@ -6,6 +6,7 @@ import {
   Bagel_Fat_One,
   Mochiy_Pop_One,
   Klee_One,
+  Noto_Serif_JP,
 } from "next/font/google";
 import "./globals.css";
 
@@ -54,6 +55,14 @@ const kleeOne = Klee_One({
   variable: "--font-klee",
 });
 
+// Noto Serif Japanese — for the bait intro 天使 reveal moment
+const notoSerifJP = Noto_Serif_JP({
+  subsets: ["latin"],
+  weight: ["400", "500", "700", "900"],
+  display: "block", // block = wait for font, no fallback flash on the dramatic reveal
+  variable: "--font-noto-serif-jp",
+});
+
 export const metadata: Metadata = {
   title: "angel — discovered, not designed",
   description:
@@ -74,7 +83,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${manrope.variable} ${instrumentSerif.variable} ${fragmentMono.variable} ${bagelFatOne.variable} ${mochiyPop.variable} ${kleeOne.variable}`}
+      className={`${manrope.variable} ${instrumentSerif.variable} ${fragmentMono.variable} ${bagelFatOne.variable} ${mochiyPop.variable} ${kleeOne.variable} ${notoSerifJP.variable}`}
     >
       <body className="bg-paper text-ink-near antialiased">{children}</body>
     </html>

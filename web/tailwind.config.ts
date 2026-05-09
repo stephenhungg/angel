@@ -46,6 +46,8 @@ const config: Config = {
         mochiy: ["var(--font-mochiy)", "system-ui", "sans-serif"],
         // jp rounded brush for kanji body
         klee: ["var(--font-klee)", "ui-serif", "serif"],
+        // jp serif for the bait kanji reveal
+        notoJP: ["var(--font-noto-serif-jp)", "ui-serif", "serif"],
       },
       fontSize: {
         // type scale extracted from typography.json — moment's authored sizes
