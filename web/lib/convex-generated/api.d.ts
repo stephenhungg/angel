@@ -1,17 +1,33 @@
 /* eslint-disable */
 /**
- * Generated `api` utility.
+ * Generated `api` utility — type stub for the web client.
  *
- * THIS CODE IS AUTOMATICALLY GENERATED.
+ * NOTE: this file is hand-maintained as a thin mirror of
+ * `convex/_generated/api.d.ts`. The runtime side (`api.js`) uses `anyApi`
+ * so any function name resolves at runtime; this `.d.ts` exists purely so
+ * `useQuery(api.foo.bar, ...)` typechecks under strict mode.
  *
- * To regenerate, run `npx convex dev`.
+ * When you add a new convex module, also add it here.
+ *
+ * To regenerate from scratch: `cd convex && bun run dev` once, then copy
+ * the contents of `convex/_generated/api.d.ts` here (and rewrite the
+ * relative imports to `../`).
  * @module
  */
 
 import type * as agentState from "../agentState.js";
 import type * as crons from "../crons.js";
+import type * as discord_functions from "../discord/functions.js";
+import type * as discord_interactions from "../discord/interactions.js";
+import type * as discord_orchestrator from "../discord/orchestrator.js";
+import type * as http from "../http.js";
 import type * as memoryMirror from "../memoryMirror.js";
 import type * as observability from "../observability.js";
+import type * as sms_functions from "../sms/functions.js";
+import type * as sms_index from "../sms/index.js";
+import type * as sms_orchestrator from "../sms/orchestrator.js";
+import type * as sms_sendblue from "../sms/sendblue.js";
+import type * as sms_twilio from "../sms/twilio.js";
 import type * as tasks from "../tasks.js";
 import type * as turns from "../turns.js";
 import type * as users from "../users.js";
@@ -25,8 +41,17 @@ import type {
 declare const fullApi: ApiFromModules<{
   agentState: typeof agentState;
   crons: typeof crons;
+  "discord/functions": typeof discord_functions;
+  "discord/interactions": typeof discord_interactions;
+  "discord/orchestrator": typeof discord_orchestrator;
+  http: typeof http;
   memoryMirror: typeof memoryMirror;
   observability: typeof observability;
+  "sms/functions": typeof sms_functions;
+  "sms/index": typeof sms_index;
+  "sms/orchestrator": typeof sms_orchestrator;
+  "sms/sendblue": typeof sms_sendblue;
+  "sms/twilio": typeof sms_twilio;
   tasks: typeof tasks;
   turns: typeof turns;
   users: typeof users;

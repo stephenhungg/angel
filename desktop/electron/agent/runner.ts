@@ -12,8 +12,9 @@
  * the demo never hard-breaks.
  */
 import Anthropic from '@anthropic-ai/sdk';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
+import { logOrchestratorTurn } from '../convex-bridge';
 import type {
   SceneAction,
   AnchorId,
@@ -586,6 +587,55 @@ function summarizeTurn(userMessage: string, assistantContent: Anthropic.ContentB
     return `user said "${userTrim}"; angel replied "${replyTrim}"`;
   }
   return `user said "${userTrim}"; angel reacted (no spoken line)`;
+}
+
+/**
+ * mirror this turn to convex (orchestratorTurns table) so the unified
+ * /admin/timeline can interleave electron with sms/discord/web. fire-and-
+ * forget — wrapped in try/catch so observability never breaks the loop.
+ */
+function mirrorTurnToConvex(args: {
+  userId: string;
+  turnId: string;
+  systemPrompt: string;
+  userInput: string;
+  assistantContent: Anthropic.ContentBlock[];
+  latencyMs: number;
+}): void {
+  try {
+    const says: string[] = [];
+    const toolsCalled: Array<{ name: string; input: unknown }> = [];
+    for (const block of args.assistantContent) {
+      if (block.type === 'tool_use') {
+        toolsCalled.push({ name: block.name, input: block.input });
+        if (block.name === 'say') {
+          const text = (block.input as { text?: unknown })?.text;
+          if (typeof text === 'string') says.push(text);
+        }
+      } else if (block.type === 'text' && block.text.trim()) {
+        says.push(block.text.trim());
+      }
+    }
+    const output = says.join(' ');
+    const systemPromptHash = createHash('sha1')
+      .update(args.systemPrompt)
+      .digest('hex')
+      .slice(0, 12);
+    void logOrchestratorTurn({
+      userId: args.userId,
+      turnId: args.turnId,
+      systemPromptHash,
+      systemPromptFull: args.systemPrompt,
+      userInput: args.userInput,
+      output,
+      toolsCalled,
+      latencyMs: args.latencyMs,
+    }).catch((err) => {
+      console.warn('[orchestrator] convex mirror failed:', err);
+    });
+  } catch (err) {
+    console.warn('[orchestrator] mirror prep failed:', err);
+  }
 }
 
 async function writeTurnMemory(userId: string, userMessage: string, assistantContent: Anthropic.ContentBlock[], turnId: string): Promise<void> {
@@ -1268,6 +1318,8 @@ export async function runOrchestrator(input: {
   // Gather memory BEFORE the model call so the system prompt has it.
   const memCtx = await gatherMemoryContext(input.text);
   const turnId = randomUUID();
+  const turnStart = Date.now();
+  const builtSystemPrompt = buildSystemPrompt(memCtx);
 
   // bundle the renderer-facing emitters so agentic tools can stream out-of-band
   const sender: Sender = {
@@ -1301,7 +1353,7 @@ export async function runOrchestrator(input: {
       const resp = await c.messages.create({
         model: 'claude-sonnet-4-5-20250929',
         max_tokens: 1024,
-        system: buildSystemPrompt(memCtx),
+        system: builtSystemPrompt,
         tools: TOOLS,
         messages: history,
       });
@@ -1422,6 +1474,16 @@ export async function runOrchestrator(input: {
     }
     // write episodic memory after the model is done — non-blocking
     void writeTurnMemory(userId, input.text, lastAssistantContent, turnId);
+    // mirror the turn into convex.orchestratorTurns so /admin/timeline
+    // can interleave it with sms / discord / web rows. fire-and-forget.
+    mirrorTurnToConvex({
+      userId,
+      turnId,
+      systemPrompt: builtSystemPrompt,
+      userInput: input.text,
+      assistantContent: lastAssistantContent,
+      latencyMs: Date.now() - turnStart,
+    });
   } catch (err) {
     console.error('[orchestrator] anthropic call failed', err);
     // roll history back to the state we entered with so the next user
@@ -1469,11 +1531,13 @@ export async function runBootGreeting(input: {
   // empty, she just says hi and stops.
   const memCtx = await gatherMemoryContext('');
   const turnId = randomUUID();
+  const turnStart = Date.now();
+  const builtSystemPrompt = buildSystemPrompt(memCtx);
   try {
     const resp = await c.messages.create({
       model: 'claude-sonnet-4-5-20250929',
       max_tokens: 1024,
-      system: buildSystemPrompt(memCtx),
+      system: builtSystemPrompt,
       tools: TOOLS,
       messages: [{ role: 'user', content: primer }],
     });
@@ -1522,6 +1586,17 @@ export async function runBootGreeting(input: {
       resp.content as Anthropic.ContentBlock[],
       turnId,
     );
+    // mirror the boot greeting into convex.orchestratorTurns too so the
+    // unified /admin/timeline picks up the wake-up beat as the first
+    // electron row of the session.
+    mirrorTurnToConvex({
+      userId: input.userId ?? 'stephen',
+      turnId,
+      systemPrompt: builtSystemPrompt,
+      userInput: '<boot greeting>',
+      assistantContent: resp.content as Anthropic.ContentBlock[],
+      latencyMs: Date.now() - turnStart,
+    });
   } catch (err) {
     console.error('[orchestrator] boot greeting failed, falling back to mock:', err);
     const { bootAutonomyBeat } = await import('./mock');

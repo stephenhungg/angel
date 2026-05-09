@@ -702,7 +702,7 @@ export const handlePassiveMessage = action({
         botToken,
         channelId: args.discordChannelId,
         content: fallback,
-        replyToId: args.replyToMessageId,
+        // intentionally NOT replying-to — feels more conversational
       });
       return { ok: false, error: errMsg, reply: fallback };
     }
@@ -712,12 +712,12 @@ export const handlePassiveMessage = action({
     if (!reply) reply = 'hey.';
     if (reply.length > 1900) reply = reply.slice(0, 1900);
 
-    // 6. post via REST (bot token)
+    // 6. post via REST (bot token) — NO reply threading, just a normal message in chat
     const sendResult = await postChannelMessage({
       botToken,
       channelId: args.discordChannelId,
       content: reply,
-      replyToId: args.replyToMessageId,
+      // intentionally NOT replying-to — feels more conversational, like she's texting
     });
     if (!sendResult.ok) {
       console.error('[discord.orchestrator/passive] post failed:', sendResult.error);

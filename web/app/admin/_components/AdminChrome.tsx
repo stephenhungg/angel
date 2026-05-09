@@ -8,6 +8,7 @@ const TABS: { href: string; label: string; sublabel: string }[] = [
   { href: '/admin/space', label: 'space', sublabel: 'live trait-space' },
   { href: '/admin/traces', label: 'traces', sublabel: 'per-user inspector' },
   { href: '/admin/synthesis', label: 'synthesis', sublabel: 'personality.md log' },
+  { href: '/admin/timeline', label: 'timeline', sublabel: 'cross-surface feed' },
 ];
 
 export function AdminChrome({ children }: React.PropsWithChildren) {

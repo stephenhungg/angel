@@ -54,13 +54,14 @@ http.route({
     console.log(`[http:/sms/inbound] ${provider.name} inbound from ${inbound.from}: ${inbound.body.slice(0, 80)}`);
 
     // Resolve phone → user. Onboarded users have onboardingExtras.phoneNumber.
-    // Unknown phones map to 'demo:<phone>' so the orchestrator still runs
+    // CRITICAL: fallback to "stephen" so SMS, electron, and discord all share
+    // the SAME nia memory namespace. one soul, all surfaces.
     // with the default persona (nice for judges who text without onboarding).
     const phoneE164 = toE164(inbound.from);
     const lookup = await ctx.runQuery(api.sms.functions.findUserByPhone, {
       phoneNumber: phoneE164,
     });
-    const userId = lookup?.authId ?? `demo:${phoneE164}`;
+    const userId = lookup?.authId ?? 'stephen';
 
     // schedule the orchestrator. it runs in the action runtime (node) and
     // does the anthropic call + provider send + memory write.
@@ -185,11 +186,13 @@ http.route({
       );
     }
 
-    // Resolve discord user → angel user. Fallback to demo persona for judges.
+    // Resolve discord user → angel user. CRITICAL: fallback to "stephen"
+    // (not a per-discord-id demo persona) so that discord, electron, and sms
+    // all share the SAME nia memory namespace. one soul, all surfaces.
     const lookup = await ctx.runQuery(api.discord.functions.findUserByDiscordId, {
       discordUserId: authorId,
     });
-    const userId = lookup?.authId ?? `demo:discord:${authorId}`;
+    const userId = lookup?.authId ?? 'stephen';
 
     console.log(
       `[http:/discord/passive-message] trigger=${payload.trigger ?? 'unknown'} ` +

@@ -57,3 +57,5 @@ reference/moment/measurements/
 
 # local dev artifacts
 bun.lock.local-backup
+*.local.bak
+web/.env.local.bak
