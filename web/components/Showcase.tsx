@@ -10,10 +10,10 @@ import { CuteAccent } from "./CuteAccent";
 // label. replaces the stock-photo placeholders entirely.
 
 const scenes = [
-  { title: "while you slept",  meta: "afk · 3:42 AM",        asset: "/kawaii/mascot-sleep-t.png" },
-  { title: "she texted you",   meta: "iMessage · 11:08 AM",  asset: "/kawaii/mascot-phone-t.png" },
-  { title: "shipped a PR",     meta: "main · #142",          asset: "/kawaii/mascot-wave-t.png" },
-  { title: "made you tea",     meta: "boba o'clock",         asset: "/kawaii/cute-boba-t.png" },
+  { title: "while you slept",     meta: "afk · 3:42 AM",        asset: "/kawaii/mascot-sleep-t.png" },
+  { title: "deep work",           meta: "main · pr #142",       asset: "/kawaii/mascot-desk-t.png" },
+  { title: "reading your codebase", meta: "files indexed · 412", asset: "/kawaii/mascot-read-t.png" },
+  { title: "stretching at sunrise", meta: "warmup · 6:08 AM",   asset: "/kawaii/mascot-stretch-t.png" },
 ];
 
 export function Showcase() {

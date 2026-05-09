@@ -22,6 +22,10 @@ const ASSETS = {
   cloud: "/kawaii/cute-cloud-t.png",
   hearts: "/kawaii/cute-hearts-t.png",
   moon: "/kawaii/cute-moon-t.png",
+  donut: "/kawaii/cute-donut-t.png",
+  popsicle: "/kawaii/cute-popsicle-t.png",
+  crystal: "/kawaii/cute-crystal-t.png",
+  pudding: "/kawaii/cute-pudding-t.png",
 } as const;
 
 type Kind = keyof typeof ASSETS;

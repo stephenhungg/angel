@@ -1,28 +1,14 @@
-"use client";
-
 import Link from "next/link";
 import Image from "next/image";
-import { useEffect, useRef } from "react";
-import gsap from "gsap";
-import { ScrollTrigger } from "gsap/ScrollTrigger";
-import { useGSAP } from "@gsap/react";
 import { Reveal } from "./Reveal";
 import { MaskedLine } from "./MaskedLine";
 import { TiltedCard } from "./TiltedCard";
 import { SparkleField } from "./SparkleField";
 import { CuteAccent } from "./CuteAccent";
 
-if (typeof window !== "undefined") {
-  gsap.registerPlugin(ScrollTrigger, useGSAP);
-}
-
-// "paths she could take" — pinned-section horizontal scroll on desktop.
-// each of the 4 archetype kawaii stickers occupies its own viewport-width
-// panel, scrolling horizontally as the user scrolls vertically. mobile/tablet
-// fall back to a stacked grid (no pin).
-//
-// pattern lifted from `scroll--horizontal-scroll-container` codepen pattern
-// in the user's gsap-inspo collection.
+// "paths she could take" — clean 2x2 grid on tablet+, single column on mobile.
+// scroll-pin removed per user direction; cards stay in place, sparkle + accent
+// decor on the section bg, TiltedCard 3d hover keeps the interactive feel.
 
 const archetypes = [
   { title: "soft",  meta: "morning haze",  asset: "/kawaii/archetype-soft-t.png",  body: "she opens the curtains. light spills in, the room exhales. soft means slow, considerate, willing to wait." },
@@ -32,58 +18,9 @@ const archetypes = [
 ];
 
 export function Archetypes() {
-  const sectionRef = useRef<HTMLDivElement | null>(null);
-  const trackRef = useRef<HTMLDivElement | null>(null);
-
-  useGSAP(
-    () => {
-      const section = sectionRef.current;
-      const track = trackRef.current;
-      if (!section || !track) return;
-      if (typeof window === "undefined") return;
-
-      // pin + horizontal scroll w/ snap. each panel is 100vw so the card
-      // CENTERS on viewport at every snap point. user scrolls vertically →
-      // track moves horizontally → snaps to each card before advancing.
-      const mm = gsap.matchMedia();
-      mm.add("(min-width: 1024px)", () => {
-        const panels = track.querySelectorAll<HTMLDivElement>("[data-panel]");
-        const N = panels.length;
-        if (N <= 1) return;
-
-        const tween = gsap.to(track, {
-          x: () => -(N - 1) * window.innerWidth,
-          ease: "none",
-          scrollTrigger: {
-            trigger: section,
-            pin: true,
-            scrub: 1,
-            start: "top top",
-            end: () => "+=" + (N - 1) * window.innerWidth,
-            // snap to each card center (N-1 segments → 1/(N-1) per snap)
-            snap: {
-              snapTo: 1 / (N - 1),
-              duration: { min: 0.2, max: 0.5 },
-              ease: "power1.inOut",
-            },
-            invalidateOnRefresh: true,
-          },
-        });
-
-        return () => {
-          tween.scrollTrigger?.kill();
-          tween.kill();
-        };
-      });
-
-      return () => mm.kill();
-    },
-    { scope: sectionRef },
-  );
-
   return (
     <section
-      ref={sectionRef}
+      id="archetypes"
       className="relative overflow-hidden"
       style={{
         backgroundImage:
@@ -94,100 +31,66 @@ export function Archetypes() {
       <CuteAccent kind="bow"        size={140} rotate={-12} top="80px"   right="6%" opacity={0.95} />
       <CuteAccent kind="strawberry" size={110} rotate={18}  top="40%"    left="3%"  opacity={0.9} />
       <CuteAccent kind="cloud"      size={170} rotate={-6}  bottom="18%" right="4%" opacity={0.85} />
+      <CuteAccent kind="donut"      size={120} rotate={20}  bottom="40%" left="6%"  opacity={0.9} />
+      <CuteAccent kind="crystal"    size={100} rotate={-14} top="25%"    right="14%" opacity={0.85} />
 
-      <div className="relative">
-        {/* heading + cta — sits at top, NOT inside the pinned track */}
-        <div className="gutter relative pt-[140px] tablet:pt-[180px] desktop:pt-[200px]">
-          <MaskedLine duration={1} ease="expo.out">
-            <h2 className="m-0 max-w-[820px] font-bagel text-[44px] font-normal leading-[1.05] tracking-[-0.01em] text-ink-near tablet:text-[64px] desktop:text-[80px]">
-              paths she could take.
-            </h2>
-          </MaskedLine>
-          <Reveal delay={0.2} className="mt-6 max-w-[640px]">
-            <p className="font-sans text-[16px] leading-[1.6] text-muted-deep tablet:text-[18px]">
-              four moods you could converge into. swipe through the discovery flow to find which one she becomes for you. drag, click, or just keep scrolling.
-            </p>
-          </Reveal>
-        </div>
+      <div className="gutter relative pt-[140px] pb-[120px] tablet:pt-[180px]">
+        <MaskedLine duration={1} ease="expo.out">
+          <h2 className="m-0 max-w-[820px] font-bagel text-[44px] font-normal leading-[1.05] tracking-[-0.01em] text-ink-near tablet:text-[64px] desktop:text-[80px]">
+            paths she could take.
+          </h2>
+        </MaskedLine>
+        <Reveal delay={0.2} className="mt-6 max-w-[640px]">
+          <p className="font-sans text-[16px] leading-[1.6] text-muted-deep tablet:text-[18px]">
+            four moods you could converge into. swipe through the discovery flow to find which one she becomes for you.
+          </p>
+        </Reveal>
 
-        {/* mobile + tablet: 2-col grid. desktop: pinned horizontal scroll. */}
-        <div className="gutter mt-12 grid grid-cols-1 gap-10 pb-[100px] tablet:grid-cols-2 tablet:gap-12 desktop:hidden">
+        <ul className="mt-16 grid grid-cols-1 gap-10 tablet:grid-cols-2 tablet:gap-12">
           {archetypes.map((a, i) => (
-            <Reveal as="div" key={a.title} delay={i * 0.08}>
-              <ArchetypeCard archetype={a} />
+            <Reveal as="li" key={a.title} delay={i * 0.08}>
+              <article className="flex flex-col items-start gap-5">
+                <div className="relative aspect-square w-full max-w-[560px]" data-cursor-grow>
+                  <TiltedCard
+                    rotateAmplitude={9}
+                    scaleOnHover={1.03}
+                    showTooltip
+                    captionText={a.title}
+                    className="h-full w-full"
+                  >
+                    <Image
+                      src={a.asset}
+                      alt={a.title}
+                      width={1024}
+                      height={1024}
+                      className="h-full w-full select-none object-contain"
+                      style={{ transform: "translateZ(0)" }}
+                    />
+                  </TiltedCard>
+                </div>
+                <div className="flex w-full items-baseline justify-between gap-4 px-1">
+                  <h3 className="font-bagel text-[28px] font-normal leading-tight tracking-[-0.005em] text-ink-near tablet:text-[36px]">
+                    {a.title}
+                  </h3>
+                  <span className="font-sans text-[12px] text-muted-secondary">{a.meta}</span>
+                </div>
+                <p className="px-1 font-sans text-[15px] leading-[1.6] text-muted-deep">{a.body}</p>
+              </article>
             </Reveal>
           ))}
-        </div>
+        </ul>
 
-        {/* desktop pinned horizontal scroll — section pins, track scrolls X.
-            each panel is 100vw so cards CENTER on viewport at every snap. */}
-        <div className="hidden desktop:block">
-          <div ref={trackRef} className="flex w-max">
-            {archetypes.map((a) => (
-              <div
-                key={a.title}
-                data-panel
-                className="flex h-[80vh] w-screen shrink-0 items-center justify-center px-[max(8vw,100px)]"
-              >
-                <div className="w-full max-w-[680px]">
-                  <ArchetypeCard archetype={a} />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="gutter relative pb-[80px] desktop:pb-[120px]">
-          <Reveal delay={0.2}>
-            <Link
-              href="/download"
-              className="group inline-flex items-baseline gap-3 font-sans text-[20px] font-medium tracking-[-0.005em] text-ink-near transition-colors duration-200 ease-linear hover:text-sakura-600"
-              data-cursor-grow
-            >
-              <span>see all archetypes</span>
-              <span className="transition-transform duration-200 ease-linear group-hover:translate-x-1">
-                →
-              </span>
-            </Link>
-          </Reveal>
-        </div>
+        <Reveal delay={0.3} className="mt-16 tablet:mt-20">
+          <Link
+            href="/download"
+            className="group inline-flex items-baseline gap-3 font-sans text-[20px] font-medium tracking-[-0.005em] text-ink-near transition-colors duration-200 ease-linear hover:text-sakura-600"
+            data-cursor-grow
+          >
+            <span>see all archetypes</span>
+            <span className="transition-transform duration-200 ease-linear group-hover:translate-x-1">→</span>
+          </Link>
+        </Reveal>
       </div>
     </section>
-  );
-}
-
-function ArchetypeCard({
-  archetype: a,
-}: {
-  archetype: (typeof archetypes)[number];
-}) {
-  return (
-    <article className="flex flex-col items-start gap-5">
-      <div className="relative aspect-square w-full" data-cursor-grow>
-        <TiltedCard
-          rotateAmplitude={9}
-          scaleOnHover={1.03}
-          showTooltip
-          captionText={a.title}
-          className="h-full w-full"
-        >
-          <Image
-            src={a.asset}
-            alt={a.title}
-            width={1024}
-            height={1024}
-            className="h-full w-full select-none object-contain"
-            style={{ transform: "translateZ(0)" }}
-          />
-        </TiltedCard>
-      </div>
-      <div className="flex w-full items-baseline justify-between gap-4 px-1">
-        <h3 className="font-bagel text-[28px] font-normal leading-tight tracking-[-0.005em] text-ink-near tablet:text-[36px]">
-          {a.title}
-        </h3>
-        <span className="font-sans text-[12px] text-muted-secondary">{a.meta}</span>
-      </div>
-      <p className="px-1 font-sans text-[15px] leading-[1.6] text-muted-deep">{a.body}</p>
-    </article>
   );
 }
