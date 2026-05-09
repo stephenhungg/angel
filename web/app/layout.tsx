@@ -63,15 +63,93 @@ const notoSerifJP = Noto_Serif_JP({
   variable: "--font-noto-serif-jp",
 });
 
+const SITE_URL = "https://angel-swipe.vercel.app";
+const TITLE = "angel — your kawaii AI agent, discovered not designed";
+const DESC =
+  "angel is a kawaii desktop AI companion. swipe through 4 archetypes, converge on a 768d persona vector, and meet a chibi-style agent who remembers you across sessions, ships your code, and lives on your machine. built on sonnet 4.6 + nia memory + convex realtime.";
+
 export const metadata: Metadata = {
-  title: "angel — discovered, not designed",
-  description:
-    "a personal ai agent you don't prompt — you discover. swipe through generated archetypes, converge on a persona vector, and meet a presence who lives on your machine, remembers you across sessions, and ships your code.",
-  metadataBase: new URL("https://angel.fyi"),
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: TITLE,
+    template: "%s · angel",
+  },
+  description: DESC,
+  keywords: [
+    "angel",
+    "kawaii ai",
+    "ai agent",
+    "personal ai",
+    "ai companion",
+    "desktop agent",
+    "anthropic sonnet",
+    "claude agent",
+    "always-on agent",
+    "agentic orchestration",
+    "vroid avatar agent",
+    "discovered not designed",
+    "天使",
+    "kawaii sticker design",
+    "convex realtime",
+    "nia memory",
+  ],
+  applicationName: "angel",
+  authors: [{ name: "Stephen Hung" }, { name: "Matthew" }],
+  creator: "Stephen Hung & Matthew",
+  publisher: "angel",
+  category: "ai-companions",
+  alternates: {
+    canonical: "/",
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+      "max-video-preview": -1,
+    },
+  },
   openGraph: {
-    title: "angel",
-    description: "she's not designed. she's discovered.",
     type: "website",
+    siteName: "angel",
+    title: TITLE,
+    description: DESC,
+    url: SITE_URL,
+    locale: "en_US",
+    images: [
+      {
+        url: "/kawaii/wordmark-pink-nano.png",
+        width: 2048,
+        height: 2048,
+        alt: "angel — kawaii sticker wordmark",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: TITLE,
+    description: DESC,
+    creator: "@stephenhungg",
+    images: ["/kawaii/wordmark-pink-nano.png"],
+  },
+  icons: {
+    icon: [
+      { url: "/kawaii/wordmark-pink-nano.png", type: "image/png" },
+    ],
+    apple: "/kawaii/wordmark-pink-nano.png",
+  },
+  manifest: "/manifest.webmanifest",
+  formatDetection: {
+    telephone: false,
+    email: false,
+    address: false,
+  },
+  other: {
+    "theme-color": "#ff85a8",
+    "color-scheme": "light",
   },
 };
 
