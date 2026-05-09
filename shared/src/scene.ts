@@ -45,6 +45,20 @@ export type Expression =
   | 'yawn'
   | 'nod';
 
+/**
+ * Verbs an interactable can support. The renderer translates these into the
+ * appropriate animation chain (sit → typing flow → exit) without the brain
+ * needing to know the underlying clips.
+ */
+export type InteractableVerb =
+  | 'sit'
+  | 'sit_playful'
+  | 'sit_and_type'
+  | 'look_out'
+  | 'browse'
+  | 'open'
+  | 'lay_down';
+
 export type SceneAction =
   | { id: string; type: 'walk_to'; anchor: AnchorId; speed?: 'slow' | 'normal' | 'urgent' }
   | { id: string; type: 'sit_at'; anchor: AnchorId }
@@ -56,7 +70,11 @@ export type SceneAction =
   | { id: string; type: 'set_expression'; expression: Expression; weight: number; durationMs?: number }
   | { id: string; type: 'delegate'; taskId: string; summary: string }
   | { id: string; type: 'wait'; ms: number }
-  | { id: string; type: 'cancel_queue' };
+  | { id: string; type: 'cancel_queue' }
+  /** macro: walk to an interactable's approach anchor and execute its verb.
+   * The renderer handles the underlying choreography (walk → face → sit →
+   * typing flow etc.) so the brain only needs to name the prop + verb. */
+  | { id: string; type: 'interact_with'; interactableId: string; verb: InteractableVerb; durationMs?: number };
 
 export type SceneActionComplete = {
   id: string;

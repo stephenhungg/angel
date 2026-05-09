@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
+import { autoDiscoverFromRoom, resetInteractables } from '../lib/interactables';
 
 type RoomProps = {
   url?: string;
@@ -84,6 +85,12 @@ export function Room({ url = '/room.glb', scale, targetFootprint = DEFAULT_TARGE
     }
 
     console.info('[room] loaded', { meshes, size: `${size.x.toFixed(2)}×${size.y.toFixed(2)}×${size.z.toFixed(2)}` });
+
+    // re-bind interactables to room geometry. resets to defaults first so HMR
+    // / asset swaps don't leave stale meshName tags around.
+    resetInteractables();
+    autoDiscoverFromRoom(root);
+
     onLoadRef.current?.(root);
   }, [scene, scale, targetFootprint]);
 

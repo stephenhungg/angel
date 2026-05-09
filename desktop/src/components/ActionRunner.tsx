@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { RefObject } from 'react';
@@ -9,6 +9,7 @@ import { resolveAnchor, isChairAnchor } from '@/lib/anchors';
 import type { AvatarHandle } from '@/components/Avatar';
 import { ipc } from '@/lib/ipc';
 import { resolveCollision } from '@/lib/collision';
+import { getInteractable } from '@/lib/interactables';
 
 type Props = {
   avatarRef: RefObject<AvatarHandle | null>;
@@ -58,6 +59,7 @@ export function ActionRunner({ avatarRef, roomRoot }: Props) {
   const current = useAngelStore((s) => s.current);
   const popNext = useAngelStore((s) => s.popNext);
   const completeCurrent = useAngelStore((s) => s.completeCurrent);
+  const enqueue = useAngelStore((s) => s.enqueue);
   const setStoreState = useAngelStore((s) => s.setState);
   const showBubble = useAngelStore((s) => s.showBubble);
   const clearBubble = useAngelStore((s) => s.clearBubble);
@@ -249,6 +251,27 @@ export function ActionRunner({ avatarRef, roomRoot }: Props) {
         ctx.totalDuration = 0;
         break;
       }
+      case 'interact_with': {
+        // macro: expand into a sequence based on the interactable's verb.
+        // The actual choreography is the hardcoded animation chain below;
+        // we enqueue child actions and immediately complete this one.
+        const it = getInteractable(current.interactableId);
+        if (!it) {
+          console.warn('[interact_with] unknown interactable', current.interactableId);
+          ctx.totalDuration = 0;
+          break;
+        }
+        const expanded = expandInteract(current, it.id, it.kind, it.anchorId, it.pairedChairId);
+        if (expanded.length > 0) {
+          // push to the front (well, back — but no actions should be queued
+          // behind interact_with by design) so the chain runs immediately
+          enqueue(expanded);
+        }
+        // mark this interact_with as instantly done; popNext will pull the
+        // first child action next frame
+        ctx.totalDuration = 0;
+        break;
+      }
       default: {
         // exhaustiveness check
         const _never: never = current;
@@ -257,7 +280,7 @@ export function ActionRunner({ avatarRef, roomRoot }: Props) {
       }
     }
     ctxRef.current = ctx;
-  }, [current, avatarRef, roomRoot, setStoreState, showBubble, appendChat, setClip]);
+  }, [current, avatarRef, roomRoot, setStoreState, showBubble, appendChat, setClip, enqueue]);
 
   useFrame((_, dt) => {
     // pop next when idle
@@ -285,6 +308,15 @@ export function ActionRunner({ avatarRef, roomRoot }: Props) {
         const arrived = distToTarget < ARRIVE_EPS;
         const timedOut = elapsed >= ctx.totalDuration;
         if (arrived || timedOut) {
+          console.info('[walk_to] done', {
+            anchor: current.anchor,
+            arrived,
+            timedOut,
+            elapsed: elapsed.toFixed(2),
+            from: ctx.fromPos.toArray().map((n) => n.toFixed(2)),
+            to: ctx.toPos.toArray().map((n) => n.toFixed(2)),
+            final: root.position.toArray().map((n) => n.toFixed(2)),
+          });
           // snap to anchor position only on real arrival; on timeout, just
           // stop where collision left us so we don't pop through a wall.
           if (arrived) {
@@ -361,6 +393,10 @@ export function ActionRunner({ avatarRef, roomRoot }: Props) {
       case 'cancel_queue':
         finish(current);
         break;
+      case 'interact_with':
+        // already expanded into child actions; complete the placeholder
+        finish(current);
+        break;
     }
   });
 
@@ -370,4 +406,75 @@ export function ActionRunner({ avatarRef, roomRoot }: Props) {
   }
 
   return null;
+}
+
+/* -------------------------------------------------------------------------- */
+/* interact_with macro expansion                                              */
+/* -------------------------------------------------------------------------- */
+
+let _expandSeq = 0;
+const newId = (suffix: string) => `expand_${Date.now().toString(36)}_${(_expandSeq++).toString(36)}_${suffix}`;
+
+/**
+ * Translate an `interact_with` action into the underlying animation chain.
+ * Knows how to compose walk_to → face → sit_at → play_clip(typing) for the
+ * "sit and type" verb, and simpler chains for the rest.
+ */
+function expandInteract(
+  src: Extract<SceneAction, { type: 'interact_with' }>,
+  interactableId: string,
+  kind: string,
+  anchorId: AnchorId | undefined,
+  pairedChairId: string | undefined,
+): SceneAction[] {
+  const verb = src.verb;
+  const out: SceneAction[] = [];
+  // every chain wants to walk to the approach anchor first. We use the
+  // legacy AnchorId so resolveAnchor() can use room-empties when present.
+  // Fall back to 'center' if no anchor mapping (caller will telecommute).
+  const approachAnchor: AnchorId = anchorId ?? 'center';
+
+  if (verb === 'sit_and_type') {
+    const chair = pairedChairId ? getInteractable(pairedChairId) : undefined;
+    const chairAnchor = (chair?.anchorId ?? approachAnchor) as AnchorId;
+    out.push(
+      { id: newId('walk'), type: 'walk_to', anchor: chairAnchor, speed: 'normal' },
+      { id: newId('face'), type: 'face', target: chairAnchor },
+      { id: newId('sit'), type: 'sit_at', anchor: chairAnchor },
+      // typing flow expands itself inside play_clip handler
+      { id: newId('type'), type: 'play_clip', clip: 'typing', durationMs: src.durationMs ?? 8000 },
+    );
+  } else if (verb === 'sit') {
+    out.push(
+      { id: newId('walk'), type: 'walk_to', anchor: approachAnchor, speed: 'normal' },
+      { id: newId('sit'), type: 'sit_at', anchor: approachAnchor },
+    );
+  } else if (verb === 'sit_playful') {
+    out.push(
+      { id: newId('walk'), type: 'walk_to', anchor: approachAnchor, speed: 'normal' },
+      { id: newId('sit'), type: 'sit_at', anchor: approachAnchor },
+      { id: newId('clip'), type: 'play_clip', clip: 'sitting_playful', durationMs: 4000 },
+    );
+  } else if (verb === 'look_out') {
+    out.push(
+      { id: newId('walk'), type: 'walk_to', anchor: approachAnchor, speed: 'normal' },
+      { id: newId('face'), type: 'face', target: approachAnchor },
+      { id: newId('thk'), type: 'play_clip', clip: 'thinking', durationMs: 2400 },
+    );
+  } else if (verb === 'browse') {
+    out.push(
+      { id: newId('walk'), type: 'walk_to', anchor: approachAnchor, speed: 'normal' },
+      { id: newId('face'), type: 'face', target: approachAnchor },
+      { id: newId('read'), type: 'play_clip', clip: 'reading', durationMs: 4000 },
+    );
+  } else if (verb === 'open' || verb === 'lay_down') {
+    // door / bed — minimal: walk + face + speak. The brain can layer a `speak`.
+    out.push(
+      { id: newId('walk'), type: 'walk_to', anchor: approachAnchor, speed: 'normal' },
+      { id: newId('face'), type: 'face', target: approachAnchor },
+    );
+  }
+
+  console.info('[interact_with] expanded', interactableId, kind, verb, '→', out.length, 'actions');
+  return out;
 }

@@ -87,6 +87,23 @@ export type AngelStore = {
   // pointer lock state — UI uses this to show/hide the "click to enter" prompt
   pointerLocked: boolean;
   setPointerLocked: (v: boolean) => void;
+
+  // interactables — id of the one currently in the player's reticle (or null)
+  focusedInteractable: string | null;
+  setFocusedInteractable: (id: string | null) => void;
+
+  // player seated state — set when E-interacting with a chair-like object
+  playerSeated: {
+    interactableId: string;
+    pos?: [number, number, number];
+    yaw?: number;
+    mode: 'sit' | 'sit_and_type' | 'sit_playful';
+  } | null;
+  setPlayerSeated: (s: AngelStore['playerSeated']) => void;
+
+  // one-shot teleport-toward target for the look_out verb (Player consumes it)
+  lookOutTarget: [number, number, number] | null;
+  setLookOutTarget: (p: [number, number, number] | null) => void;
 };
 
 const initialState: AgentLiveState = {
@@ -169,6 +186,16 @@ export const useAngelStore = create<AngelStore>()(
 
     pointerLocked: false,
     setPointerLocked: (v) => set({ pointerLocked: v }),
+
+    focusedInteractable: null,
+    setFocusedInteractable: (id) =>
+      set((s) => (s.focusedInteractable === id ? s : { focusedInteractable: id })),
+
+    playerSeated: null,
+    setPlayerSeated: (st) => set({ playerSeated: st }),
+
+    lookOutTarget: null,
+    setLookOutTarget: (p) => set({ lookOutTarget: p }),
   })),
 );
 

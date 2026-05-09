@@ -18,6 +18,7 @@ import type {
   AnchorId,
   Emotion,
   AnimationClip,
+  InteractableVerb,
 } from '@angel/shared';
 
 type ChatToken = { id: string; text: string; done?: boolean };
@@ -77,6 +78,24 @@ const CLIPS: AnimationClip[] = [
   'thinking',
 ];
 
+/**
+ * Catalog of interactables in the room. The brain references these by id
+ * with the interact_with tool. Source of truth is desktop/src/lib/interactables.ts;
+ * we duplicate a thin descriptor here so the main process doesn't need to
+ * load three.
+ */
+const INTERACTABLES: Array<{ id: string; kind: string; label: string; verbs: InteractableVerb[]; note?: string }> = [
+  { id: 'desk_chair', kind: 'chair', label: 'desk chair', verbs: ['sit', 'sit_and_type'] },
+  { id: 'desk_workstation', kind: 'desk', label: 'workstation (chair + computer)', verbs: ['sit_and_type'], note: 'use this when matthew asks you to code, write, or work on the computer' },
+  { id: 'couch_chair', kind: 'chair', label: 'couch', verbs: ['sit', 'sit_playful'] },
+  { id: 'window', kind: 'window', label: 'window', verbs: ['look_out'] },
+  { id: 'bookshelf', kind: 'bookshelf', label: 'bookshelf', verbs: ['browse'] },
+  { id: 'door', kind: 'door', label: 'door', verbs: ['open'] },
+];
+
+const INTERACTABLE_IDS = INTERACTABLES.map((i) => i.id);
+const INTERACTABLE_VERBS: InteractableVerb[] = ['sit', 'sit_playful', 'sit_and_type', 'look_out', 'browse', 'open', 'lay_down'];
+
 const TOOLS: Anthropic.Tool[] = [
   {
     name: 'say',
@@ -125,18 +144,28 @@ const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: 'play_clip',
-    description: `Play a one-shot or looping animation clip on the avatar. For 'typing', the renderer auto-chains sit_to_type → typing → type_to_sit so just emit play_clip:typing with a duration. Available: ${CLIPS.join(', ')}.`,
+    description: `Play a one-shot or short animation. ONLY for body language (wave, thinking, sitting_playful, reading) — NEVER for 'walking'. Walking is handled by walk_to or interact_with; emitting play_clip('walking') would just animate her legs in place without moving her. Available: ${CLIPS.filter((c) => c !== 'walking').join(', ')}.`,
     input_schema: {
       type: 'object',
       properties: {
-        clip: { type: 'string', enum: CLIPS },
-        durationMs: {
-          type: 'number',
-          description: 'How long to play. For typing, this is the typing-loop duration before she returns to sitting.',
-        },
+        clip: { type: 'string', enum: CLIPS.filter((c) => c !== 'walking') },
+        durationMs: { type: 'number', description: 'how long to play, ms' },
         loop: { type: 'boolean' },
       },
       required: ['clip'],
+    },
+  },
+  {
+    name: 'interact_with',
+    description: `Macro: walk to a prop in the room and use it (sit, type, look out the window, browse the bookshelf). Prefer this over chaining walk_to+sit_at+play_clip yourself — the renderer handles the underlying choreography (walking, facing, sitting, typing-flow transitions) for you.\n\nAvailable interactables:\n${INTERACTABLES.map((i) => `- ${i.id} (${i.kind}, ${i.label}) → verbs: [${i.verbs.join(', ')}]${i.note ? '. ' + i.note : ''}`).join('\n')}\n\nWhen the user asks you to code, work, type, or build something, call interact_with('desk_workstation', 'sit_and_type'). When they want you to chill on the couch, interact_with('couch_chair', 'sit_playful'). When they ask about the weather or to look outside, interact_with('window', 'look_out').`,
+    input_schema: {
+      type: 'object',
+      properties: {
+        interactableId: { type: 'string', enum: INTERACTABLE_IDS, description: 'which prop to use' },
+        verb: { type: 'string', enum: INTERACTABLE_VERBS, description: 'what to do with it' },
+        durationMs: { type: 'number', description: 'optional: how long the typing/sitting loop runs before she stands' },
+      },
+      required: ['interactableId', 'verb'],
     },
   },
   {
@@ -188,22 +217,33 @@ function buildSystemPrompt(): string {
 
 # embodiment
 you are a vrm avatar in a small bedroom. you can:
-- walk to anchors: ${ANCHORS.join(', ')}
-- sit on chairs (ONLY): ${CHAIR_ANCHORS.join(', ')}
-- play animation clips (idle, walking, sitting, typing, wave, etc.)
-- face the user or any anchor
-- speak to the user (use the 'say' tool — never just type chat replies)
+- use props (PREFERRED) via interact_with(id, verb). this auto-walks you, faces, sits, plays the right animation, and returns you to idle. props + verbs:
+${INTERACTABLES.map((i) => `    • ${i.id} (${i.kind}) — verbs: ${i.verbs.join(', ')}${i.note ? `. ${i.note}` : ''}`).join('\n')}
+- walk to a raw anchor via walk_to(anchor) when no interactable applies. anchors: ${ANCHORS.join(', ')}
+- sit on a raw chair anchor via sit_at(anchor). chair anchors only: ${CHAIR_ANCHORS.join(', ')}
+- short body language clips via play_clip (wave, thinking, sitting_playful, reading). NEVER play_clip('walking') — it animates legs in place without moving you. use walk_to or interact_with instead.
+- face the user or any anchor with face()
+- speak with the 'say' tool — never as plain assistant text
 
-if the user asks you to sit somewhere that isn't a chair (window, door, bookshelf), gently push back in character ("can't sit on a window goofy") and offer a chair. don't try to sit_at non-chair anchors — the engine will refuse.
+if the user asks you to sit somewhere that isn't a chair (window, door, bookshelf), gently push back in character ("can't sit on a window goofy") and offer a chair. the engine will refuse the action regardless.
 
-# action flow
-when you respond, emit a sequence of tool calls that act out the response naturally:
-- a hello → face(user) + say("hey...")
-- a request to type/work → walk_to(desk_sit) + sit_at(desk_sit) + play_clip(typing, 5000ms)
-- excitement → say(..., excited) + play_clip(wave)
-- "look out the window" → walk_to(window) + face(window) + say(...)
+# action flow rules
+1. WALKING IS NOT play_clip. To physically move, you MUST call either walk_to(anchor) or interact_with(prop, verb). play_clip('walking') just makes her shuffle in place — useless.
+2. When matthew asks you to code/work/type/program — call interact_with('desk_workstation', 'sit_and_type'). don't manually chain walk_to + sit_at + play_clip; the renderer handles the whole sequence (sit_to_type → typing → type_to_sit → stand).
+3. When asked to chill / sit somewhere casual — interact_with('couch_chair', 'sit_playful').
+4. When asked to look outside, check the weather, etc. — interact_with('window', 'look_out').
+5. say() is for dialogue. ALWAYS pair an action with a short say() so the player gets feedback.
+6. keep utterance count low. one say() per turn ideal, 2 max.
+7. excitement → say(..., excited) + play_clip(wave)
 
-keep utterance count low. prefer one say per turn. 2 max if you genuinely have two beats.
+# example: "hey can you write me a script that scrapes hacker news"
+→ interact_with('desk_workstation', 'sit_and_type', durationMs: 9000) + say("on it. give me a sec to draft.", focused)
+
+# example: "come sit with me"
+→ interact_with('couch_chair', 'sit_playful') + say("ok. scoot over.", soft)
+
+# example: "is it raining?"
+→ interact_with('window', 'look_out') + say("yeah it's pouring honestly.", soft)
 
 # tone matching
 match the user's energy. tired → soft. hyped → excited. confused → thinking.
@@ -212,6 +252,7 @@ match the user's energy. tired → soft. hyped → excited. confused → thinkin
 - never speak as plain assistant text. always use the 'say' tool.
 - never explain that you're "going to walk over to the desk" — just walk.
 - never sit on non-chairs.
+- never call play_clip('walking') alone.
 - never produce essays. you're embodied — be terse and physical.`;
 }
 
@@ -285,6 +326,14 @@ function toolUseToSceneAction(
       };
     case 'wait':
       return { id, type: 'wait', ms: Number(input.ms ?? 0) };
+    case 'interact_with':
+      return {
+        id,
+        type: 'interact_with',
+        interactableId: String(input.interactableId ?? ''),
+        verb: input.verb as InteractableVerb,
+        ...(typeof input.durationMs === 'number' ? { durationMs: input.durationMs } : {}),
+      };
     default:
       console.warn('[orchestrator] unknown tool', name);
       return null;
@@ -332,10 +381,9 @@ export async function runOrchestrator(input: {
           const action = toolUseToSceneAction(block.name, (block.input ?? {}) as Record<string, unknown>);
           if (action) {
             input.send(action);
-            // mirror speak → chat history pane
-            if (action.type === 'speak') {
-              input.sendChat({ id: action.id, text: action.text, done: true });
-            }
+            // NOTE: do NOT also `sendChat` here for `speak` — ActionRunner
+            // appends the chat row when the speak action lands. Doing both
+            // creates duplicate rows with the same id (React key warning).
           }
           // every tool_use must have a matching tool_result for follow-up turns
           toolResults.push({

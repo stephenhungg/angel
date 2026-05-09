@@ -28,6 +28,9 @@ const MOUSE_SENSITIVITY = 0.0024;
 const GRAVITY = 22;              // m/s² (heavier than real life — feels less floaty)
 const TERMINAL_VY = -28;         // clamp fall speed
 const HARD_FLOOR_Y = 0;          // safety net: never let the player drop below world y=0
+// when seated the camera drops from eyeHeight (1.55) to ~1.05m — feels like
+// you're at desk-height. Tweak if it reads weird from another room.
+const SEATED_EYE_HEIGHT = 1.05;
 
 const KEYS = {
   forward: ['KeyW', 'ArrowUp'],
@@ -50,6 +53,9 @@ export function Player({
 }: PlayerProps) {
   const { camera } = useThree();
   const setPlayerState = useAngelStore((s) => s.setPlayer);
+  const seated = useAngelStore((s) => s.playerSeated);
+  const lookOutTarget = useAngelStore((s) => s.lookOutTarget);
+  const setLookOutTarget = useAngelStore((s) => s.setLookOutTarget);
 
   const positionRef = useRef(new THREE.Vector3(spawn[0], spawn[1], spawn[2]));
   // horizontal velocity in xz; vyRef tracks vertical velocity separately
@@ -160,20 +166,40 @@ export function Player({
     return () => window.removeEventListener('keydown', onKey);
   }, [spawn, spawnYaw, radius]);
 
+  // when seated, lock the camera at the chair's anchor and zero velocity.
+  // Player can still mouse-look (you can swivel in your chair), can't WASD.
+  useEffect(() => {
+    if (!seated?.pos) return;
+    positionRef.current.set(seated.pos[0], seated.pos[1], seated.pos[2]);
+    if (seated.yaw != null) yawRef.current = seated.yaw;
+    velocityRef.current.set(0, 0, 0);
+    vyRef.current = 0;
+  }, [seated]);
+
+  // one-shot teleport-toward target for the look_out verb. We move to the
+  // anchor, point yaw at the interactable, then clear the target.
+  useEffect(() => {
+    if (!lookOutTarget) return;
+    positionRef.current.set(lookOutTarget[0], lookOutTarget[1], lookOutTarget[2]);
+    velocityRef.current.set(0, 0, 0);
+    vyRef.current = 0;
+    setLookOutTarget(null);
+  }, [lookOutTarget, setLookOutTarget]);
+
   useFrame((_, dt) => {
     const dtClamped = Math.min(dt, 0.05); // avoid huge jumps after a stutter
 
-    // input intent
+    // input intent (zeroed while seated; mouse-look still works)
     const k = keysRef.current;
     let intentX = 0;
     let intentZ = 0;
-    if (locked) {
+    if (locked && !seated) {
       if (KEYS.forward.some((c) => k[c])) intentZ -= 1;
       if (KEYS.back.some((c) => k[c])) intentZ += 1;
       if (KEYS.left.some((c) => k[c])) intentX -= 1;
       if (KEYS.right.some((c) => k[c])) intentX += 1;
     }
-    const sprinting = locked && KEYS.sprint.some((c) => k[c]);
+    const sprinting = locked && !seated && KEYS.sprint.some((c) => k[c]);
     const intentLen = Math.hypot(intentX, intentZ);
     if (intentLen > 0) {
       intentX /= intentLen;
@@ -266,9 +292,10 @@ export function Player({
     const bobY = Math.sin(bobPhaseRef.current) * bobAmp;
     const bobX = Math.cos(bobPhaseRef.current * 0.5) * bobAmp * 0.5;
 
+    const effectiveEye = seated ? SEATED_EYE_HEIGHT : eyeHeight;
     camera.position.set(
       corrected.x + Math.sin(yawRef.current + Math.PI / 2) * bobX,
-      corrected.y + eyeHeight + bobY,
+      corrected.y + effectiveEye + bobY,
       corrected.z + Math.cos(yawRef.current + Math.PI / 2) * bobX,
     );
     camera.rotation.order = 'YXZ';

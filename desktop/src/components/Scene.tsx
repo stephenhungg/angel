@@ -9,6 +9,12 @@ import { ActionRunner } from '@/components/ActionRunner';
 import { Player } from '@/components/Player';
 import { DeskMonitor } from '@/components/DeskMonitor';
 import { AnimationTestPanel } from '@/components/AnimationTestPanel';
+import {
+  InteractableDebugMarkers,
+  InteractablePicker,
+  InteractablePromptHUD,
+  PlayerInteractKeyHandler,
+} from '@/components/InteractableOverlay';
 import { useAngelStore } from '@/stores/angel';
 
 const FALLBACK_VRM = '/vrm/2068967230566994300.vrm';
@@ -216,6 +222,10 @@ export function Scene({ debug = true }: SceneProps) {
         <AvatarLookAtPlayer avatarRef={avatarRef} />
         <Player roomRoot={roomRoot} locked={pointerLocked} />
 
+        {/* interactables */}
+        <InteractablePicker />
+        <InteractableDebugMarkers visible={debug} />
+
         {/* desk monitor — codex stdout streams here when angel is delegating
             (the 30% bg-execution rubric). position is rough; tune live or
             replace with an `Anchor_Monitor` empty in room.glb. */}
@@ -229,6 +239,8 @@ export function Scene({ debug = true }: SceneProps) {
 
       {!pointerLocked && <PointerLockPrompt />}
       <Crosshair />
+      <InteractablePromptHUD />
+      <PlayerInteractKeyHandler />
       {debug && <SceneDebugBadge {...debugInfo} />}
       {debug && <AnimationTestPanel avatarRef={avatarRef} />}
     </div>

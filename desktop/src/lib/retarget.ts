@@ -57,12 +57,19 @@ function getVrmBoneNode(vrm: VRM, vrmBoneName: VRMHumanBoneName): THREE.Object3D
 /**
  * Retargets a Mixamo-rigged FBX clip onto a VRM. The fbx must contain its
  * mixamorig skeleton tree (used to read rest-pose orientations).
+ *
+ * `stripHipsXZ` (default true) zeroes out hip translation in the X/Z axes
+ * — keeping vertical bob — so the ActionRunner is the single source of
+ * truth for in-world translation. Without this, "Walking.fbx" drifts the
+ * avatar forward inside her own group AND we move the group, double-counting.
  */
 export function retargetMixamoClip(
   srcClip: THREE.AnimationClip,
   vrm: VRM,
   mixamoAsset: THREE.Object3D,
+  options: { stripHipsXZ?: boolean } = {},
 ): THREE.AnimationClip {
+  const stripHipsXZ = options.stripHipsXZ ?? true;
   const tracks: THREE.KeyframeTrack[] = [];
 
   const restRotationInverse = new THREE.Quaternion();
@@ -137,16 +144,25 @@ export function retargetMixamoClip(
           Array.from(values),
         ),
       );
-    } else if (track instanceof THREE.VectorKeyframeTrack && vrmBoneName === 'hips') {
-      const values = track.values.slice() as Float32Array;
-      for (let i = 0; i < values.length; i++) values[i] *= hipsPositionScale;
-      // mirror x/z for VRM 0.x
-      if (isVrm0) {
-        for (let i = 0; i < values.length; i += 3) {
-          values[i] *= -1;
-          values[i + 2] *= -1;
-        }
-      }
+            } else if (track instanceof THREE.VectorKeyframeTrack && vrmBoneName === 'hips') {
+              const values = track.values.slice() as Float32Array;
+              for (let i = 0; i < values.length; i++) values[i] *= hipsPositionScale;
+              // mirror x/z for VRM 0.x
+              if (isVrm0) {
+                for (let i = 0; i < values.length; i += 3) {
+                  values[i] *= -1;
+                  values[i + 2] *= -1;
+                }
+              }
+              // strip in-world translation from the clip; ActionRunner
+              // owns the avatar's position. We keep the y axis so vertical
+              // bob during walking still reads.
+              if (stripHipsXZ) {
+                for (let i = 0; i < values.length; i += 3) {
+                  values[i] = 0;     // x
+                  values[i + 2] = 0; // z
+                }
+              }
       tracks.push(
         new THREE.VectorKeyframeTrack(
           `${vrmNodeName}.${propertyName}`,

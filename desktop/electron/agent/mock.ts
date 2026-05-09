@@ -45,16 +45,10 @@ function pickScript(text: string): 'ship' | 'browse' | 'memory' | 'idle' | 'gree
   return 'idle';
 }
 
-async function streamSay(send: Sender['sendChat'], text: string) {
-  const id = nid();
-  // simulate streaming so the chat UI feels live; the subtitle component
-  // does its own char-by-char reveal driven by the speak action below.
-  send({ id, text, done: true });
-}
-
 async function emitSpeak(s: Sender, text: string, emotion: Emotion = 'neutral') {
+  // ActionRunner appends the chat row when this speak action lands — do NOT
+  // also push via sendChat or the message duplicates in the history pane.
   s.send({ id: nid(), type: 'speak', text, emotion });
-  await streamSay(s.sendChat, text);
 }
 
 async function emitWalkAndWait(s: Sender, anchor: AnchorId, ms = 1600) {
