@@ -10,31 +10,31 @@ const config: Config = {
     extend: {
       colors: {
         // pink/white kawaii palette — angel pivot from moment's monochrome
-        paper: "#fffafc",        // warm-white with sakura tint
+        paper: "#fffdfe",        // near-white with the lightest pink tint
         cloud: "#ffffff",        // pure white surfaces
-        soft: "#fff0f5",         // pale pink soft surface
-        hairline: "#ffd6e3",     // hairline borders, sakura tint
+        soft: "#fff5fa",         // pale pink soft surface
+        hairline: "#ffe6ee",     // hairline borders, soft sakura tint
         muted: {
-          tertiary: "#d99fb5",   // pale dusty pink
-          secondary: "#b87592",  // mid muted pink
-          deep: "#7a3e58",       // deep muted pink for body
+          tertiary: "#e8b4c5",   // pale dusty pink
+          secondary: "#b07c92",  // mid muted pink
+          deep: "#624054",       // deep muted plum for body
         },
         ink: {
-          near: "#1a0a12",       // near-black with subtle pink tint
+          near: "#1a0a12",       // near-black w/ subtle pink tint
           primary: "#0a0507",    // primary text — keep dark for legibility
         },
-        // pink brand colors (angel-coded)
+        // pink brand colors — softer, lighter sakura palette
         sakura: {
-          50: "#fff5f9",
-          100: "#ffe5ee",        // pale pink bg
-          200: "#ffb7c5",        // soft sakura
-          300: "#ff95b3",        // light pink
-          400: "#ff6f9d",        // medium pink
-          500: "#ff4f8b",        // hot pink — primary brand
-          600: "#e63a73",        // saturated pink
-          700: "#c73e73",        // deep pink — shadows + dark sections
-          800: "#9c2a55",        // very deep pink
-          900: "#6e1a3a",        // darkest pink — near-black
+          50: "#fffbfd",
+          100: "#fff0f6",        // very pale pink bg
+          200: "#ffd9e6",        // soft sakura
+          300: "#ffbcd0",        // light pink
+          400: "#ffa1bd",        // medium soft pink — primary brand
+          500: "#ff85a8",        // brand accent (was much hotter before)
+          600: "#ec6592",        // saturated pink
+          700: "#c84e7a",        // deep pink
+          800: "#9b3a5f",        // very deep pink
+          900: "#5e2640",        // dark dusty rose — near-black for dark sections
         },
       },
       fontFamily: {

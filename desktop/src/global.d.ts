@@ -25,6 +25,10 @@ export type ChatToken = {
 
 export type StatePatch = Partial<AgentState> & { mood?: number; energy?: number; trust?: number };
 
+export type CodexStreamEvent = { jobId: string; chunk: string };
+export type CodexCompleteEvent = { jobId: string; result: unknown };
+export type VerifyResultEvent = { check: string; ok: boolean; evidence: string };
+
 declare global {
   interface Window {
     angel: {
@@ -33,6 +37,9 @@ declare global {
       onChat: (cb: (token: ChatToken) => void) => Unsubscribe;
       onState: (cb: (patch: StatePatch) => void) => Unsubscribe;
       onClaim: (cb: (payload: ClaimTokenPayload) => void) => Unsubscribe;
+      onCodexStream: (cb: (e: CodexStreamEvent) => void) => Unsubscribe;
+      onCodexComplete: (cb: (e: CodexCompleteEvent) => void) => Unsubscribe;
+      onVerifyResult: (cb: (e: VerifyResultEvent) => void) => Unsubscribe;
       reportActionComplete: (result: SceneActionComplete) => void;
       getInitialClaim: () => Promise<ClaimTokenPayload | null>;
       platform: NodeJS.Platform;

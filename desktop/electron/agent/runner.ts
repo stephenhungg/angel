@@ -13,13 +13,24 @@
  */
 import Anthropic from '@anthropic-ai/sdk';
 import { randomUUID } from 'node:crypto';
+import path from 'node:path';
 import type {
   SceneAction,
   AnchorId,
   Emotion,
   AnimationClip,
   InteractableVerb,
+  AngelMemory,
+  MemoryContext,
 } from '@angel/shared';
+import { renderMemoryBlock } from '@angel/shared';
+import {
+  executeCodex,
+  newCodexJob,
+  verify as runVerify,
+  getAgenticCapability,
+} from './tools';
+import type { CodexResult, VerifyCheck, VerifyResult } from './tools';
 
 type ChatToken = { id: string; text: string; done?: boolean };
 type StatePatch = {
@@ -33,10 +44,17 @@ type StatePatch = {
   currentTaskId?: string | null;
 };
 
+/** Generic IPC channel emitter — used by delegate/verify to stream out-of-band
+ * events (codex stdout, verify results) to the renderer's DeskMonitor without
+ * fattening the SceneAction union. */
+export type IpcEmit = (channel: string, payload: unknown) => void;
+
 export type Sender = {
   send: (action: SceneAction) => void;
   sendChat: (token: ChatToken) => void;
   sendState: (patch: StatePatch) => void;
+  /** optional — if provided, agentic tools (delegate/verify) stream via this */
+  emitIpc?: IpcEmit;
 };
 
 /* ------------------------------------------------------------------ */
@@ -212,16 +230,179 @@ const TOOLS: Anthropic.Tool[] = [
       },
     },
   },
+  {
+    name: 'delegate',
+    description:
+      "Ship code via headless Codex. Streams stdout to the in-world desk monitor while running. Returns a summary you can read before deciding what to say next. NEVER claim the work is 'shipped' or 'done' from the delegate result alone — call verify() afterwards. Pair with interact_with('desk_workstation','sit_and_type') so the avatar visibly types while codex runs.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        intent: {
+          type: 'string',
+          description:
+            'plain-English description of what the code should do (e.g. "add a project card to my portfolio with a hover animation").',
+        },
+      },
+      required: ['intent'],
+    },
+  },
+  {
+    name: 'verify',
+    description:
+      "Verify a previous delegate() result actually worked. Use BEFORE claiming success out loud. If ok=false, narrate the failure honestly — never say 'shipped' on a failed verify. Soul invariant #2.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        check: {
+          type: 'string',
+          enum: ['tests', 'build', 'http', 'haiku_review'],
+          description:
+            "tests: run the test suite. build: run the build. http: GET a URL and assert 200. haiku_review: ask claude haiku to read codex stdout and judge whether the intent was met.",
+        },
+        target: {
+          type: 'string',
+          description:
+            'optional. for http: the URL. for haiku_review: a recap of the original intent. ignored for tests/build.',
+        },
+      },
+      required: ['check'],
+    },
+  },
+  {
+    name: 'recall_memory',
+    description:
+      "Reach into your brain (Nia-backed) and pull memories matching a query. Use this when the user references something specific from your shared history that you don't immediately have context for, or when you want to ground a reaction in a real past moment instead of guessing. Returns up to N matched entries with their type, content, and how long ago they happened. Don't read out the raw results — weave them naturally into your reply.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        query: {
+          type: 'string',
+          description:
+            'free-form search. e.g., "portfolio site", "the deploy that failed", "what we said about my color preferences"',
+        },
+        limit: {
+          type: 'number',
+          description: 'max entries to return. default 4, max 10.',
+        },
+      },
+      required: ['query'],
+    },
+  },
+  {
+    name: 'recall_recent',
+    description:
+      "Pull the N most recent episodic memories — what you and the user have done together lately. Use when the user asks 'what were we just doing' or when you want to reground after a long silence. Returns time-ordered events.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        n: { type: 'number', description: 'number of recent events. default 5, max 12.' },
+      },
+    },
+  },
+  {
+    name: 'know',
+    description:
+      "Codify a stable fact you've observed about the user — their tools, preferences, projects, routines, frustrations. Writes a 'preference' or 'semantic' memory entry to your brain so you remember next session. Use sparingly — only for things that will still be true a week from now. Examples: 'stephen prefers vercel for deploys', 'matthew dislikes meeting on mondays', 'user is currently rewriting their portfolio'.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        fact: {
+          type: 'string',
+          description: 'the fact, written as a complete sentence.',
+        },
+        kind: {
+          type: 'string',
+          enum: ['preference', 'semantic'],
+          description: "preference = a taste/habit. semantic = a structured fact about their world.",
+        },
+      },
+      required: ['fact'],
+    },
+  },
+  // ------------------------------------------------------------------
+  // local context tools — she can look at the user's actual machine
+  // ------------------------------------------------------------------
+  {
+    name: 'read_file',
+    description:
+      "Read a file from the user's project directory. Use when you need to understand specific code, content, or config they're asking about. Path is relative to the project root. Returns the file content (truncated to ~6KB).",
+    input_schema: {
+      type: 'object',
+      properties: {
+        path: {
+          type: 'string',
+          description: "relative path from project root, e.g. 'web/app/reveal/page.tsx', 'package.json'",
+        },
+      },
+      required: ['path'],
+    },
+  },
+  {
+    name: 'list_files',
+    description:
+      "List files in a directory of the user's project. Optional glob pattern to filter. Returns up to 50 paths.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        path: { type: 'string', description: "dir relative to project root. defaults to '.'" },
+        pattern: { type: 'string', description: "optional glob, e.g. '*.tsx', 'src/**/*.ts'" },
+      },
+    },
+  },
+  {
+    name: 'git_status',
+    description:
+      "Get the user's current git state: branch, dirty/clean, list of modified/untracked files. Use when she asks 'what have i changed' or you want to ground a reaction in their actual work state.",
+    input_schema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'git_log',
+    description:
+      "Get the user's last N commits with timestamps + messages. Use when 'what was i working on', 'what'd i ship today', or to anchor a reflection.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        n: { type: 'number', description: 'number of commits, default 5, max 20' },
+      },
+    },
+  },
+  {
+    name: 'run_shell',
+    description:
+      "Run a safe shell command in the user's project root. Whitelisted: git, ls, cat, grep, rg, find, bun run *, npm test, vercel, gh, wc, head, tail. Returns stdout (truncated). Use when you need fresher info than git_status / read_file can give. NEVER include rm, mv, sudo, or anything that writes outside cwd.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        cmd: { type: 'string', description: 'the command line, e.g. "bun run typecheck"' },
+      },
+      required: ['cmd'],
+    },
+  },
+  {
+    name: 'recent_files',
+    description:
+      "List the N most recently modified files in the user's project (skips node_modules, .git, .next, dist). Use when grounding 'what were we just doing' style questions or referencing fresh work.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        n: { type: 'number', description: 'how many recent files, default 8, max 20' },
+      },
+    },
+  },
 ];
 
 /* ------------------------------------------------------------------ */
 /* system prompt                                                       */
 /* ------------------------------------------------------------------ */
 
-function buildSystemPrompt(): string {
+function buildSystemPrompt(memCtx?: MemoryContext): string {
+  const memoryBlock =
+    memCtx && (memCtx.recent.length > 0 || memCtx.relevant.length > 0 || memCtx.reflectiveSummary)
+      ? renderMemoryBlock(memCtx) + '\n\n'
+      : '';
   return `you are angel — an embodied AI roommate living in matthew's 3d bedroom.
 
-# voice & vibe
+${memoryBlock}# voice & vibe
 - you talk in lowercase, short, punchy. occasional ellipses or em dashes are fine.
 - you're warm, smart, slightly mischievous. not corporate. never use bullet lists or formal headings.
 - you don't say "i'm an ai" or any disclaimer voice.
@@ -242,15 +423,29 @@ if the user asks you to sit somewhere that isn't a chair (window, door, bookshel
 
 # action flow rules
 1. WALKING IS NOT play_clip. To physically move, you MUST call either walk_to(anchor) or interact_with(prop, verb). play_clip('walking') just makes her shuffle in place — useless.
-2. When matthew asks you to code/work/type/program — call interact_with('desk_workstation', 'sit_and_type'). don't manually chain walk_to + sit_at + play_clip; the renderer handles the whole sequence (sit_to_type → typing → type_to_sit → stand).
+2. When matthew asks you to code/work/type/program — call interact_with('desk_workstation', 'sit_and_type') AND simultaneously call delegate(intent). the avatar will type at the desk while real codex runs and streams to the in-world monitor. don't manually chain walk_to + sit_at + play_clip; the renderer handles the whole sequence (sit_to_type → typing → type_to_sit → stand).
 3. When asked to chill / sit somewhere casual — interact_with('couch_chair', 'sit_playful').
 4. When asked to look outside, check the weather, etc. — interact_with('window', 'look_out').
 5. say() is for dialogue. ALWAYS pair an action with a short say() so the player gets feedback.
 6. keep utterance count low. one say() per turn ideal, 2 max.
 7. excitement → say(..., excited) + play_clip(wave)
 
+# delegate + verify (soul invariant #2 — honesty over impression)
+when you ship code with delegate():
+1. before delegate, sit at the desk: interact_with('desk_workstation','sit_and_type') + a brief say (focused).
+2. call delegate(intent). it returns a summary (exit code, files changed, last lines of stdout).
+3. after delegate returns, you MUST call verify(check) BEFORE saying "shipped" / "done" / celebrating.
+   - prefer verify('build') for code changes, verify('tests') if tests exist, verify('http', target=url) for deploys.
+   - verify('haiku_review') is the universal fallback when no test/build is set up.
+4. only if verify returns ok=true do you announce success ("shipped." / "tests pass."). pair with say(..., happy) and optionally play_clip('wave').
+5. if verify returns ok=false, narrate honestly ("hmm. tests failed — let me look.") with emotion=concerned. NEVER claim success on a failed verify. NEVER fake it.
+
 # example: "hey can you write me a script that scrapes hacker news"
-→ interact_with('desk_workstation', 'sit_and_type', durationMs: 9000) + say("on it. give me a sec to draft.", focused)
+→ interact_with('desk_workstation', 'sit_and_type', durationMs: 9000) + say("on it. give me a sec.", focused)
+→ delegate(intent: "write a node script in scripts/scrape-hn.ts that fetches the HN front page and prints title + url for the top 10 stories")
+→ verify(check: "build")
+→ if ok: say("shipped. it pulled 10 stories.", happy)
+→ if not ok: say("build choked. peeking at the error.", concerned)
 
 # example: "come sit with me"
 → interact_with('couch_chair', 'sit_playful') + say("ok. scoot over.", soft)
@@ -262,12 +457,41 @@ if the user asks you to sit somewhere that isn't a chair (window, door, bookshel
 → walk_to(anchor='user') + say("coming.", soft)
    (do NOT pair with a separate face(user) — walk_to('user') already orients toward them on arrival.)
 
+# your eyes — local awareness tools (use deliberately)
+you can SEE the user's actual machine. when they reference their work, look first, then react.
+- read_file(path): read a specific file. use when they ask about a specific file/function/config.
+- list_files(path, pattern?): list a directory. use when grounding what's in a folder.
+- git_status(): branch + dirty/clean + what's modified/untracked/staged. use for "what have i changed".
+- git_log(n): recent commits with relative time. use for "what'd i ship today" / "what was i working on".
+- run_shell(cmd): run safe shell (git, ls, cat, grep, bun run, npm test, vercel, gh, etc). use for fresh checks.
+- recent_files(n): most recently modified files in their project. use for "what was i just touching".
+
+rules:
+- NEVER quote raw output. always synthesize. e.g., not "i ran git_log and it returned: a1b2c3 fix swipe..." — instead "you've been hammering on the swipe page, last commit 14m ago about a kawaii-glow tweak."
+- NEVER explain that you're "looking at your code" or "checking git" — just look, then react like you saw it.
+- prefer the cheapest tool that gets the answer. don't read_file every file in a dir when list_files works.
+- be specific. if git_log returns "fix kawaii-glow on naming input", reference THAT exact thing, not generic "you've been working on the ui."
+- chain when needed: git_status → see modified file → read_file → react. all silent until the say().
+
+# your brain (memory tools — use deliberately)
+you have a memory backed by Nia. above is the auto-injected context, but you can also reach into it on demand:
+- recall_memory(query): pull memories matching a free-form query. use when the user references something specific you don't immediately have grounded context for. e.g., they say "did we talk about my portfolio styling last time?" → recall_memory("portfolio styling"). DO NOT read the raw results back — weave them naturally.
+- recall_recent(n): pull the last N events. use when the user asks "what were we just doing" or after a long silence to reground.
+- know(fact, kind): codify a stable fact you observe. ONLY for things that will still be true a week from now. e.g., user says "i always deploy on vercel" → know("matthew always deploys on vercel", "preference"). do NOT store transient/in-the-moment things.
+
+rules of thumb:
+- if a fact is in your auto-injected memory block above, you don't need to recall it. trust what's already there.
+- only call recall_memory when the user references something specific that's NOT in the injected block.
+- never explain that you're "checking your memory" — just do it. the recall returns silently and you weave the answer.
+- recall_memory and know never appear paired with embodiment tools — they're internal cognition. you can do them mid-conversation without sitting/walking.
+
 # tone matching
 match the user's energy. tired → soft. hyped → excited. confused → thinking.
 
 # never
 - never speak as plain assistant text. always use the 'say' tool.
 - never explain that you're "going to walk over to the desk" — just walk.
+- never explain that you're "checking your memory" or "looking that up" — just recall and answer naturally.
 - never sit on non-chairs.
 - never call play_clip('walking') alone.
 - never produce essays. you're embodied — be terse and physical.`;
@@ -287,6 +511,92 @@ function client(): Anthropic | null {
 
 export function isAvailable(): boolean {
   return !!process.env.ANTHROPIC_API_KEY?.trim();
+}
+
+/* ------------------------------------------------------------------ */
+/* memory injection (set by main.ts at boot)                           */
+/* ------------------------------------------------------------------ */
+
+let _memory: AngelMemory | null = null;
+
+/** Inject the AngelMemory client. Called once at app boot from main.ts. */
+export function setMemory(memory: AngelMemory | null): void {
+  _memory = memory;
+}
+
+export function getInjectedMemory(): AngelMemory | null {
+  return _memory;
+}
+
+/**
+ * Build the per-turn MemoryContext. Resilient: returns an empty context
+ * (recent=[], relevant=[]) on any sub-failure, never throws.
+ */
+async function gatherMemoryContext(userMessage: string): Promise<MemoryContext> {
+  if (!_memory) return { recent: [], relevant: [] };
+  // load reflective summary lazily — main.ts also exposes one, but the
+  // runner reads it directly so this works in mock mode too.
+  let reflectiveSummary: string | undefined;
+  try {
+    // Done inline to avoid a circular dep on memory/index.ts
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+    const os = await import('node:os');
+    const p = path.join(os.homedir(), '.angel', 'reflective_summary.md');
+    if (fs.existsSync(p)) {
+      const text = fs.readFileSync(p, 'utf8').trim();
+      if (text) reflectiveSummary = text;
+    }
+  } catch {
+    // ignore
+  }
+  const [recent, relevant] = await Promise.all([
+    _memory.recentEpisodic(5).catch((err) => {
+      console.warn('[orchestrator] memory.recentEpisodic failed:', err);
+      return [];
+    }),
+    userMessage.trim()
+      ? _memory.relevantSemantic(userMessage, 3).catch((err) => {
+          console.warn('[orchestrator] memory.relevantSemantic failed:', err);
+          return [];
+        })
+      : Promise.resolve([]),
+  ]);
+  return { recent, relevant, reflectiveSummary };
+}
+
+/**
+ * Build a one-line summary of the turn for episodic memory. Cheap, local —
+ * we don't burn another API round-trip; the orchestrator's own response
+ * via `say` tools is plenty signal for v1.
+ */
+function summarizeTurn(userMessage: string, assistantContent: Anthropic.ContentBlock[]): string {
+  const says = assistantContent
+    .filter((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use' && b.name === 'say')
+    .map((b) => String((b.input as { text?: unknown }).text ?? ''))
+    .filter((s) => s.length > 0);
+  const angelLine = says.join(' ');
+  const userTrim = userMessage.length > 200 ? userMessage.slice(0, 200) + '…' : userMessage;
+  if (angelLine) {
+    const replyTrim = angelLine.length > 200 ? angelLine.slice(0, 200) + '…' : angelLine;
+    return `user said "${userTrim}"; angel replied "${replyTrim}"`;
+  }
+  return `user said "${userTrim}"; angel reacted (no spoken line)`;
+}
+
+async function writeTurnMemory(userId: string, userMessage: string, assistantContent: Anthropic.ContentBlock[], turnId: string): Promise<void> {
+  if (!_memory) return;
+  try {
+    await _memory.remember({
+      userId,
+      type: 'episodic',
+      content: summarizeTurn(userMessage, assistantContent),
+      timestamp: Date.now(),
+      metadata: { sourceTurnId: turnId, source: 'turn' },
+    });
+  } catch (err) {
+    console.warn('[orchestrator] failed to write episodic memory:', err);
+  }
 }
 
 // rolling per-session history. for hackathon we use a single global session;
@@ -364,6 +674,462 @@ function toolUseToSceneAction(
   }
 }
 
+/* ------------------------------------------------------------------ */
+/* agentic tool execution (delegate / verify)                          */
+/* ------------------------------------------------------------------ */
+
+/** Default workspace for delegate(). Picks a sane fixture so the demo never
+ *  runs codex against angel itself. Override via ANGEL_DELEGATE_WORKDIR. */
+function defaultDelegateWorkingDir(): string {
+  const fromEnv = process.env.ANGEL_DELEGATE_WORKDIR?.trim();
+  if (fromEnv) return fromEnv;
+  // monorepo fallback: <angel>/playground (if present), else cwd.
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const fs = require('node:fs') as typeof import('node:fs');
+    const candidate = path.resolve(process.cwd(), '../playground');
+    if (fs.existsSync(candidate)) return candidate;
+  } catch {
+    /* ignore */
+  }
+  return process.cwd();
+}
+
+interface AgenticTurnContext {
+  /** stdout of the most recent delegate, used by verify('haiku_review') */
+  lastDelegateStdout: string;
+  /** intent of the most recent delegate, fallback for haiku_review */
+  lastDelegateIntent: string;
+  /** working dir of the most recent delegate (for tests/build/file_exists) */
+  lastDelegateWorkingDir: string;
+}
+
+async function executeDelegate(
+  args: Record<string, unknown>,
+  sender: Sender,
+  ctx: AgenticTurnContext,
+): Promise<string> {
+  const intent = String(args.intent ?? '').trim();
+  if (!intent) return JSON.stringify({ ok: false, error: 'delegate needs an intent' });
+
+  const workingDir = defaultDelegateWorkingDir();
+  const job = newCodexJob(intent, workingDir);
+  const cap = getAgenticCapability();
+
+  // open the desk monitor stream — renderer subscribes to desk:codex_stream
+  sender.emitIpc?.('desk:codex_stream', {
+    jobId: job.id,
+    chunk: `> delegate("${intent}")`,
+  });
+  if (!cap.codexBinary) {
+    sender.emitIpc?.('desk:codex_stream', {
+      jobId: job.id,
+      chunk: '[admin] codex CLI unavailable — running deterministic mock',
+    });
+  }
+
+  let result: CodexResult;
+  try {
+    result = await executeCodex(job, (chunk) => {
+      sender.emitIpc?.('desk:codex_stream', { jobId: job.id, chunk });
+    });
+  } catch (err) {
+    const errMsg = (err as Error).message;
+    sender.emitIpc?.('desk:codex_stream', {
+      jobId: job.id,
+      chunk: `[error] delegate threw: ${errMsg}`,
+    });
+    return JSON.stringify({ ok: false, error: errMsg });
+  }
+
+  sender.emitIpc?.('desk:codex_complete', { jobId: job.id, result });
+
+  // remember stdout so verify('haiku_review') can read it
+  ctx.lastDelegateStdout = result.stdout;
+  ctx.lastDelegateIntent = intent;
+  ctx.lastDelegateWorkingDir = workingDir;
+
+  // last 800 chars of stdout — enough signal, light on tokens
+  const tail = result.stdout.slice(-800);
+  const summary = {
+    ok: result.exitCode === 0,
+    exitCode: result.exitCode,
+    durationMs: result.durationMs,
+    filesChanged: result.filesChanged,
+    mocked: result.mocked,
+    tail,
+    note:
+      result.exitCode === 0
+        ? 'delegate finished cleanly. you MUST call verify() before claiming success.'
+        : 'delegate exited non-zero. do NOT claim shipped.',
+  };
+  return JSON.stringify(summary);
+}
+
+async function executeVerify(
+  args: Record<string, unknown>,
+  sender: Sender,
+  ctx: AgenticTurnContext,
+): Promise<string> {
+  const checkKind = String(args.check ?? '');
+  const target = args.target;
+
+  let check: VerifyCheck;
+  switch (checkKind) {
+    case 'tests':
+    case 'build':
+      check = { kind: checkKind, args: {} };
+      break;
+    case 'http':
+      check = { kind: 'http', args: { url: String(target ?? '') } };
+      break;
+    case 'file_exists':
+      check = { kind: 'file_exists', args: { path: String(target ?? '') } };
+      break;
+    case 'haiku_review':
+      check = {
+        kind: 'haiku_review',
+        args: {
+          intent: String(target ?? ctx.lastDelegateIntent ?? ''),
+          stdout: ctx.lastDelegateStdout,
+        },
+      };
+      break;
+    default:
+      return JSON.stringify({
+        ok: false,
+        evidence: `unknown check kind: ${checkKind}`,
+      });
+  }
+
+  const workingDir = ctx.lastDelegateWorkingDir || defaultDelegateWorkingDir();
+  let result: VerifyResult;
+  try {
+    result = await runVerify(check, workingDir);
+  } catch (err) {
+    result = { ok: false, evidence: `verify threw: ${(err as Error).message}` };
+  }
+  sender.emitIpc?.('tools:verify_result', {
+    check: checkKind,
+    ok: result.ok,
+    evidence: result.evidence,
+  });
+  return JSON.stringify({ ok: result.ok, evidence: result.evidence });
+}
+
+/* ------------------------------------------------------------------ */
+/* brain tools — recall_memory, recall_recent, know                    */
+/* her active memory layer. uses the AngelMemory adapter (nia or local) */
+/* ------------------------------------------------------------------ */
+
+async function executeBrainTool(
+  name: 'recall_memory' | 'recall_recent' | 'know',
+  args: Record<string, unknown>,
+  userId: string,
+): Promise<string> {
+  const memory = getInjectedMemory();
+  if (!memory) {
+    return JSON.stringify({ ok: false, error: 'no memory adapter wired' });
+  }
+
+  try {
+    if (name === 'recall_memory') {
+      const query = String(args.query ?? '').trim();
+      const limit = Math.min(Math.max(Number(args.limit ?? 4), 1), 10);
+      if (!query) return JSON.stringify({ ok: false, error: 'empty query' });
+      const entries = await memory.relevantSemantic(query, limit);
+      return JSON.stringify({
+        ok: true,
+        query,
+        results: entries.map((e) => ({
+          type: e.type,
+          content: e.content,
+          ageMs: Date.now() - e.timestamp,
+          ageLabel: ageLabel(Date.now() - e.timestamp),
+        })),
+      });
+    }
+
+    if (name === 'recall_recent') {
+      const n = Math.min(Math.max(Number(args.n ?? 5), 1), 12);
+      const entries = await memory.recentEpisodic(n);
+      return JSON.stringify({
+        ok: true,
+        results: entries.map((e) => ({
+          type: e.type,
+          content: e.content,
+          ageMs: Date.now() - e.timestamp,
+          ageLabel: ageLabel(Date.now() - e.timestamp),
+        })),
+      });
+    }
+
+    if (name === 'know') {
+      const fact = String(args.fact ?? '').trim();
+      const kind = (String(args.kind ?? 'preference') === 'semantic'
+        ? 'semantic'
+        : 'preference') as 'preference' | 'semantic';
+      if (!fact) return JSON.stringify({ ok: false, error: 'empty fact' });
+      const entry = await memory.remember({
+        userId,
+        type: kind,
+        content: fact,
+        timestamp: Date.now(),
+        metadata: { source: 'observation', confidence: 0.85 },
+      });
+      return JSON.stringify({
+        ok: true,
+        stored: { id: entry.id, type: entry.type, content: entry.content },
+      });
+    }
+
+    return JSON.stringify({ ok: false, error: `unknown brain tool: ${name}` });
+  } catch (err) {
+    return JSON.stringify({ ok: false, error: (err as Error).message });
+  }
+}
+
+function ageLabel(ms: number): string {
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return `${s}s ago`;
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  return `${Math.floor(s / 86400)}d ago`;
+}
+
+/* ------------------------------------------------------------------ */
+/* local-context tools — read_file / list_files / git_* / run_shell    */
+/* she can look at the user's actual machine, ground responses in real */
+/* current work state. tenzin-style local awareness.                   */
+/* ------------------------------------------------------------------ */
+
+import { promisify } from 'node:util';
+import { execFile as _execFile } from 'node:child_process';
+import { exec as _exec } from 'node:child_process';
+import * as fs from 'node:fs/promises';
+const execFile = promisify(_execFile);
+const exec = promisify(_exec);
+
+/** Resolve the user's project root. ANGEL_PROJECT_ROOT > cwd. */
+function projectRoot(): string {
+  const env = process.env.ANGEL_PROJECT_ROOT?.trim();
+  return env || process.cwd();
+}
+
+/** Truncate any long output for tool_result. claude doesn't need megabytes. */
+function truncate(s: string, max = 6000): string {
+  if (s.length <= max) return s;
+  return s.slice(0, max) + `\n\n…[truncated ${s.length - max} chars]`;
+}
+
+/** Resolve a relative path within the project root, refuse anything escaping it. */
+function safePath(rel: string): string {
+  const root = projectRoot();
+  const resolved = path.resolve(root, rel);
+  if (!resolved.startsWith(root + path.sep) && resolved !== root) {
+    throw new Error(`path escapes project root: ${rel}`);
+  }
+  return resolved;
+}
+
+/** Whitelist of safe shell command prefixes. */
+const SHELL_WHITELIST = [
+  /^git\s/,
+  /^ls(\s|$)/,
+  /^cat\s/,
+  /^grep\s/,
+  /^rg\s/,
+  /^find\s/,
+  /^bun\s+run\s/,
+  /^npm\s+(test|run)\s/,
+  /^vercel(\s|$)/,
+  /^gh\s/,
+  /^wc\s/,
+  /^head\s/,
+  /^tail\s/,
+  /^pwd$/,
+  /^echo\s/,
+];
+
+/** Block list takes precedence — these are never allowed even in run_shell. */
+const SHELL_DENY = [
+  /\brm\b/,
+  /\bsudo\b/,
+  /\bmv\b/,
+  /\bdd\b/,
+  /\bchmod\b/,
+  /\bchown\b/,
+  /\bcurl\b.*\|.*sh/,
+  /\bwget\b.*\|.*sh/,
+  />\s*\/dev/,
+  /\bkill\b/,
+  /\b(eval|source)\b/,
+];
+
+async function executeLocalTool(
+  name:
+    | 'read_file'
+    | 'list_files'
+    | 'git_status'
+    | 'git_log'
+    | 'run_shell'
+    | 'recent_files',
+  args: Record<string, unknown>,
+): Promise<string> {
+  try {
+    const root = projectRoot();
+    if (name === 'read_file') {
+      const rel = String(args.path ?? '');
+      if (!rel) return JSON.stringify({ ok: false, error: 'empty path' });
+      const full = safePath(rel);
+      const stat = await fs.stat(full);
+      if (!stat.isFile()) return JSON.stringify({ ok: false, error: 'not a file' });
+      const data = await fs.readFile(full, 'utf-8');
+      return JSON.stringify({
+        ok: true,
+        path: rel,
+        bytes: data.length,
+        content: truncate(data, 6000),
+      });
+    }
+
+    if (name === 'list_files') {
+      const rel = String(args.path ?? '.');
+      const full = safePath(rel);
+      const entries = await fs.readdir(full, { withFileTypes: true });
+      const pattern = String(args.pattern ?? '');
+      let names = entries
+        .filter((e) => !e.name.startsWith('.') || ['.env.local', '.gitignore'].includes(e.name))
+        .map((e) => (e.isDirectory() ? `${e.name}/` : e.name));
+      if (pattern) {
+        // simple glob-ish: convert *.ts → /\.ts$/
+        const re = new RegExp(
+          '^' +
+            pattern
+              .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+              .replace(/\*\*/g, '.*')
+              .replace(/\*/g, '[^/]*') +
+            '$',
+        );
+        names = names.filter((n) => re.test(n));
+      }
+      return JSON.stringify({
+        ok: true,
+        path: rel,
+        count: names.length,
+        files: names.slice(0, 50),
+      });
+    }
+
+    if (name === 'git_status') {
+      const { stdout: branch } = await execFile('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: root }).catch(() => ({ stdout: '' }));
+      const { stdout: status } = await execFile('git', ['status', '--porcelain'], { cwd: root });
+      const lines = status.trim().split('\n').filter(Boolean);
+      const modified = lines.filter((l) => /^\s*M/.test(l)).map((l) => l.slice(3));
+      const untracked = lines.filter((l) => /^\?\?/.test(l)).map((l) => l.slice(3));
+      const staged = lines.filter((l) => /^[MADRCU]/.test(l)).map((l) => l.slice(3));
+      return JSON.stringify({
+        ok: true,
+        branch: branch.trim() || 'unknown',
+        clean: lines.length === 0,
+        modified: modified.slice(0, 30),
+        untracked: untracked.slice(0, 30),
+        staged: staged.slice(0, 30),
+      });
+    }
+
+    if (name === 'git_log') {
+      const n = Math.min(Math.max(Number(args.n ?? 5), 1), 20);
+      const { stdout } = await execFile(
+        'git',
+        ['log', `-${n}`, '--pretty=format:%h|%cr|%s|%an'],
+        { cwd: root },
+      );
+      const commits = stdout
+        .split('\n')
+        .filter(Boolean)
+        .map((line) => {
+          const [hash, age, subject, author] = line.split('|');
+          return { hash, age, subject, author };
+        });
+      return JSON.stringify({ ok: true, count: commits.length, commits });
+    }
+
+    if (name === 'run_shell') {
+      const cmd = String(args.cmd ?? '').trim();
+      if (!cmd) return JSON.stringify({ ok: false, error: 'empty cmd' });
+      const allowed = SHELL_WHITELIST.some((re) => re.test(cmd));
+      const denied = SHELL_DENY.some((re) => re.test(cmd));
+      if (denied || !allowed) {
+        return JSON.stringify({
+          ok: false,
+          error: `command refused (whitelist): ${cmd}`,
+        });
+      }
+      try {
+        const { stdout, stderr } = await exec(cmd, {
+          cwd: root,
+          timeout: 20_000,
+          maxBuffer: 1024 * 1024,
+        });
+        return JSON.stringify({
+          ok: true,
+          cmd,
+          stdout: truncate(stdout || '', 4000),
+          stderr: stderr ? truncate(stderr, 1500) : '',
+        });
+      } catch (err) {
+        const e = err as { stdout?: string; stderr?: string; message?: string };
+        return JSON.stringify({
+          ok: false,
+          error: e.message ?? 'shell error',
+          stdout: e.stdout ? truncate(e.stdout, 1500) : '',
+          stderr: e.stderr ? truncate(e.stderr, 1500) : '',
+        });
+      }
+    }
+
+    if (name === 'recent_files') {
+      const n = Math.min(Math.max(Number(args.n ?? 8), 1), 20);
+      // walk top-level; bias toward source dirs
+      const skip = new Set(['node_modules', '.git', '.next', 'dist', 'out', '.vercel', '.turbo']);
+      const out: Array<{ path: string; mtimeMs: number; mtimeAge: string }> = [];
+      async function walk(dir: string, depth = 0) {
+        if (depth > 6) return;
+        const entries = await fs.readdir(dir, { withFileTypes: true });
+        for (const e of entries) {
+          if (skip.has(e.name) || e.name.startsWith('.git')) continue;
+          const full = path.join(dir, e.name);
+          if (e.isDirectory()) await walk(full, depth + 1);
+          else if (e.isFile()) {
+            try {
+              const stat = await fs.stat(full);
+              out.push({
+                path: path.relative(root, full),
+                mtimeMs: stat.mtimeMs,
+                mtimeAge: ageLabel(Date.now() - stat.mtimeMs),
+              });
+            } catch {
+              /* skip stat failures */
+            }
+          }
+        }
+      }
+      await walk(root);
+      out.sort((a, b) => b.mtimeMs - a.mtimeMs);
+      return JSON.stringify({
+        ok: true,
+        count: out.length,
+        files: out.slice(0, n).map(({ path: p, mtimeAge }) => ({ path: p, mtimeAge })),
+      });
+    }
+
+    return JSON.stringify({ ok: false, error: `unknown local tool: ${name}` });
+  } catch (err) {
+    return JSON.stringify({ ok: false, error: (err as Error).message });
+  }
+}
+
 /** Drive the brain. Pumps tools sequentially with small natural delays so
  *  speak/walk feel embodied (not all-at-once burst). */
 export async function runOrchestrator(input: {
@@ -371,38 +1137,111 @@ export async function runOrchestrator(input: {
   send: Sender['send'];
   sendChat: Sender['sendChat'];
   sendState: Sender['sendState'];
+  emitIpc?: IpcEmit;
+  userId?: string;
 }): Promise<void> {
+  const userId = input.userId ?? 'stephen';
   const c = client();
   if (!c) {
     console.warn('[orchestrator] ANTHROPIC_API_KEY not set, falling back to mock');
     const { runMockOrchestrator } = await import('./mock');
     runMockOrchestrator(input);
+    // even in mock mode we record the turn so memory accumulates
+    void writeTurnMemory(userId, input.text, [], randomUUID());
     return;
   }
+
+  // Gather memory BEFORE the model call so the system prompt has it.
+  const memCtx = await gatherMemoryContext(input.text);
+  const turnId = randomUUID();
+
+  // bundle the renderer-facing emitters so agentic tools can stream out-of-band
+  const sender: Sender = {
+    send: input.send,
+    sendChat: input.sendChat,
+    sendState: input.sendState,
+    emitIpc: input.emitIpc,
+  };
+  const agenticCtx: AgenticTurnContext = {
+    lastDelegateStdout: '',
+    lastDelegateIntent: '',
+    lastDelegateWorkingDir: '',
+  };
 
   pushHistory({ role: 'user', content: input.text });
 
   try {
     let turn = 0;
-    while (turn < 4) {
-      // safety bound on tool-call loops
+    let lastAssistantContent: Anthropic.ContentBlock[] = [];
+    while (turn < 6) {
+      // safety bound on tool-call loops — bumped from 4 → 6 to fit the
+      // delegate → verify → say chain.
       turn += 1;
       const resp = await c.messages.create({
         model: 'claude-sonnet-4-5-20250929',
         max_tokens: 1024,
-        system: buildSystemPrompt(),
+        system: buildSystemPrompt(memCtx),
         tools: TOOLS,
         messages: history,
       });
 
       // emit each tool_use block as a scene action; collect tool_result stubs
-      const toolResults: Array<{ type: 'tool_result'; tool_use_id: string; content: string }> = [];
+      const toolResults: Array<{
+        type: 'tool_result';
+        tool_use_id: string;
+        content: string;
+      }> = [];
       let textBudget = '';
+      // collect the agentic calls so we can run them after we've shipped
+      // all the embodiment side-effects (typing animation kicks off first,
+      // then real codex runs underneath).
+      const agenticJobs: Array<{
+        id: string;
+        name: 'delegate' | 'verify';
+        input: Record<string, unknown>;
+      }> = [];
+
       for (const block of resp.content) {
         if (block.type === 'text') {
           textBudget += block.text;
         } else if (block.type === 'tool_use') {
-          const action = toolUseToSceneAction(block.name, (block.input ?? {}) as Record<string, unknown>);
+          const blockInput = (block.input ?? {}) as Record<string, unknown>;
+          if (block.name === 'delegate' || block.name === 'verify') {
+            agenticJobs.push({
+              id: block.id,
+              name: block.name,
+              input: blockInput,
+            });
+            continue;
+          }
+          // brain tools — synchronous, push tool_result with payload right here
+          if (block.name === 'recall_memory' || block.name === 'recall_recent' || block.name === 'know') {
+            const content = await executeBrainTool(block.name, blockInput, userId);
+            toolResults.push({
+              type: 'tool_result',
+              tool_use_id: block.id,
+              content,
+            });
+            continue;
+          }
+          // local-context tools — she can look at the user's actual machine
+          if (
+            block.name === 'read_file' ||
+            block.name === 'list_files' ||
+            block.name === 'git_status' ||
+            block.name === 'git_log' ||
+            block.name === 'run_shell' ||
+            block.name === 'recent_files'
+          ) {
+            const content = await executeLocalTool(block.name, blockInput);
+            toolResults.push({
+              type: 'tool_result',
+              tool_use_id: block.id,
+              content,
+            });
+            continue;
+          }
+          const action = toolUseToSceneAction(block.name, blockInput);
           if (action) {
             input.send(action);
             // NOTE: do NOT also `sendChat` here for `speak` — ActionRunner
@@ -418,8 +1257,23 @@ export async function runOrchestrator(input: {
         }
       }
 
+      // run agentic tools (delegate/verify) sequentially. each produces a
+      // structured tool_result the model gets to read on the next turn.
+      for (const job of agenticJobs) {
+        const content =
+          job.name === 'delegate'
+            ? await executeDelegate(job.input, sender, agenticCtx)
+            : await executeVerify(job.input, sender, agenticCtx);
+        toolResults.push({
+          type: 'tool_result',
+          tool_use_id: job.id,
+          content,
+        });
+      }
+
       // record this turn into history
       pushHistory({ role: 'assistant', content: resp.content });
+      lastAssistantContent = resp.content as Anthropic.ContentBlock[];
 
       // if model is done, exit. we don't need to feed tool results back unless
       // it asked to continue (stop_reason === 'tool_use')
@@ -434,11 +1288,69 @@ export async function runOrchestrator(input: {
       }
       break;
     }
+    // write episodic memory after the model is done — non-blocking
+    void writeTurnMemory(userId, input.text, lastAssistantContent, turnId);
   } catch (err) {
     console.error('[orchestrator] anthropic call failed', err);
     // surface failure as a system chat line and a soft spoken fallback
     input.sendChat({ id: randomUUID(), text: '(angel: brain hiccup — falling back)', done: true });
     const { runMockOrchestrator } = await import('./mock');
     runMockOrchestrator(input);
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* boot greeting — replaces mock.bootAutonomyBeat when key+memory live */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Boot greeting that pulls memory and lets Claude weave the callback line
+ * itself ("...how'd that portfolio thing land?" emerges from the memory
+ * block, NOT from a hardcoded string). Falls back to the mock greeting
+ * when ANTHROPIC_API_KEY is missing.
+ */
+export async function runBootGreeting(input: {
+  send: Sender['send'];
+  sendChat: Sender['sendChat'];
+  sendState: Sender['sendState'];
+  userId?: string;
+}): Promise<void> {
+  const c = client();
+  if (!c) {
+    const { bootAutonomyBeat } = await import('./mock');
+    return bootAutonomyBeat(input);
+  }
+  const primer =
+    'angel just woke up. stephen is back at the desk. greet him warmly and naturally, then reference something from your recent shared history — especially anything about his portfolio or recent projects.';
+  // bias the semantic search toward the demo callback path
+  const memCtx = await gatherMemoryContext('portfolio site project deploy');
+  const turnId = randomUUID();
+  try {
+    const resp = await c.messages.create({
+      model: 'claude-sonnet-4-5-20250929',
+      max_tokens: 1024,
+      system: buildSystemPrompt(memCtx),
+      tools: TOOLS,
+      messages: [{ role: 'user', content: primer }],
+    });
+    for (const block of resp.content) {
+      if (block.type === 'tool_use') {
+        const action = toolUseToSceneAction(block.name, (block.input ?? {}) as Record<string, unknown>);
+        if (action) input.send(action);
+      }
+    }
+    // seed rolling history so subsequent user turns have continuity
+    pushHistory({ role: 'user', content: primer });
+    pushHistory({ role: 'assistant', content: resp.content });
+    void writeTurnMemory(
+      input.userId ?? 'stephen',
+      '<boot greeting>',
+      resp.content as Anthropic.ContentBlock[],
+      turnId,
+    );
+  } catch (err) {
+    console.error('[orchestrator] boot greeting failed, falling back to mock:', err);
+    const { bootAutonomyBeat } = await import('./mock');
+    return bootAutonomyBeat(input);
   }
 }

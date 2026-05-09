@@ -101,4 +101,51 @@ export const ipc = {
     }
     return b.onClaim(cb);
   },
+
+  /* ---------- tensorlake bg-job introspection (used by /admin) ---------- */
+  async tensorlakeStatus(): Promise<TensorlakeStatusSummary | null> {
+    const b = bridge() as unknown as { tensorlakeStatus?: () => Promise<TensorlakeStatusSummary> } | null;
+    if (!b?.tensorlakeStatus) {
+      warnOnce('tensorlakeStatus');
+      return null;
+    }
+    return b.tensorlakeStatus();
+  },
+
+  async tensorlakeRerun(): Promise<TensorlakeRerunResult | null> {
+    const b = bridge() as unknown as { tensorlakeRerun?: () => Promise<TensorlakeRerunResult> } | null;
+    if (!b?.tensorlakeRerun) {
+      warnOnce('tensorlakeRerun');
+      return null;
+    }
+    return b.tensorlakeRerun();
+  },
 };
+
+/**
+ * Shape of the `tensorlake:status` IPC reply. Mirrors what main.ts returns;
+ * lastObservation is the full BgObservation from
+ * desktop/electron/agent/tensorlake/bg-jobs.ts.
+ */
+export interface TensorlakeStatusSummary {
+  available: boolean;
+  backend: 'tensorlake' | 'mock';
+  keyConfigured: boolean;
+  lastJobAt?: number;
+  lastObservation?: {
+    summary: string;
+    findings: string[];
+    suggestion: string;
+    recentFiles: Array<{ path: string; modified?: string; note?: string }>;
+    producedAt: number;
+    backend: 'tensorlake' | 'mock';
+  };
+}
+
+export interface TensorlakeRerunResult {
+  ok: boolean;
+  backend: 'tensorlake' | 'mock' | null;
+  findings: string[];
+  suggestion: string;
+  producedAt: number | null;
+}

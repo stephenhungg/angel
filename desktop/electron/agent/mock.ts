@@ -170,23 +170,37 @@ export function registerMockHandlers(): void {
  * Stephen's real orchestrator will replace this hook at integration; the
  * IPC channels (scene:action, chat:token, state:update) stay identical.
  */
-export async function bootAutonomyBeat(send: {
-  send: (a: SceneAction) => void;
-  sendChat: (t: ChatToken) => void;
-  sendState: (p: StatePatch) => void;
-}): Promise<void> {
+export interface BootAutonomyObservation {
+  /** Single-line natural utterance to speak (already shaped for lipsync). */
+  greetingLine?: string;
+  /** Optional followup suggestion \u2014 spoken after a beat. */
+  suggestion?: string;
+}
+
+export async function bootAutonomyBeat(
+  send: {
+    send: (a: SceneAction) => void;
+    sendChat: (t: ChatToken) => void;
+    sendState: (p: StatePatch) => void;
+  },
+  observation?: BootAutonomyObservation,
+): Promise<void> {
   // small grace so the avatar finishes loading + lighting settles
   await sleep(2200);
   const s: Sender = send;
   await emitSpeak(s, 'oh \u2014 you\u2019re back.', 'happy');
   s.sendState({ emotion: 'happy', mood: 0.85, energy: 0.78, trust: 0.6 });
   await sleep(900);
-  await emitSpeak(
-    s,
-    'while you were gone, i watched your portfolio repo and prepared 3 commits to review.',
-    'soft',
-  );
+  const mainLine =
+    observation?.greetingLine ??
+    'while you were gone, i watched your portfolio repo and prepared 3 commits to review.';
+  await emitSpeak(s, mainLine, 'soft');
   await sleep(1400);
+  if (observation?.suggestion) {
+    s.sendState({ emotion: 'thinking' });
+    await emitSpeak(s, `want me to ${observation.suggestion}?`, 'soft');
+    return;
+  }
   // statefulness 25% beat — the memory callback
   s.sendState({ emotion: 'thinking' });
   await emitSpeak(s, 'how\u2019d that portfolio thing land last week, by the way?', 'soft');

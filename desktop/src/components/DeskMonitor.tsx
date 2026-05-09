@@ -77,6 +77,32 @@ export function DeskMonitor({
     });
   }, [setTask, appendTaskLog]);
 
+  // wire main-process delegate/verify streams → store. Each codex stdout
+  // chunk lands as a fresh log line so the monitor paints live.
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.angel) return;
+    const offStream = window.angel.onCodexStream(({ chunk }) => {
+      if (typeof chunk === 'string' && chunk.length > 0) appendTaskLog(chunk);
+    });
+    const offComplete = window.angel.onCodexComplete(({ result }) => {
+      const r = result as { exitCode?: number; durationMs?: number; mocked?: boolean } | null;
+      if (!r) return;
+      const tag = r.mocked ? 'mock' : 'codex';
+      appendTaskLog(
+        `[${tag}] complete — exit ${r.exitCode ?? '?'} in ${Math.round((r.durationMs ?? 0) / 100) / 10}s`,
+      );
+    });
+    const offVerify = window.angel.onVerifyResult(({ check, ok, evidence }) => {
+      const badge = ok ? 'verify ok' : 'verify FAIL';
+      appendTaskLog(`[${badge}] ${check}: ${evidence}`);
+    });
+    return () => {
+      offStream();
+      offComplete();
+      offVerify();
+    };
+  }, [appendTaskLog]);
+
   // visible tail
   const visible = useMemo(() => taskLog.slice(-MAX_VISIBLE_LINES), [taskLog]);
 

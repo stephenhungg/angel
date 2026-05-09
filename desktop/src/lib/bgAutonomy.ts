@@ -41,19 +41,41 @@ function id(prefix: string): string {
   return `${prefix}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
 }
 
-/** boot greeting "while you were away..." — 30% bg-execution rubric */
-function buildWhileYouWereAwaySteps(commits: number, repos: string[]): ScriptStep[] {
+/** boot greeting "while you were away..." — 30% bg-execution rubric.
+ *
+ * When tensorlake findings are present in the payload (main process
+ * threaded a real BgObservation in), we lead with a specific finding
+ * instead of the canned commit-count line. That's the receipt judges can
+ * point at when they ask "is tensorlake actually doing the work?".
+ */
+function buildWhileYouWereAwaySteps(
+  commits: number,
+  repos: string[],
+  findings?: string[],
+  suggestion?: string,
+): ScriptStep[] {
   const repo = repos[0] ?? 'your repo';
-  const text =
-    commits > 0
+  const lead = findings && findings.length > 0 ? findings[0] : null;
+  const text = lead
+    ? `oh — you're back. i looked at ${repo} while you were away — ${lead}.`
+    : commits > 0
       ? `oh — you're back. while you were gone, i watched ${repo} and prepared ${commits} commits to review.`
       : `oh — you're back. i was just watching ${repo}.`;
-  return [
+  const steps: ScriptStep[] = [
     { kind: 'action', action: { type: 'face', target: 'user' } },
     { kind: 'action', action: { type: 'set_expression', expression: 'smile', weight: 0.6, durationMs: 400 } },
     { kind: 'action', action: { type: 'speak', text, emotion: 'happy' } },
     { kind: 'token', text },
   ];
+  if (suggestion) {
+    const followup = `want me to ${suggestion}?`;
+    steps.push(
+      { kind: 'action', action: { type: 'set_expression', expression: 'smile', weight: 0.4, durationMs: 350 } },
+      { kind: 'action', action: { type: 'speak', text: followup, emotion: 'soft' } },
+      { kind: 'token', text: followup },
+    );
+  }
+  return steps;
 }
 
 /** periodic heartbeat — small ambient updates between turns */
@@ -109,7 +131,13 @@ function handleEvent(ev: BgAutonomyEvent): void {
     case 'while_you_were_away': {
       const commits = Number(ev.payload?.commits ?? 3);
       const repos = (ev.payload?.repos as string[] | undefined) ?? ['your portfolio'];
-      runSteps(buildWhileYouWereAwaySteps(commits, repos));
+      // findings/suggestion are populated by the main process when the
+      // Tensorlake portfolio bg job (electron/agent/tensorlake/bg-jobs.ts)
+      // returns successfully. When absent, fall back to the canned line.
+      const findings = ev.payload?.findings as string[] | undefined;
+      const suggestion =
+        typeof ev.payload?.suggestion === 'string' ? (ev.payload.suggestion as string) : undefined;
+      runSteps(buildWhileYouWereAwaySteps(commits, repos, findings, suggestion));
       break;
     }
     case 'heartbeat':
@@ -143,6 +171,30 @@ export function startBgAutonomy(opts: { heartbeatMs?: number } = {}): void {
   _started = true;
 
   _unsub = onBgAutonomy(handleEvent);
+
+  // Bridge: when main process sends 'bg:autonomy' (e.g., the Tensorlake
+  // boot observation), forward into the local bus so the existing
+  // handler runs unchanged. Only attaches when the preload bridge
+  // exposed the subscription (`window.angel.onBgAutonomy`).
+  const angel = (typeof window !== 'undefined'
+    ? (window as unknown as {
+        angel?: {
+          onBgAutonomy?: (
+            cb: (e: { kind: string; payload?: Record<string, unknown> }) => void,
+          ) => () => void;
+        };
+      }).angel
+    : undefined);
+  if (angel?.onBgAutonomy) {
+    const unsubIpc = angel.onBgAutonomy((e) => {
+      handleEvent({ kind: e.kind as BgAutonomyEvent['kind'], payload: e.payload });
+    });
+    const prevUnsub = _unsub;
+    _unsub = () => {
+      try { unsubIpc(); } catch { /* ignore */ }
+      if (prevUnsub) prevUnsub();
+    };
+  }
 
   const interval = opts.heartbeatMs ?? 300_000;
   if (interval > 0) {

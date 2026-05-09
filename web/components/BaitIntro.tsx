@@ -199,13 +199,110 @@ export function BaitIntro({ children }: { children: React.ReactNode }) {
           "wipe+=0.4",
         )
         // hold the pink wipe momentarily
-        .to({}, { duration: 0.4 })
+        .to({}, { duration: 0.3 })
         // ────────────────────────────────────────────────────────────
-        // STAGE 6: handoff — fade everything to reveal the real landing
+        // STAGE 6: hero intro — choreographed, NOT a flat fade.
+        // pre-set everything off-screen / invisible, then build the
+        // hero in piece by piece while the bait wipe fades out.
+        // selectors target classes inside <Hero /> rendered underneath.
         // ────────────────────────────────────────────────────────────
+        .addLabel("hero")
+        // pre-stage hero pieces (no flash — they were obscured by the wipe)
+        .set(".hero-bg", { opacity: 0 }, "hero")
+        .set(".hero-decor", { opacity: 0, scale: 0 }, "hero")
+        .set(".hero-snow", { opacity: 0, scale: 0.6, rotate: -90 }, "hero")
+        .set(".hero-preview", { opacity: 0, x: 80 }, "hero")
+        .set(".hero-wordmark", { opacity: 0, y: 80, scale: 0.6, rotate: -6 }, "hero")
+        .set(".hero-byline", { opacity: 0, y: 14 }, "hero")
+        .set(".hero-meta-l", { opacity: 0, x: -20 }, "hero")
+        .set(".hero-meta-r", { opacity: 0, x: 20 }, "hero")
+        .set(".hero-grain", { opacity: 0 }, "hero")
+        .set(".hero-subtitle", { opacity: 0, y: 24 }, "hero")
+        .set(".hero-stack li", { opacity: 0, y: 12 }, "hero")
+        // start fading the wipe + kanji out as hero builds up
         .to(
           [".shape-overlays", ".black-collapse"],
-          { autoAlpha: 0, duration: 0.7, ease: "momentOut" },
+          { autoAlpha: 0, duration: 0.9, ease: "momentOut" },
+          "hero",
+        )
+        // 1. scene gradient fades in (slow)
+        .to(
+          ".hero-bg",
+          { opacity: 1, duration: 1.4, ease: "expoOut" },
+          "hero+=0.1",
+        )
+        // 2. corner crosshairs pop one-by-one (back.out)
+        .to(
+          ".hero-decor",
+          {
+            opacity: 0.5,
+            scale: 1,
+            duration: 0.5,
+            stagger: { each: 0.08, from: "random" },
+            ease: "back.out(2.2)",
+          },
+          "hero+=0.5",
+        )
+        // 3. snow svg twirl-in
+        .to(
+          ".hero-snow",
+          { opacity: 0.4, scale: 1, rotate: 0, duration: 0.7, ease: "back.out(1.6)" },
+          "hero+=0.7",
+        )
+        // 4. dust grain fades in
+        .to(".hero-grain", { opacity: 0.07, duration: 1, ease: "power2.out" }, "hero+=0.4")
+        // 5. wordmark sticker drops in with elastic bounce — the moment
+        .to(
+          ".hero-wordmark",
+          {
+            opacity: 1,
+            y: 0,
+            scale: 1,
+            rotate: 0,
+            duration: 1.4,
+            ease: "elastic.out(1, 0.6)",
+          },
+          "hero+=0.85",
+        )
+        // 6. byline fades up under wordmark
+        .to(
+          ".hero-byline",
+          { opacity: 0.95, y: 0, duration: 0.6, ease: "expoOut" },
+          "hero+=1.4",
+        )
+        // 7. sub-preview card slides in from right
+        .to(
+          ".hero-preview",
+          { opacity: 1, x: 0, duration: 0.9, ease: "expoOut" },
+          "hero+=1.0",
+        )
+        // 8. metadata fragment-mono rows slide in left + right simultaneously
+        .to(
+          ".hero-meta-l",
+          { opacity: 0.8, x: 0, duration: 0.7, ease: "expoOut" },
+          "hero+=1.2",
+        )
+        .to(
+          ".hero-meta-r",
+          { opacity: 0.8, x: 0, duration: 0.7, ease: "expoOut" },
+          "hero+=1.25",
+        )
+        // 9. below-hero subtitle + stack list (these are below the fold)
+        .to(
+          ".hero-subtitle",
+          { opacity: 1, y: 0, duration: 0.8, ease: "expoOut" },
+          "hero+=1.3",
+        )
+        .to(
+          ".hero-stack li",
+          {
+            opacity: 1,
+            y: 0,
+            duration: 0.5,
+            stagger: 0.06,
+            ease: "expoOut",
+          },
+          "hero+=1.5",
         );
 
       return () => {
@@ -278,7 +375,7 @@ function SaasBait({ onSkip }: { onSkip: () => void }) {
         </nav>
       </header>
       <main className="relative z-10 mx-auto max-w-6xl px-10 pt-16 pb-10 text-center">
-        <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-white px-4 py-1.5 font-sans text-[11px] font-semibold uppercase tracking-wider text-indigo-700 shadow-sm">
+        <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-indigo-200 bg-white px-4 py-1.5 font-sans text-[11px] font-semibold text-indigo-700 shadow-sm">
           <span>★</span>
           <span>Trusted by 500+ Fortune 1000 Enterprises</span>
           <span>·</span>
@@ -314,14 +411,14 @@ function SaasBait({ onSkip }: { onSkip: () => void }) {
           ].map((s) => (
             <div key={s.l} className="saas-stat rounded-lg border border-slate-200 bg-white/60 p-4 backdrop-blur">
               <div className="font-sans text-[28px] font-bold text-slate-900">{s.v}</div>
-              <div className="mt-1 font-sans text-[11px] uppercase tracking-wider text-slate-500">{s.l}</div>
+              <div className="mt-1 font-sans text-[11px] text-slate-500">{s.l}</div>
             </div>
           ))}
         </div>
       </main>
       <div className="relative z-10 mt-2 border-y border-slate-200 bg-white py-6">
         <div className="mx-auto max-w-6xl px-10">
-          <div className="mb-3 text-center font-sans text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">Powering Mission-Critical AI Workflows At</div>
+          <div className="mb-3 text-center font-sans text-[10px] font-semibold text-slate-400">Powering Mission-Critical AI Workflows At</div>
           <div className="flex items-center justify-around opacity-60">
             {["MORGAN", "ACME CORP", "GLOBEX", "INITECH", "STARK INDUSTRIES", "WAYNE ENT.", "UMBRELLA", "PIED PIPER"].map((b) => (
               <span key={b} className="font-serif text-[13px] font-bold tracking-widest text-slate-500">{b}</span>

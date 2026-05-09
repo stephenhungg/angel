@@ -19,6 +19,27 @@ contextBridge.exposeInMainWorld('angel', {
   onState: (cb: (patch: Record<string, unknown>) => void) => on('state:update', cb),
   onClaim: (cb: (payload: ClaimTokenPayload) => void) => on('claim:received', cb),
 
+  // Bg autonomy events from main — currently the Tensorlake boot job
+  // (while_you_were_away with findings + suggestion). Renderer fan-out
+  // lives in src/lib/bgAutonomy.ts.
+  onBgAutonomy: (
+    cb: (e: { kind: string; payload?: Record<string, unknown> }) => void,
+  ) => on<{ kind: string; payload?: Record<string, unknown> }>('bg:autonomy', cb),
+
+  // Tensorlake bg-job introspection — used by /admin/space dashboard to
+  // show "is tensorlake actually doing the work?" with the latest
+  // observation (judges' receipt). status = read; rerun = trigger fresh.
+  tensorlakeStatus: () => ipcRenderer.invoke('tensorlake:status'),
+  tensorlakeRerun: () => ipcRenderer.invoke('tensorlake:rerun'),
+
+  // agentic tools — delegate streams codex stdout, verify reports check results
+  onCodexStream: (cb: (e: { jobId: string; chunk: string }) => void) =>
+    on('desk:codex_stream', cb),
+  onCodexComplete: (cb: (e: { jobId: string; result: unknown }) => void) =>
+    on('desk:codex_complete', cb),
+  onVerifyResult: (cb: (e: { check: string; ok: boolean; evidence: string }) => void) =>
+    on('tools:verify_result', cb),
+
   reportActionComplete: (result: SceneActionComplete) =>
     ipcRenderer.invoke('tool:invoke', { name: 'action_complete', args: result }),
 

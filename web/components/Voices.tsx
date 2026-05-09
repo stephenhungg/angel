@@ -74,7 +74,7 @@ export function Voices() {
           <div className="font-sans text-[16px] font-medium tracking-[-0.005em] text-ink-near">
             anonymous, early access
           </div>
-          <div className="font-mono text-[11px] uppercase tracking-[0.08em] text-muted-secondary">
+          <div className="font-mono text-[11px] text-muted-secondary">
             Berkeley, CA · 2026-04
           </div>
         </div>

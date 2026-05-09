@@ -1,0 +1,4 @@
+
+.env.local
+# note: _generated/ IS committed — web/tsconfig depends on it for typecheck.
+# regenerate locally with `bunx convex dev --once` from this workspace.

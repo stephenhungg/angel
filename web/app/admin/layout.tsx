@@ -1,6 +1,7 @@
 import { cookies } from 'next/headers';
 import { AdminGate } from './_components/AdminGate';
 import { AdminChrome } from './_components/AdminChrome';
+import { ConvexClientProvider } from './_components/ConvexClientProvider';
 
 /**
  * /admin layout — server component.
@@ -26,7 +27,11 @@ export default async function AdminLayout({
     return <AdminGate />;
   }
 
-  return <AdminChrome>{children}</AdminChrome>;
+  return (
+    <ConvexClientProvider>
+      <AdminChrome>{children}</AdminChrome>
+    </ConvexClientProvider>
+  );
 }
 
 export const metadata = {

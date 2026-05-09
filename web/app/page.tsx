@@ -1,4 +1,5 @@
 import { BaitIntro } from "@/components/BaitIntro";
+import { SmoothScroll } from "@/components/SmoothScroll";
 import { Nav } from "@/components/Nav";
 import { Hero } from "@/components/Hero";
 import { Origin } from "@/components/Origin";
@@ -20,17 +21,20 @@ import { Footer } from "@/components/Footer";
 // primary cta inside the dark services grid.
 export default function HomePage() {
   return (
-    <BaitIntro>
-      <main className="min-h-screen bg-paper">
-        <Nav />
-        <Hero />
-        <Origin />
-        <WhatSheIs />
-        <Archetypes />
-        <Voices />
-        <Showcase />
-        <Footer />
-      </main>
-    </BaitIntro>
+    <>
+      <SmoothScroll />
+      <BaitIntro>
+        <main className="min-h-screen bg-paper">
+          <Nav />
+          <Hero />
+          <Origin />
+          <WhatSheIs />
+          <Archetypes />
+          <Voices />
+          <Showcase />
+          <Footer />
+        </main>
+      </BaitIntro>
+    </>
   );
 }

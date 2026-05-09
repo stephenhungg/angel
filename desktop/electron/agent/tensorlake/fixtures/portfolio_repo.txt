@@ -1,0 +1,163 @@
+# stephen-hung/portfolio — repo digest (snapshot 2026-05-09)
+#
+# This file is a flat, ingestible "digest" of the portfolio repo, formatted
+# the way you'd dump a small repo into one document so a parser like
+# Tensorlake can extract structured facts in one pass. Designed to look
+# realistic so the demo's "while you were away" findings have specificity
+# (file names, commit messages, deploy URLs, package versions, TODOs).
+#
+# Tensorlake structured-extraction graph "PortfolioObservation" reads this
+# and emits: project_summary, recent_files[], noteworthy_observations[],
+# suggested_followup. See bg-jobs.ts.
+
+==============================================================================
+META
+==============================================================================
+repo:           github.com/stephenhung/portfolio
+branch:         main
+deploy:         https://stephenhung.com  (vercel, last build OK)
+stack:          next.js 15 / react 19 / tailwind 4 / framer-motion 11
+size:           42 files, 3.1k LOC (excluding node_modules)
+ci:             github actions — vercel preview on PR, prod on main
+test runner:    vitest 1.6  (3 tests total — way under what this project deserves)
+
+==============================================================================
+RECENT COMMITS  (git log --oneline --date=short -n 10)
+==============================================================================
+e8f1c2a  2026-04-22  chore: bump framer-motion to 11.5
+a4d3b91  2026-04-21  fix: hero gradient flicker on safari
+77ac0ee  2026-04-19  feat: add /now page with live status pill
+5b2e103  2026-04-15  refactor: collapse ProjectCard variants into one component
+9f8a221  2026-04-10  docs: update README with new deploy URL
+2c6d4e0  2026-04-04  feat: cmd+k command menu (kbar)
+3b1aa55  2026-03-30  fix: og image rendering on twitter
+1e7c809  2026-03-22  chore: dep bumps (next 14 → 15)
+... (most recent commit was 17 days ago — repo has been quiet since)
+
+==============================================================================
+RECENTLY MODIFIED FILES  (mtime, top of list)
+==============================================================================
+src/app/page.tsx                       2026-04-22  hero + project grid
+src/components/ProjectCard.tsx         2026-04-21  card primitive (used 6x)
+src/app/now/page.tsx                   2026-04-19  /now status page
+src/lib/projects.ts                    2026-04-15  project metadata array
+src/components/HeroGradient.tsx        2026-04-21  shader background
+src/app/layout.tsx                     2026-03-22  root shell
+public/og.png                          2026-03-30  open graph card
+README.md                              2026-04-10  deploy + dev notes
+
+==============================================================================
+src/lib/projects.ts  (excerpt — the source-of-truth array)
+==============================================================================
+export const projects = [
+  {
+    slug: 'kalilabs',
+    name: 'kali labs',
+    blurb: 'building agents that ship code while you sleep.',
+    href: 'https://kalilabs.ai',
+    year: 2026,
+    tags: ['ai', 'startup'],
+  },
+  {
+    slug: 'gbrain',
+    name: 'gbrain',
+    blurb: 'a personal knowledge graph that compiles itself.',
+    href: 'https://github.com/stephenhung/gbrain',
+    year: 2025,
+    tags: ['knowledge', 'graph', 'mcp'],
+  },
+  {
+    slug: 'gstack',
+    name: 'gstack',
+    blurb: 'an opinionated dev toolchain for shipping with claude.',
+    href: 'https://github.com/stephenhung/gstack',
+    year: 2025,
+    tags: ['tooling', 'cli'],
+  },
+  // TODO(self): angel goes here once the hackathon is over.
+  //             promised matthew you'd add a proper project card on demo day.
+];
+
+==============================================================================
+src/components/ProjectCard.tsx  (excerpt)
+==============================================================================
+type Project = {
+  slug: string;
+  name: string;
+  blurb: string;
+  href: string;
+  year: number;
+  tags: string[];
+};
+
+export function ProjectCard({ p }: { p: Project }) {
+  return (
+    <a href={p.href} className="group rounded-2xl border ...">
+      <h3 className="text-lg">{p.name}</h3>
+      <p className="text-sm opacity-70">{p.blurb}</p>
+      <ul className="mt-2 flex gap-1">{p.tags.map((t) => <li key={t}>#{t}</li>)}</ul>
+    </a>
+  );
+}
+// NOTE: no <picture> / preview-image slot yet — every card looks textually identical.
+
+==============================================================================
+src/app/page.tsx  (excerpt)
+==============================================================================
+import { projects } from '@/lib/projects';
+import { ProjectCard } from '@/components/ProjectCard';
+import { HeroGradient } from '@/components/HeroGradient';
+
+export default function HomePage() {
+  return (
+    <main>
+      <HeroGradient />
+      <section id="work">
+        <h2>selected work</h2>
+        <div className="grid gap-4 md:grid-cols-2">
+          {projects.map((p) => <ProjectCard key={p.slug} p={p} />)}
+        </div>
+      </section>
+      {/* TODO: testimonials section. mock content sitting in tests/fixtures. */}
+    </main>
+  );
+}
+
+==============================================================================
+TODO / FIXME GREP  (rg -n "TODO|FIXME" src/)
+==============================================================================
+src/lib/projects.ts:34         TODO(self): add angel project card after hackathon
+src/app/page.tsx:18            TODO: testimonials section
+src/components/HeroGradient.tsx:64  FIXME: shader leaks GL context on hot reload
+src/app/now/page.tsx:22        TODO: pull live status from convex instead of static
+
+==============================================================================
+COVERAGE  (vitest --coverage, last run 2026-04-15)
+==============================================================================
+File                                | % Stmts | % Branch | % Funcs | % Lines
+------------------------------------|---------|----------|---------|--------
+src/lib/projects.ts                 |  100.00 |   100.00 |  100.00 |  100.00
+src/components/ProjectCard.tsx      |   42.10 |    25.00 |   33.33 |   42.10
+src/components/HeroGradient.tsx     |    0.00 |     0.00 |    0.00 |    0.00
+src/app/page.tsx                    |    0.00 |     0.00 |    0.00 |    0.00
+------------------------------------|---------|----------|---------|--------
+all files                           |   18.42 |     9.09 |   14.28 |   18.42
+
+==============================================================================
+DEPLOY HEALTH  (vercel last 5 deployments)
+==============================================================================
+2026-04-22 14:02   ● Ready    main      e8f1c2a  build 38s
+2026-04-21 09:11   ● Ready    main      a4d3b91  build 41s
+2026-04-19 22:47   ● Ready    main      77ac0ee  build 39s
+2026-04-15 18:30   ● Ready    main      5b2e103  build 44s
+2026-04-10 12:05   ● Ready    main      9f8a221  build 36s
+production url 200 OK on last health probe (2026-05-08 22:14 UTC)
+
+==============================================================================
+NOTES (from .agent/notes.md — angel's prior observations on this repo)
+==============================================================================
+- stephen wanted to add a project card for *me* (angel) before demo day.
+- the ProjectCard component has no image slot — visually flat grid right now.
+- /now page is great but pulls from a hardcoded constant; should be live.
+- last meaningful feature was 2026-04-19 (/now page). 17 quiet days since.
+- coverage dropped after the ProjectCard refactor (5b2e103); never recovered.

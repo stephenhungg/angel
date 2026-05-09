@@ -53,7 +53,7 @@ export function Showcase() {
                 <h3 className="font-sans text-[24px] font-medium leading-tight tracking-[-0.01em] text-cloud tablet:text-[28px]">
                   {s.title}
                 </h3>
-                <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-cloud opacity-80">
+                <span className="font-mono text-[11px] text-cloud opacity-80">
                   {s.meta}
                 </span>
               </div>

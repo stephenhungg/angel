@@ -5,7 +5,31 @@ import { fileURLToPath } from 'node:url';
 import { registerProtocolHandler, parseClaimFromArgs } from './persona/claim';
 import type { SceneAction, SceneActionComplete, ClaimTokenPayload } from '@angel/shared';
 import { runMockOrchestrator, registerMockHandlers, bootAutonomyBeat } from './agent/mock';
-import { runOrchestrator, isAvailable as isBrainAvailable } from './agent/runner';
+import {
+  runOrchestrator,
+  isAvailable as isBrainAvailable,
+  setMemory,
+  runBootGreeting,
+} from './agent/runner';
+import {
+  buildMemory,
+  memoryStatus,
+  setSeedComplete,
+  DEFAULT_USER_ID,
+  getMemory,
+} from './agent/memory';
+import { seedDemoHistory } from './agent/memory/seed';
+import {
+  createTensorlakeClient,
+  isTensorlakeConfigured,
+  type TensorlakeClient,
+} from './agent/tensorlake/client';
+import {
+  runPortfolioObservation,
+  pickGreetingLine,
+  setObservationMemoryWriter,
+  type BgObservation,
+} from './agent/tensorlake/bg-jobs';
 
 /**
  * Tiny .env.local loader — reads desktop/.env.local before any module that
@@ -52,6 +76,36 @@ const isDev = !!process.env.ELECTRON_RENDERER_URL || !app.isPackaged;
 let mainWindow: BrowserWindow | null = null;
 let pendingClaim: ClaimTokenPayload | null = null;
 
+/* ------------------------------------------------------------------ */
+/* Tensorlake (always-on agents track sponsor) — bg observation state  */
+/* ------------------------------------------------------------------ */
+
+let tensorlakeClient: TensorlakeClient | null = null;
+let lastObservation: BgObservation | null = null;
+let lastObservationAt: number | null = null;
+let observationInFlight: Promise<BgObservation | null> | null = null;
+
+/** Run the portfolio observation pipeline once, cache result for IPC.
+ *  Never throws — returns null on failure (the demo's spoken greeting
+ *  falls back to its canned line). */
+async function runTensorlakeBgJob(): Promise<BgObservation | null> {
+  if (!tensorlakeClient) tensorlakeClient = createTensorlakeClient();
+  try {
+    const obs = await runPortfolioObservation(tensorlakeClient);
+    lastObservation = obs;
+    lastObservationAt = Date.now();
+    console.info(
+      '[tensorlake] portfolio observation complete (backend=%s, findings=%d)',
+      obs.backend,
+      obs.findings.length,
+    );
+    return obs;
+  } catch (err) {
+    console.warn('[tensorlake] portfolio observation failed (non-fatal):', err);
+    return null;
+  }
+}
+
 const __dirname_compat =
   typeof __dirname === 'string' ? __dirname : path.dirname(fileURLToPath(import.meta.url));
 
@@ -86,12 +140,53 @@ async function createMainWindow() {
     mainWindow?.show();
     // fire the 30%-weighted bg autonomy beat: avatar greets the user on
     // launch like she was watching repo activity while they were away.
+    // When ANTHROPIC_API_KEY + memory are both live, Claude weaves the
+    // portfolio callback from the seeded memory block (no hardcoded line).
+    // Otherwise we fall back to mock.bootAutonomyBeat — and we feed it the
+    // Tensorlake portfolio observation we kicked off at app-ready, so the
+    // canned line is replaced with a real, specific finding from the bg job.
     if (mainWindow) {
-      void bootAutonomyBeat({
-        send: (a) => mainWindow?.webContents.send('scene:action', a),
-        sendChat: (t) => mainWindow?.webContents.send('chat:token', t),
-        sendState: (p) => mainWindow?.webContents.send('state:update', p),
-      });
+      const sender = {
+        send: (a: SceneAction) => mainWindow?.webContents.send('scene:action', a),
+        sendChat: (t: { id: string; text: string; done?: boolean }) =>
+          mainWindow?.webContents.send('chat:token', t),
+        sendState: (p: Record<string, unknown>) =>
+          mainWindow?.webContents.send('state:update', p),
+      };
+      if (isBrainAvailable()) {
+        void runBootGreeting({ ...sender, userId: DEFAULT_USER_ID });
+      } else {
+        // Wait for the in-flight tensorlake bg job (kicked off in
+        // app.whenReady), then thread its findings into the spoken beat.
+        // If it fails or hasn't returned, bootAutonomyBeat falls back to
+        // the canned line.
+        void (async () => {
+          const obs = (await observationInFlight) ?? null;
+          if (obs) {
+            // emit a structured bg:autonomy event the renderer can also
+            // pick up via lib/bgAutonomy.ts (extends the existing payload
+            // with `findings` + `suggestion` per task 5).
+            mainWindow?.webContents.send('bg:autonomy', {
+              kind: 'while_you_were_away',
+              payload: {
+                commits: 3,
+                repos: ['portfolio'],
+                name: DEFAULT_USER_ID,
+                findings: obs.findings,
+                suggestion: obs.suggestion,
+                summary: obs.summary,
+                backend: obs.backend,
+              },
+            });
+            await bootAutonomyBeat(sender, {
+              greetingLine: pickGreetingLine(obs),
+              suggestion: obs.suggestion,
+            });
+          } else {
+            await bootAutonomyBeat(sender);
+          }
+        })();
+      }
     }
   });
 
@@ -130,11 +225,17 @@ ipcMain.handle('tool:invoke', async (_evt, payload: { name: string; args?: Recor
       if (!text) return { ok: false, error: 'empty text' };
       const ctx = {
         text,
+        userId: DEFAULT_USER_ID,
         send: (action: SceneAction) => mainWindow?.webContents.send('scene:action', action),
         sendChat: (token: { id: string; text: string; done?: boolean }) =>
           mainWindow?.webContents.send('chat:token', token),
         sendState: (patch: Record<string, unknown>) =>
           mainWindow?.webContents.send('state:update', patch),
+        // generic IPC pipe so delegate/verify can stream out-of-band events
+        // (`desk:codex_stream`, `desk:codex_complete`, `tools:verify_result`)
+        // straight to the renderer's DeskMonitor.
+        emitIpc: (channel: string, payload: unknown) =>
+          mainWindow?.webContents.send(channel, payload),
       };
       if (isBrainAvailable()) {
         // fire and forget — runner handles its own errors and falls back
@@ -164,10 +265,43 @@ ipcMain.handle('claim:get-initial', async () => {
   return pendingClaim;
 });
 
+ipcMain.handle('tensorlake:status', async () => {
+  return {
+    available: tensorlakeClient !== null,
+    backend: isTensorlakeConfigured() ? 'tensorlake' : 'mock',
+    keyConfigured: isTensorlakeConfigured(),
+    lastJobAt: lastObservationAt ?? undefined,
+    lastObservation: lastObservation ?? undefined,
+  } as const;
+});
+
+ipcMain.handle('tensorlake:rerun', async () => {
+  // Lets /admin/space (or a CMD+I overlay) trigger a fresh observation —
+  // useful for the live demo when judges ask "is it really doing the work?".
+  observationInFlight = runTensorlakeBgJob();
+  const obs = await observationInFlight;
+  return {
+    ok: obs !== null,
+    backend: obs?.backend ?? null,
+    findings: obs?.findings ?? [],
+    suggestion: obs?.suggestion ?? '',
+    producedAt: obs?.producedAt ?? null,
+  };
+});
+
 ipcMain.handle('brain:status', async () => {
+  const mem = await memoryStatus().catch((err) => ({
+    backend: 'local' as const,
+    seedComplete: false,
+    entryCount: 0,
+    ok: false,
+    details: String((err as Error)?.message ?? err),
+  }));
   return {
     source: isBrainAvailable() ? 'claude' : 'mock',
     keyConfigured: isBrainAvailable(),
+    orchestrator: isBrainAvailable(),
+    memory: mem,
   } as const;
 });
 
@@ -198,6 +332,46 @@ if (!gotLock) {
     // boot-time claim from initial argv (windows/linux deep link)
     const bootClaim = parseClaimFromArgs(process.argv);
     if (bootClaim) pendingClaim = bootClaim;
+
+    // Build memory client (Nia if NIA_API_KEY set, else local fallback) and
+    // seed the demo history. This must complete BEFORE the window opens so
+    // the boot greeting's recall hits seeded entries.
+    try {
+      const memory = buildMemory(DEFAULT_USER_ID);
+      setMemory(memory);
+      const wrote = await seedDemoHistory(memory, DEFAULT_USER_ID);
+      setSeedComplete(true);
+      console.info('[main] memory ready, seed', wrote ? 'written' : 'already-present');
+    } catch (err) {
+      console.error('[main] memory bootstrap failed:', err);
+      setSeedComplete(false);
+    }
+
+    // Wire the tensorlake → memory bridge so completed bg observations get
+    // logged as type='observation', source='tensorlake' entries. The
+    // orchestrator can then recall them later ("i checked your portfolio
+    // earlier and noticed X") — that's the statefulness rubric.
+    setObservationMemoryWriter(async (entry) => {
+      try {
+        const mem = getMemory();
+        await mem.remember({
+          userId: DEFAULT_USER_ID,
+          type: entry.type,
+          content: entry.content,
+          timestamp: entry.timestamp,
+          metadata: { source: entry.metadata.source },
+        });
+      } catch (err) {
+        console.warn('[tensorlake→memory] write failed (non-fatal):', err);
+      }
+    });
+
+    // Kick off the portfolio bg job concurrently with window creation.
+    // The ready-to-show handler awaits this promise to thread real
+    // findings into the boot greeting; if it isn't done in time, the
+    // greeting falls back to the canned line gracefully.
+    tensorlakeClient = createTensorlakeClient();
+    observationInFlight = runTensorlakeBgJob();
 
     await createMainWindow();
 

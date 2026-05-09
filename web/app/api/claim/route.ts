@@ -17,6 +17,7 @@ import {
   type PersonaTraits,
   type VoiceConfig,
 } from '@angel/shared';
+import { saveOnboarding } from '@/lib/convex';
 
 interface Body {
   userId: string;
@@ -61,6 +62,39 @@ export async function POST(request: Request) {
       Buffer.from(s).toString('base64url').replace(/=+$/, '');
     token = `${b64('{"alg":"none","typ":"JWT"}')}.${b64(JSON.stringify(payload))}.`;
   }
+
+  // mirror the onboarded persona into convex (fire-and-forget — never blocks
+  // the http response, never throws upstream). this is what makes the user
+  // record show up in /admin and on the desktop the moment they claim.
+  const numericVector = body.numericTraits
+    ? [
+        body.numericTraits.warmth,
+        body.numericTraits.energy,
+        body.numericTraits.edge,
+        body.numericTraits.sophistication,
+        body.numericTraits.playfulness,
+      ]
+    : [];
+  void saveOnboarding({
+    userId: body.userId,
+    name: body.name,
+    vector: numericVector,
+    traits: body.traits,
+    archetypeHistory: [
+      {
+        round: 3,
+        archetypeId: body.traits.aesthetic,
+        timestamp: Math.floor(Date.now()),
+      },
+    ],
+    paletteHex: body.paletteHex,
+    vrmId: body.vrmId,
+    numericTraits: body.numericTraits,
+    voiceConfig: body.voiceConfig,
+    personalityMd: body.personalityMd,
+  }).catch(() => {
+    /* never block the claim response */
+  });
 
   return NextResponse.json({
     claimUrl: `${PROTOCOL}://claim?token=${encodeURIComponent(token)}`,

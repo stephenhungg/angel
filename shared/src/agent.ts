@@ -4,6 +4,7 @@
  */
 
 import type { Emotion, AnchorId } from './scene.js';
+import type { MemoryType } from './memory.js';
 
 export interface AgentState {
   userId: string;
@@ -37,21 +38,9 @@ export interface AngelTask {
   error?: string;
 }
 
-export type MemoryType = 'episodic' | 'semantic' | 'preference';
-
-export interface MemoryEntry {
-  id: string;
-  userId: string;
-  type: MemoryType;
-  content: string;
-  timestamp: number;
-  embedding?: number[];
-  metadata?: {
-    sourceTurnId?: string;
-    relatedTaskId?: string;
-    confidence?: number;
-  };
-}
+// MemoryType + MemoryEntry are now defined in ./memory.ts (the v1 AngelMemory
+// contract). This file used to export legacy stubs; we keep the import above
+// so ToolCall.remember can still type its `type` arg.
 
 export interface OrchestratorOutput {
   say?: string;

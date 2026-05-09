@@ -103,7 +103,7 @@ export function SwipeCard({ entry, onSwipe, onHover, isTop, zIndex }: SwipeCardP
           <div className="font-display italic text-[28px] leading-tight tracking-tight kawaii-text-glow">
             {entry.tags.vibe_phrase}
           </div>
-          <div className="font-mono uppercase tracking-[0.18em] text-[10px] mt-1 opacity-80 text-sakura-100">
+          <div className="font-mono tracking-[0.18em] text-[10px] mt-1 opacity-80 text-sakura-100">
             {entry.tags.aesthetic.replace(/_/g, ' ')} · {entry.tags.energy_descriptor}
           </div>
         </div>

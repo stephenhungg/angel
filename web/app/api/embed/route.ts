@@ -10,6 +10,7 @@
 import { NextResponse } from 'next/server';
 import { centroidOf, nearestArchetype, DEMO_LIBRARY } from '@/lib/library';
 import { voiceConfigFromTraits } from '@/lib/voice-config';
+import { saveOnboarding } from '@/lib/convex';
 import {
   PALETTE_BY_AESTHETIC,
   VRM_BY_AESTHETIC,
@@ -57,7 +58,7 @@ function voiceClusterFromTraits(t: NumericTraits): 1 | 2 | 3 | 4 | 5 | 6 {
 /* ----- handler ----- */
 
 export async function POST(request: Request) {
-  let body: { picks?: PickInput[] };
+  let body: { picks?: PickInput[]; userId?: string };
   try {
     body = await request.json();
   } catch {
@@ -101,6 +102,32 @@ export async function POST(request: Request) {
     },
     heroCard.tags.suggested_voice_cluster,
   );
+
+  // mirror partial onboarding into convex (no personalityMd yet — that's
+  // computed downstream). fire-and-forget. if userId is missing we skip;
+  // /api/claim handles the final canonical write.
+  if (body.userId) {
+    void saveOnboarding({
+      userId: body.userId,
+      vector: [
+        numericTraits.warmth,
+        numericTraits.energy,
+        numericTraits.edge,
+        numericTraits.sophistication,
+        numericTraits.playfulness,
+      ],
+      traits,
+      archetypeHistory: [
+        { round: 3, archetypeId: archetype, timestamp: Date.now() },
+      ],
+      paletteHex: PALETTE_BY_AESTHETIC[archetype],
+      vrmId: VRM_BY_AESTHETIC[archetype],
+      numericTraits,
+      voiceConfig,
+    }).catch(() => {
+      /* never block /api/embed */
+    });
+  }
 
   return NextResponse.json({
     numericTraits,

@@ -22,8 +22,13 @@ export default defineSchema({
   // ──────────────────────────────────────────────────────────────────────────
 
   users: defineTable({
+    // identity — authId is the upsert key (typically the same userId stephen's
+    // web/desktop generates). email may be empty for anon demo visitors.
     authId: v.string(),
-    email: v.string(),
+    email: v.optional(v.string()),
+    name: v.optional(v.string()),
+
+    // persona vector + categorical traits (set at end of onboarding)
     personaVector: v.array(v.float64()),
     archetypeHistory: v.array(
       v.object({
@@ -38,6 +43,15 @@ export default defineSchema({
       style: v.string(),
       voice_cluster: v.number(),
     }),
+
+    // visual + voice + character — used by desktop renderer + reveal cascade
+    vrmId: v.optional(v.string()),
+    paletteHex: v.optional(v.string()),
+    numericTraits: v.optional(v.any()),
+    voiceConfig: v.optional(v.any()),
+    personalityMd: v.optional(v.string()),
+
+    // ts
     createdAt: v.number(),
     lastSeenAt: v.number(),
   }).index('by_authId', ['authId']),
@@ -186,4 +200,69 @@ export default defineSchema({
   })
     .index('by_userId_time', ['userId', 'timestamp'])
     .index('by_turnId', ['turnId']),
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // always-on track tables — heartbeat, bg observations, memory mirror
+  // ──────────────────────────────────────────────────────────────────────────
+
+  /**
+   * heartbeat — proves crons are actually running. one row every 5 min from
+   * convex/crons.ts. /admin reads the most recent row to display "last
+   * heartbeat: Xm ago".
+   */
+  heartbeats: defineTable({
+    source: v.string(), // 'cron' | 'desktop' | 'web'
+    counter: v.number(),
+    timestamp: v.number(),
+    note: v.optional(v.string()),
+  }).index('by_time', ['timestamp']),
+
+  /**
+   * memoryMirror — convex-side reflection of nia memory writes. nia is the
+   * primary store; this is the read-replica for /admin. userId is v.string()
+   * because anonymous demo visitors don't have a users record yet.
+   */
+  memoryMirror: defineTable({
+    userId: v.string(),
+    type: v.string(), // 'episodic' | 'semantic' | 'preference' | 'observation'
+    content: v.string(),
+    timestamp: v.number(),
+    metadata: v.optional(v.any()),
+  })
+    .index('by_userId_time', ['userId', 'timestamp'])
+    .index('by_time', ['timestamp']),
+
+  /**
+   * bgObservations — tensorlake / scheduled observation outputs. emitted by
+   * bg jobs (the "while you were away" feel). userId is v.string() to match
+   * the rest of the always-on surface.
+   */
+  bgObservations: defineTable({
+    userId: v.string(),
+    kind: v.string(), // 'tensorlake' | 'scheduled' | 'compaction'
+    summary: v.string(),
+    sourceUrl: v.optional(v.string()),
+    payload: v.optional(v.any()),
+    timestamp: v.number(),
+  })
+    .index('by_userId_time', ['userId', 'timestamp'])
+    .index('by_time', ['timestamp']),
+
+  /**
+   * onboardingExtras — extras from the swipe flow that don't fit the canonical
+   * users schema (vrmId, paletteHex, voiceConfig, personalityMd, etc). keyed
+   * by the same authId as users so /admin can join on demand. lets us avoid
+   * touching the canonical users table while still persisting everything the
+   * desktop renderer needs.
+   */
+  onboardingExtras: defineTable({
+    authId: v.string(),
+    name: v.optional(v.string()),
+    vrmId: v.optional(v.string()),
+    paletteHex: v.optional(v.string()),
+    numericTraits: v.optional(v.any()),
+    voiceConfig: v.optional(v.any()),
+    personalityMd: v.optional(v.string()),
+    updatedAt: v.number(),
+  }).index('by_authId', ['authId']),
 });

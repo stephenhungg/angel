@@ -50,9 +50,8 @@ export function Footer() {
         </div>
       </div>
 
-      {/* dark band — angel pivot: deep sakura pink instead of near-ink.
-          email lockup (45/500/paper) + giant closing wordmark (160/500/paper). */}
-      <div className="text-paper" style={{ background: "#6e1a3a" }}>
+      {/* dark band — softer dusty rose. email lockup + giant closing wordmark. */}
+      <div className="text-paper" style={{ background: "#5e2640" }}>
         <div className="gutter flex flex-col gap-12 pt-[80px] pb-12 tablet:flex-row tablet:items-end tablet:justify-between">
           <Reveal>
             {/* matches moment email lockup: 45px / Manrope 500 / lineHeight
@@ -69,7 +68,7 @@ export function Footer() {
             </Link>
           </Reveal>
 
-          <div className="font-mono text-[12px] uppercase tracking-[0.08em] text-muted-tertiary">
+          <div className="font-mono text-[12px] text-muted-tertiary">
             <div>nozomio hackathon · always-on agents</div>
             <div>ef office, san francisco · 2026-05-09</div>
           </div>
