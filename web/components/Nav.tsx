@@ -21,7 +21,7 @@ const NAV_LINKS = [
   { href: "#origin", label: "origin" },
   { href: "#what-she-is", label: "what she is" },
   { href: "#archetypes", label: "archetypes" },
-  { href: "/about", label: "about" },
+  { href: "https://github.com/stephenhungg/angel", label: "github" },
 ];
 
 function DotIcon({ open }: { open: boolean }) {

@@ -148,18 +148,10 @@ export function Footer() {
             github
           </a>
           <Link
-            href="/about"
+            href="/download"
             className="inline-flex min-h-11 min-w-11 items-center justify-center px-2 transition-colors hover:text-sakura-600"
-           
           >
-            about
-          </Link>
-          <Link
-            href="/privacy"
-            className="inline-flex min-h-11 min-w-11 items-center justify-center px-2 transition-colors hover:text-sakura-600"
-           
-          >
-            privacy
+            download
           </Link>
         </div>
 
