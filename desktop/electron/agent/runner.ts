@@ -200,6 +200,18 @@ const TOOLS: Anthropic.Tool[] = [
       required: ['ms'],
     },
   },
+  {
+    name: 'come_to_me',
+    description:
+      "Walk physically over to where matthew currently is and stop ~1.4m away facing him. Use this whenever he asks you to come here, come closer, get over here, etc. The renderer reads his live position at execution time. Don't try to fake it with set_state(location) — that's just a label, it doesn't move the avatar.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        stopDistance: { type: 'number', description: 'how close to stop (m). default 1.4' },
+        speed: { type: 'string', enum: ['slow', 'normal', 'urgent'] },
+      },
+    },
+  },
 ];
 
 /* ------------------------------------------------------------------ */
@@ -331,6 +343,13 @@ function toolUseToSceneAction(
       };
     case 'wait':
       return { id, type: 'wait', ms: Number(input.ms ?? 0) };
+    case 'come_to_me':
+      return {
+        id,
+        type: 'walk_to_user',
+        ...(typeof input.stopDistance === 'number' ? { stopDistance: input.stopDistance } : {}),
+        ...(input.speed ? { speed: input.speed as 'slow' | 'normal' | 'urgent' } : {}),
+      };
     case 'interact_with':
       return {
         id,
