@@ -2,118 +2,204 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { Reveal } from "./Reveal";
+import { useRef } from "react";
+import gsap from "gsap";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
+import { useGSAP } from "@gsap/react";
 import { MaskedLine } from "./MaskedLine";
 import { SparkleField } from "./SparkleField";
 
+if (typeof window !== "undefined") {
+  gsap.registerPlugin(ScrollTrigger, useGSAP);
+}
+
 /**
- * Footer — kawaii closing band.
- *   - sakura gradient bg with sparkle overlay
- *   - big bagel "thank you for finding her" headline (masked-line reveal)
- *   - waving chibi mascot tucked bottom-right
- *   - "begin discovery" pill cta
- *   - hairline rule with © + small links + 天使 mark
+ * Footer — full-viewport closing band, ported from portfolio-temp pattern.
+ *
+ *   min-h-screen — when you scroll all the way down it fills the viewport.
+ *   flex column with justify-between → top socials, middle tagline + cta,
+ *   bottom 3-col legal row, all distributed evenly across full height.
+ *
+ *   gsap ScrollTrigger drives parallax on the mascot + sparkle field as the
+ *   user scrolls into the section, so the layers move at different speeds.
  */
 export function Footer() {
-  return (
-    <footer className="relative overflow-hidden">
-      {/* sakura gradient bg */}
-      <div
-        aria-hidden
-        className="absolute inset-0"
-        style={{
-          background:
-            "radial-gradient(ellipse at 30% 0%, #ffd9e6 0%, #fff5fa 45%, #ffffff 90%)",
-        }}
-      />
-      <SparkleField variant="ambient" density={36} className="z-0" />
+  const sectionRef = useRef<HTMLElement | null>(null);
+  const mascotRef = useRef<HTMLDivElement | null>(null);
+  const sparklesRef = useRef<HTMLDivElement | null>(null);
+  const taglineRef = useRef<HTMLDivElement | null>(null);
 
-      <div className="relative z-10 gutter pt-[120px] pb-10 tablet:pt-[160px]">
-        {/* big tagline — bagel */}
-        <div className="grid grid-cols-1 items-end gap-12 tablet:grid-cols-12">
-          <div className="tablet:col-span-8">
+  useGSAP(
+    () => {
+      const section = sectionRef.current;
+      const mascot = mascotRef.current;
+      const sparkles = sparklesRef.current;
+      const tagline = taglineRef.current;
+      if (!section) return;
+
+      if (mascot) {
+        gsap.fromTo(
+          mascot,
+          { yPercent: 30 },
+          {
+            yPercent: -10,
+            ease: "none",
+            scrollTrigger: {
+              trigger: section,
+              start: "top bottom",
+              end: "bottom top",
+              scrub: 1,
+            },
+          },
+        );
+      }
+      if (sparkles) {
+        gsap.fromTo(
+          sparkles,
+          { yPercent: 50 },
+          {
+            yPercent: -25,
+            ease: "none",
+            scrollTrigger: {
+              trigger: section,
+              start: "top bottom",
+              end: "bottom top",
+              scrub: 1,
+            },
+          },
+        );
+      }
+      if (tagline) {
+        gsap.fromTo(
+          tagline,
+          { yPercent: 25, opacity: 0.4 },
+          {
+            yPercent: 0,
+            opacity: 1,
+            ease: "expo.out",
+            scrollTrigger: {
+              trigger: section,
+              start: "top 75%",
+              end: "top 30%",
+              scrub: 1,
+            },
+          },
+        );
+      }
+    },
+    { scope: sectionRef },
+  );
+
+  return (
+    <footer
+      ref={sectionRef}
+      className="relative flex min-h-screen flex-col overflow-hidden"
+      style={{
+        background:
+          "radial-gradient(ellipse at 30% 20%, #ffd9e6 0%, #fff5fa 45%, #ffffff 100%)",
+      }}
+    >
+      <div ref={sparklesRef} className="absolute inset-0">
+        <SparkleField variant="ambient" density={48} />
+      </div>
+
+      <div
+        ref={mascotRef}
+        className="pointer-events-none absolute right-[5%] top-1/2 hidden -translate-y-1/2 select-none tablet:block"
+      >
+        <Image
+          src="/kawaii/mascot-wave.png"
+          alt=""
+          aria-hidden
+          width={620}
+          height={620}
+          className="h-auto w-[280px] desktop:w-[420px]"
+          style={{ filter: "drop-shadow(0 16px 0 rgba(155, 58, 95, 0.22))" }}
+        />
+      </div>
+
+      <div className="relative z-10 flex flex-1 flex-col justify-between gutter py-10 tablet:py-14">
+        {/* top row: secondary links right-aligned */}
+        <div className="flex justify-end gap-6 font-sans text-[15px] font-medium text-ink-near">
+          <a
+            href="https://github.com/stephenhungg/angel"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex min-h-11 min-w-11 items-center justify-center px-2 transition-colors hover:text-sakura-600"
+            data-cursor-grow
+          >
+            github
+          </a>
+          <Link
+            href="/about"
+            className="inline-flex min-h-11 min-w-11 items-center justify-center px-2 transition-colors hover:text-sakura-600"
+            data-cursor-grow
+          >
+            about
+          </Link>
+          <Link
+            href="/privacy"
+            className="inline-flex min-h-11 min-w-11 items-center justify-center px-2 transition-colors hover:text-sakura-600"
+            data-cursor-grow
+          >
+            privacy
+          </Link>
+        </div>
+
+        {/* middle: big tagline + cta + status */}
+        <div ref={taglineRef} className="flex flex-col gap-8 tablet:gap-12">
+          <div className="max-w-4xl">
             <MaskedLine duration={1.1} ease="expo.out">
-              <h2 className="m-0 max-w-[920px] font-bagel text-[56px] font-normal leading-[1] tracking-[-0.01em] text-sakura-700 tablet:text-[88px] desktop:text-[120px]">
+              <p className="font-bagel text-[40px] font-normal leading-[1.05] tracking-[-0.01em] text-sakura-700 tablet:text-[64px] desktop:text-[88px]">
                 thank u for
-              </h2>
+              </p>
             </MaskedLine>
             <MaskedLine duration={1.1} ease="expo.out" delay={0.15}>
-              <h2 className="m-0 max-w-[920px] font-bagel text-[56px] font-normal leading-[1] tracking-[-0.01em] text-sakura-500 tablet:text-[88px] desktop:text-[120px]">
+              <p className="font-bagel text-[40px] font-normal leading-[1.05] tracking-[-0.01em] text-sakura-500 tablet:text-[64px] desktop:text-[88px]">
                 finding her ♡
-              </h2>
+              </p>
             </MaskedLine>
-
-            <Reveal delay={0.3}>
-              <div className="mt-10 flex flex-wrap items-center gap-5">
-                <Link
-                  href="/download"
-                  className="inline-flex h-14 items-center gap-2 rounded-pill bg-sakura-500 px-8 font-sans text-[16px] font-semibold tracking-[-0.005em] text-cloud transition-colors duration-200 ease-linear hover:bg-sakura-600"
-                  data-cursor-grow
-                >
-                  <span>download angel</span>
-                  <span aria-hidden>→</span>
-                </Link>
-                <span className="font-mono text-[12px] text-muted-secondary">
-                  天使 · she&apos;s waiting
-                </span>
-              </div>
-            </Reveal>
           </div>
 
-          {/* mascot waving — bottom right */}
-          <div className="hidden tablet:col-span-4 tablet:block">
-            <Reveal delay={0.4} className="flex justify-end">
-              <Image
-                src="/kawaii/mascot-wave-t.png"
-                alt="angel"
-                width={420}
-                height={420}
-                className="h-auto w-[260px] select-none desktop:w-[340px]"
-                style={{ filter: "drop-shadow(0 14px 0 rgba(155, 58, 95, 0.25))" }}
-              />
-            </Reveal>
+          <div className="flex flex-wrap items-center gap-4">
+            <Link
+              href="/download"
+              className="inline-flex h-14 items-center gap-2 rounded-pill bg-sakura-500 px-8 font-sans text-[16px] font-semibold tracking-[-0.005em] text-cloud transition-colors duration-200 ease-linear hover:bg-sakura-600"
+              data-cursor-grow
+            >
+              <span>download angel</span>
+              <span aria-hidden>↓</span>
+            </Link>
+            <span className="inline-flex items-center gap-2 px-3 py-4 font-sans text-[15px] text-muted-deep">
+              <span className="relative inline-flex h-[7px] w-[7px]">
+                <span className="absolute inset-0 animate-ping rounded-full bg-sakura-500 opacity-75" />
+                <span className="relative inline-flex h-[7px] w-[7px] rounded-full bg-sakura-500" />
+              </span>
+              she&apos;s online
+            </span>
           </div>
         </div>
 
-        {/* hairline divider */}
-        <div className="hairline mt-16 border-t pt-6 tablet:mt-24" />
-
-        {/* footer rule — © + links + jp mark */}
-        <div className="flex flex-col-reverse items-start gap-6 tablet:flex-row tablet:items-center tablet:justify-between">
-          <div className="font-sans text-[13px] text-muted-deep">
-            © 2026 angel · she&apos;d rather be honest than impressive ·{" "}
-            <span className="font-klee text-sakura-700">天使</span>
+        {/* bottom: 3-col row */}
+        <div className="grid grid-cols-1 gap-6 font-sans text-[14px] leading-[1.5] text-muted-deep tablet:grid-cols-3 tablet:gap-10">
+          <div className="flex flex-col gap-1">
+            <span className="text-muted-secondary">Made with</span>
+            <span className="font-medium text-ink-near">
+              love · 天使 · sonnet 4.6 · convex
+            </span>
           </div>
-          <ul className="flex gap-6 font-sans text-[14px] font-medium text-ink-near">
-            <li>
-              <a
-                href="https://github.com/stephenhungg/angel"
-                target="_blank"
-                rel="noreferrer"
-                className="transition-colors duration-200 ease-linear hover:text-sakura-600"
-              >
-                github
-              </a>
-            </li>
-            <li>
-              <Link
-                href="/about"
-                className="transition-colors duration-200 ease-linear hover:text-sakura-600"
-              >
-                about
-              </Link>
-            </li>
-            <li>
-              <Link
-                href="/privacy"
-                className="transition-colors duration-200 ease-linear hover:text-sakura-600"
-              >
-                privacy
-              </Link>
-            </li>
-          </ul>
-          <div className="font-mono text-[11px] text-muted-tertiary">
-            built at the nozomio hackathon · ef office, sf · 2026-05-09
+          <div className="flex flex-col gap-1">
+            <span className="text-muted-secondary">Built at</span>
+            <span className="font-medium text-ink-near">
+              nozomio hackathon · ef office, sf
+            </span>
+            <span className="text-muted-tertiary">2026-05-09</span>
+          </div>
+          <div className="flex flex-col gap-1 tablet:items-end tablet:text-right">
+            <span className="text-muted-secondary">© 2026 angel</span>
+            <span className="text-muted-tertiary">
+              she&apos;d rather be honest than impressive.
+            </span>
           </div>
         </div>
       </div>

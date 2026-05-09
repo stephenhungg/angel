@@ -14,25 +14,25 @@ const cards = [
   {
     no: "i",
     title: "presence",
-    asset: "/kawaii/presence-pink-t.png",
+    asset: "/kawaii/presence-pink.png",
     body: "she lives in a room on your machine. you summon her, she walks to the desk, the monitor lights up. she's not a chat — she's somewhere.",
   },
   {
     no: "ii",
     title: "memory",
-    asset: "/kawaii/memory-pink-t.png",
+    asset: "/kawaii/memory-pink.png",
     body: "every conversation, every commit, every walk you took her on — recorded in nia. she opens with 'how'd that portfolio thing land?' because she remembers.",
   },
   {
     no: "iii",
     title: "agency",
-    asset: "/kawaii/agency-pink-t.png",
+    asset: "/kawaii/agency-pink.png",
     body: "she ships your code. claude sonnet 4.6 orchestrates, codex executes, a verifier confirms. she narrates honestly — including when she fails.",
   },
   {
     no: "iv",
     title: "continuity",
-    asset: "/kawaii/continuity-pink-t.png",
+    asset: "/kawaii/continuity-pink.png",
     body: "close the laptop, text her from your phone — she replies. her substrate is the cloud; the room and the sms are surfaces. one being, many bodies.",
   },
 ];
@@ -84,7 +84,7 @@ export function WhatSheIs() {
                   </TiltedCard>
                 </div>
                 <div className="flex w-full flex-col gap-2 px-1">
-                  <div className="font-mono text-[12px] text-muted-secondary">
+                  <div className="font-sans text-[12px] text-muted-secondary">
                     {c.no} · a property of her
                   </div>
                   <p className="font-sans text-[15px] leading-[1.6] text-muted-deep">
@@ -105,7 +105,7 @@ export function WhatSheIs() {
               <span>download angel</span>
               <span aria-hidden>→</span>
             </Link>
-            <span className="font-mono text-[12px] text-muted-secondary">
+            <span className="font-sans text-[12px] text-muted-secondary">
               ~90 seconds · 12 cards · one persona
             </span>
           </div>

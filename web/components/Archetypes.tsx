@@ -25,10 +25,10 @@ if (typeof window !== "undefined") {
 // in the user's gsap-inspo collection.
 
 const archetypes = [
-  { title: "soft",  meta: "morning haze",  asset: "/kawaii/archetype-soft-t.png",  body: "she opens the curtains. light spills in, the room exhales. soft means slow, considerate, willing to wait." },
-  { title: "warm",  meta: "golden hour",   asset: "/kawaii/archetype-warm-t.png",  body: "she pours you tea. asks about your week, remembers the part you'd half-forgotten. warm means present." },
-  { title: "deep",  meta: "study lamp",    asset: "/kawaii/archetype-deep-t.png",  body: "she sits with you and the problem. doesn't simplify. asks the question you were avoiding." },
-  { title: "quiet", meta: "twilight",      asset: "/kawaii/archetype-quiet-t.png", body: "she's there but not loud. she watches you sleep, wakes the laptop in the morning, cued up." },
+  { title: "soft",  meta: "morning haze",  asset: "/kawaii/archetype-soft.png",  body: "she opens the curtains. light spills in, the room exhales. soft means slow, considerate, willing to wait." },
+  { title: "warm",  meta: "golden hour",   asset: "/kawaii/archetype-warm.png",  body: "she pours you tea. asks about your week, remembers the part you'd half-forgotten. warm means present." },
+  { title: "deep",  meta: "study lamp",    asset: "/kawaii/archetype-deep.png",  body: "she sits with you and the problem. doesn't simplify. asks the question you were avoiding." },
+  { title: "quiet", meta: "twilight",      asset: "/kawaii/archetype-quiet.png", body: "she's there but not loud. she watches you sleep, wakes the laptop in the morning, cued up." },
 ];
 
 export function Archetypes() {
@@ -42,22 +42,30 @@ export function Archetypes() {
       if (!section || !track) return;
       if (typeof window === "undefined") return;
 
-      // only pin on desktop+ (matchMedia handles teardown on resize)
+      // pin + horizontal scroll w/ snap. each panel is 100vw so the card
+      // CENTERS on viewport at every snap point. user scrolls vertically →
+      // track moves horizontally → snaps to each card before advancing.
       const mm = gsap.matchMedia();
       mm.add("(min-width: 1024px)", () => {
-        const totalWidth = track.scrollWidth;
-        const distance = totalWidth - window.innerWidth;
-        if (distance <= 0) return;
+        const panels = track.querySelectorAll<HTMLDivElement>("[data-panel]");
+        const N = panels.length;
+        if (N <= 1) return;
 
         const tween = gsap.to(track, {
-          x: -distance,
+          x: () => -(N - 1) * window.innerWidth,
           ease: "none",
           scrollTrigger: {
             trigger: section,
             pin: true,
             scrub: 1,
             start: "top top",
-            end: () => "+=" + distance,
+            end: () => "+=" + (N - 1) * window.innerWidth,
+            // snap to each card center (N-1 segments → 1/(N-1) per snap)
+            snap: {
+              snapTo: 1 / (N - 1),
+              duration: { min: 0.2, max: 0.5 },
+              ease: "power1.inOut",
+            },
             invalidateOnRefresh: true,
           },
         });
@@ -111,18 +119,19 @@ export function Archetypes() {
           ))}
         </div>
 
-        {/* desktop pinned horizontal scroll — section pins, track scrolls X */}
+        {/* desktop pinned horizontal scroll — section pins, track scrolls X.
+            each panel is 100vw so cards CENTER on viewport at every snap. */}
         <div className="hidden desktop:block">
-          <div
-            ref={trackRef}
-            className="flex w-max gap-10 px-[100px] py-[80px]"
-          >
+          <div ref={trackRef} className="flex w-max">
             {archetypes.map((a) => (
               <div
                 key={a.title}
-                className="w-[min(46vw,640px)] shrink-0"
+                data-panel
+                className="flex h-[80vh] w-screen shrink-0 items-center justify-center px-[max(8vw,100px)]"
               >
-                <ArchetypeCard archetype={a} />
+                <div className="w-full max-w-[680px]">
+                  <ArchetypeCard archetype={a} />
+                </div>
               </div>
             ))}
           </div>
@@ -176,7 +185,7 @@ function ArchetypeCard({
         <h3 className="font-bagel text-[28px] font-normal leading-tight tracking-[-0.005em] text-ink-near tablet:text-[36px]">
           {a.title}
         </h3>
-        <span className="font-mono text-[12px] text-muted-secondary">{a.meta}</span>
+        <span className="font-sans text-[12px] text-muted-secondary">{a.meta}</span>
       </div>
       <p className="px-1 font-sans text-[15px] leading-[1.6] text-muted-deep">{a.body}</p>
     </article>

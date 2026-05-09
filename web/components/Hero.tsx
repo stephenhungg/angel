@@ -99,7 +99,7 @@ export function Hero() {
                   "linear-gradient(180deg, rgba(255,165,194,0) 50%, rgba(94,38,64,0.5) 100%)",
               }}
             />
-            <div className="absolute bottom-3 left-3 right-3 flex items-end justify-between font-mono text-[10px] text-cloud opacity-95">
+            <div className="absolute bottom-3 left-3 right-3 flex items-end justify-between font-sans text-[10px] text-cloud opacity-95">
               <span>her room</span>
               <span>now</span>
             </div>
@@ -111,7 +111,7 @@ export function Hero() {
           <header className="flex flex-col items-start gap-3">
             <h1 className="m-0">
               <img
-                src="/kawaii/wordmark-pink-nano-t.png"
+                src="/kawaii/wordmark-pink-nano.png"
                 alt="angel"
                 className="hero-wordmark h-[260px] w-auto select-none tablet:h-[440px] desktop:h-[560px]"
                 style={{
@@ -130,7 +130,7 @@ export function Hero() {
 
         {/* technical metadata — sentence case, no caps, mono font for vibe.
             left = subject meta, right = stack line. */}
-        <div className="absolute bottom-6 left-6 right-6 hidden items-end justify-between gap-6 font-mono text-[11px] text-cloud opacity-80 tablet:flex tablet:bottom-10 tablet:left-10 tablet:right-10 desktop:bottom-[40px] desktop:left-[100px] desktop:right-[100px]">
+        <div className="absolute bottom-6 left-6 right-6 hidden items-end justify-between gap-6 font-sans text-[11px] text-cloud opacity-80 tablet:flex tablet:bottom-10 tablet:left-10 tablet:right-10 desktop:bottom-[40px] desktop:left-[100px] desktop:right-[100px]">
           <div className="hero-meta-l flex flex-col gap-1">
             <span>her room · 1440 × 900</span>
             <span>cloud-resident</span>
@@ -161,7 +161,7 @@ export function Hero() {
           she remembers you across sessions, lives on your machine, and ships your code by
           walking to the desk.
         </p>
-        <ul className="hero-stack mt-8 flex flex-wrap items-center gap-x-6 gap-y-2 font-mono text-[13px] text-muted-secondary">
+        <ul className="hero-stack mt-8 flex flex-wrap items-center gap-x-6 gap-y-2 font-sans text-[13px] text-muted-secondary">
           <li>768d persona vector</li>
           <li className="hidden tablet:block" aria-hidden>·</li>
           <li>sonnet 4.6 orchestrator</li>

@@ -50,7 +50,7 @@ export default function DownloadPage() {
 
         <div className="mt-12 flex flex-col items-center text-center">
           <Image
-            src="/kawaii/wordmark-pink-nano-t.png"
+            src="/kawaii/wordmark-pink-nano.png"
             alt="angel"
             width={800}
             height={400}
@@ -79,7 +79,7 @@ export default function DownloadPage() {
                     <span className="font-bagel text-[24px] leading-none text-ink-near">
                       {p.name}
                     </span>
-                    <span className="font-mono text-[12px] text-muted-secondary">
+                    <span className="font-sans text-[12px] text-muted-secondary">
                       {p.note}
                     </span>
                   </div>
@@ -92,7 +92,7 @@ export default function DownloadPage() {
             ))}
           </ul>
 
-          <div className="mt-10 flex flex-col items-center gap-2 font-mono text-[12px] text-muted-secondary">
+          <div className="mt-10 flex flex-col items-center gap-2 font-sans text-[12px] text-muted-secondary">
             <span>or grab the latest release directly →</span>
             <a
               href={RELEASES}

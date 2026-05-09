@@ -10,10 +10,10 @@ import { CuteAccent } from "./CuteAccent";
 // label. replaces the stock-photo placeholders entirely.
 
 const scenes = [
-  { title: "while you slept",  meta: "afk · 3:42 AM",        asset: "/kawaii/mascot-sleep-t.png" },
-  { title: "she texted you",   meta: "iMessage · 11:08 AM",  asset: "/kawaii/mascot-phone-t.png" },
-  { title: "shipped a PR",     meta: "main · #142",          asset: "/kawaii/mascot-wave-t.png" },
-  { title: "made you tea",     meta: "boba o'clock",         asset: "/kawaii/cute-boba-t.png" },
+  { title: "while you slept",  meta: "afk · 3:42 AM",        asset: "/kawaii/mascot-sleep.png" },
+  { title: "she texted you",   meta: "iMessage · 11:08 AM",  asset: "/kawaii/mascot-phone.png" },
+  { title: "shipped a PR",     meta: "main · #142",          asset: "/kawaii/mascot-wave.png" },
+  { title: "made you tea",     meta: "boba o'clock",         asset: "/kawaii/cute-boba.png" },
 ];
 
 export function Showcase() {
@@ -63,7 +63,7 @@ export function Showcase() {
                   <h3 className="font-sans text-[20px] font-semibold tracking-[-0.01em] text-ink-near">
                     {s.title}
                   </h3>
-                  <span className="font-mono text-[12px] text-muted-secondary">
+                  <span className="font-sans text-[12px] text-muted-secondary">
                     {s.meta}
                   </span>
                 </div>

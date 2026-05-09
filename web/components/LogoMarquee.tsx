@@ -39,7 +39,7 @@ export function LogoMarquee({ logos, className = "", duration = 38 }: Props) {
                 {logo.name}
               </span>
             )}
-            <span className="select-none font-mono text-[12px] text-muted-tertiary">·</span>
+            <span className="select-none font-sans text-[12px] text-muted-tertiary">·</span>
           </div>
         ))}
       </div>

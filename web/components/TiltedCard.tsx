@@ -96,7 +96,7 @@ export function TiltedCard({
 
       {showTooltip && captionText && (
         <motion.figcaption
-          className="pointer-events-none absolute left-0 top-0 z-[3] rounded-[4px] bg-white px-2.5 py-1 font-mono text-[11px] text-ink-near"
+          className="pointer-events-none absolute left-0 top-0 z-[3] rounded-[4px] bg-white px-2.5 py-1 font-sans text-[11px] text-ink-near"
           style={{ x, y, opacity, rotate: rotateFigcaption }}
         >
           {captionText}
