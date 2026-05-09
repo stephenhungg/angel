@@ -37,33 +37,37 @@ export function Footer() {
       const tagline = taglineRef.current;
       if (!section) return;
 
+      // mascot drifts up from below as footer enters viewport, settling at
+      // its natural -translate-y-1/2 center when the footer has fully filled
+      // the viewport. ends at yPercent: 0 (no residual offset = centered).
       if (mascot) {
         gsap.fromTo(
           mascot,
           { yPercent: 30 },
           {
-            yPercent: -10,
+            yPercent: 0,
             ease: "none",
             scrollTrigger: {
               trigger: section,
               start: "top bottom",
-              end: "bottom top",
+              end: "bottom bottom",
               scrub: 1,
             },
           },
         );
       }
+      // sparkles drift slower than scroll, also settle at 0 when fully on-screen
       if (sparkles) {
         gsap.fromTo(
           sparkles,
-          { yPercent: 50 },
+          { yPercent: 40 },
           {
-            yPercent: -25,
+            yPercent: 0,
             ease: "none",
             scrollTrigger: {
               trigger: section,
               start: "top bottom",
-              end: "bottom top",
+              end: "bottom bottom",
               scrub: 1,
             },
           },
