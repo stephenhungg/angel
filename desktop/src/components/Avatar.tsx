@@ -77,10 +77,21 @@ export const Avatar = forwardRef<AvatarHandle, AvatarProps>(function Avatar(
         const v = await loadVRM(vrmUrl);
         if (cancelled) return;
 
-        // NB: avatar auto-scale temporarily disabled — was producing
-        // "kicked out of the house" results. Use TARGET_AVATAR_HEIGHT
-        // manually if/when we want to renormalise.
-        void TARGET_AVATAR_HEIGHT;
+        // measure raw VRM height and scale the wrapping <group> (not the
+        // vrm.scene itself — that would also scale animation root motion
+        // and break retargeting). bbox is taken from the freshly loaded
+        // bind pose which is reliable.
+        const bbox = new THREE.Box3().setFromObject(v.scene);
+        const rawHeight = bbox.max.y - bbox.min.y;
+        if (groupRef.current && rawHeight > 0.001) {
+          const s = TARGET_AVATAR_HEIGHT / rawHeight;
+          groupRef.current.scale.setScalar(s);
+          console.info('[avatar] auto-scaled group', {
+            rawHeight: rawHeight.toFixed(3),
+            scale: s.toFixed(3),
+            targetHeight: TARGET_AVATAR_HEIGHT,
+          });
+        }
 
         setVrm(v);
         const mixer = new THREE.AnimationMixer(v.scene);

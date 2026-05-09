@@ -4,15 +4,11 @@ import * as THREE from 'three';
  * Cheap "capsule vs scene" collision test.
  *
  * For hackathon speed we don't run a full physics engine — instead we cast
- * a handful of rays out from the player's torso/feet and clamp movement
- * along each axis if a wall is too close. This is the technique used in
- * most Quake/Unity-style FPS controllers and gives perfectly serviceable
- * wall-sliding without the overhead of cannon/rapier.
- *
- * The collider is a vertical capsule of radius `r` centered at the player's
- * feet+eyes range. Cardinal rays in 8 directions catch corners reasonably
- * well as long as the player radius is bigger than the wall's depth (true
- * for our anime room).
+ * a handful of rays out from the player's body and clamp movement along
+ * each axis if a wall is too close. Classic Quake/Unity-style FPS controller
+ * stuff. With multi-height samples + step-up logic + gravity it gives a
+ * surprisingly real "you can't walk through walls or climb your dresser"
+ * feel without cannon/rapier overhead.
  */
 
 const RAY_DIRS_2D = (() => {
@@ -27,6 +23,14 @@ const RAY_DIRS_2D = (() => {
 const _ray = new THREE.Raycaster();
 _ray.firstHitOnly = true as never; // BVH hint (no-op if not built)
 
+/** vertical sample heights above feet for the horizontal capsule. ankle +
+ *  waist + head catches low tables, walls, and overhead beams. */
+export const DEFAULT_BODY_SAMPLES_Y = [0.3, 0.95, 1.45] as const;
+
+/** the max vertical step the player can absorb without being blocked. a
+ *  curb yes, a desk no. */
+export const STEP_UP_MAX = 0.35;
+
 export type CollisionInput = {
   /** current world position (player feet) */
   current: THREE.Vector3;
@@ -36,26 +40,27 @@ export type CollisionInput = {
   radius: number;
   /** scene meshes to collide against */
   colliders: THREE.Object3D[];
-  /** sample the rays at this height above the feet (mid-torso) */
-  sampleY?: number;
+  /** sample heights above feet; defaults to ankle/waist/head */
+  sampleYs?: readonly number[];
 };
 
 /**
- * Returns a corrected target position. If the player would have stepped
- * into a wall the position is slid along the wall (axis-separated check).
+ * Returns a corrected target. If the player would have stepped into a wall,
+ * the position is slid along the wall (axis-separated check) so corners
+ * don't lock you up.
  */
 export function resolveCollision(input: CollisionInput): THREE.Vector3 {
   const { current, target, radius, colliders } = input;
   if (colliders.length === 0) return target.clone();
 
-  const sampleY = input.sampleY ?? 0.9;
+  const sampleYs = input.sampleYs ?? DEFAULT_BODY_SAMPLES_Y;
   const safe = current.clone();
 
   // try each axis independently so we slide along walls instead of sticking
   const tryAxis = (axis: 'x' | 'z') => {
     const candidate = safe.clone();
     candidate[axis] = target[axis];
-    if (isClear(candidate, sampleY, radius, colliders)) {
+    if (isClear(candidate, sampleYs, radius, colliders)) {
       safe[axis] = target[axis];
     }
   };
@@ -67,34 +72,60 @@ export function resolveCollision(input: CollisionInput): THREE.Vector3 {
 
 function isClear(
   pos: THREE.Vector3,
-  sampleY: number,
+  sampleYs: readonly number[],
   radius: number,
   colliders: THREE.Object3D[],
 ): boolean {
-  const origin = new THREE.Vector3(pos.x, pos.y + sampleY, pos.z);
-  for (const dir of RAY_DIRS_2D) {
-    _ray.set(origin, dir);
-    _ray.far = radius;
-    const hits = _ray.intersectObjects(colliders, true);
-    if (hits.length > 0 && hits[0].distance < radius) {
-      return false;
+  for (const sampleY of sampleYs) {
+    const origin = new THREE.Vector3(pos.x, pos.y + sampleY, pos.z);
+    for (const dir of RAY_DIRS_2D) {
+      _ray.set(origin, dir);
+      _ray.far = radius;
+      const hits = _ray.intersectObjects(colliders, true);
+      if (hits.length > 0 && hits[0].distance < radius) {
+        return false;
+      }
     }
   }
   return true;
 }
 
-/** Returns true if the floor is within `maxDrop` directly below `pos`. Used
- *  for sticking the player to floors that aren't perfectly flat. Returns
- *  the ground Y if found. */
+/**
+ * Probe the ground beneath `pos`. Casts down from `feet + STEP_UP_MAX` so
+ * that small curbs/steps register as ground but tall obstacles (like a desk
+ * top higher than the cast origin) do not — preventing the "I walked over
+ * the desk and got teleported up" bug.
+ *
+ * Returns the world y of the ground if found, else null (i.e. falling).
+ */
 export function groundProbe(
   pos: THREE.Vector3,
   colliders: THREE.Object3D[],
-  fromHeight = 1.5,
-  maxDrop = 3.0,
+  maxDrop = 2.5,
 ): number | null {
-  const origin = new THREE.Vector3(pos.x, pos.y + fromHeight, pos.z);
+  if (colliders.length === 0) return null;
+  const origin = new THREE.Vector3(pos.x, pos.y + STEP_UP_MAX, pos.z);
   _ray.set(origin, new THREE.Vector3(0, -1, 0));
-  _ray.far = fromHeight + maxDrop;
+  _ray.far = STEP_UP_MAX + maxDrop;
+  const hits = _ray.intersectObjects(colliders, true);
+  if (hits.length === 0) return null;
+  return hits[0].point.y;
+}
+
+/**
+ * Probe the ceiling above `pos`. Used for upward velocity capping (when we
+ * eventually add jumping). Returns world y of the ceiling, or null.
+ */
+export function ceilingProbe(
+  pos: THREE.Vector3,
+  eyeHeight: number,
+  colliders: THREE.Object3D[],
+  maxRise = 1.0,
+): number | null {
+  if (colliders.length === 0) return null;
+  const origin = new THREE.Vector3(pos.x, pos.y + eyeHeight, pos.z);
+  _ray.set(origin, new THREE.Vector3(0, 1, 0));
+  _ray.far = maxRise;
   const hits = _ray.intersectObjects(colliders, true);
   if (hits.length === 0) return null;
   return hits[0].point.y;

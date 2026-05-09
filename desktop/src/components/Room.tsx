@@ -19,10 +19,20 @@ const DEFAULT_TARGET_FOOTPRINT = 6.5; // m — comfy bedroom width
 export function Room({ url = '/room.glb', scale, targetFootprint = DEFAULT_TARGET_FOOTPRINT, onLoad }: RoomProps) {
   const { scene } = useGLTF(url);
   const groupRef = useRef<THREE.Group>(null);
+  // pin onLoad in a ref so changing the inline closure on the parent doesn't
+  // re-fire the auto-fit useEffect every render (which would re-apply
+  // scale/translate every frame and cause the room to shimmy).
+  const onLoadRef = useRef(onLoad);
+  onLoadRef.current = onLoad;
+
+  // guard so we only auto-fit once per scene asset
+  const fittedRef = useRef<THREE.Object3D | null>(null);
 
   useEffect(() => {
     if (!groupRef.current) return;
     const root = groupRef.current;
+    if (fittedRef.current === scene) return; // already fit this scene
+    fittedRef.current = scene;
 
     let meshes = 0;
     const bbox = new THREE.Box3();
@@ -74,8 +84,8 @@ export function Room({ url = '/room.glb', scale, targetFootprint = DEFAULT_TARGE
     }
 
     console.info('[room] loaded', { meshes, size: `${size.x.toFixed(2)}×${size.y.toFixed(2)}×${size.z.toFixed(2)}` });
-    onLoad?.(root);
-  }, [scene, onLoad, scale, targetFootprint]);
+    onLoadRef.current?.(root);
+  }, [scene, scale, targetFootprint]);
 
   return (
     <group ref={groupRef} scale={scale ?? undefined}>

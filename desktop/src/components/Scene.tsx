@@ -1,6 +1,6 @@
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { ContactShadows } from '@react-three/drei';
-import { Suspense, useEffect, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 
 import { Room } from '@/components/Room';
@@ -141,6 +141,11 @@ export function Scene({ debug = true }: SceneProps) {
 
   const vrmUrl = persona?.vrmUrl ?? FALLBACK_VRM;
 
+  const handleRoomLoad = useCallback((r: THREE.Object3D) => {
+    setRoomRoot(r);
+    setDebugInfo((d) => (d.room ? d : { ...d, room: true }));
+  }, []);
+
   return (
     <div ref={sceneWrapRef} style={{ width: '100%', height: '100%', position: 'relative' }}>
       <Canvas
@@ -178,7 +183,7 @@ export function Scene({ debug = true }: SceneProps) {
         <pointLight position={[1.8, 1.4, 1.0]} intensity={0.55} color="#9b6dff" distance={6} decay={1.6} />
 
         <Suspense fallback={null}>
-          <Room url={FALLBACK_ROOM} onLoad={(r) => { setRoomRoot(r); setDebugInfo((d) => ({ ...d, room: true })); }} />
+          <Room url={FALLBACK_ROOM} onLoad={handleRoomLoad} />
         </Suspense>
 
         {/* avatar lives outside the room's Suspense so a slow/missing room
@@ -187,20 +192,19 @@ export function Scene({ debug = true }: SceneProps) {
           <Avatar ref={avatarRef} vrmUrl={vrmUrl} />
         </Suspense>
 
-        {/* fallback floor — visible if room.glb fails to render. transparent
-            colour matches floor shadow tone so it never clashes with a
-            real floor. */}
-        <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow position={[0, -0.001, 0]}>
+        {/* far-below safety floor — only catches the player if they fall
+            through the room's floor; deep enough not to z-fight visible geo */}
+        <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow position={[0, -2, 0]}>
           <planeGeometry args={[40, 40]} />
-          <meshStandardMaterial color="#231432" roughness={0.95} metalness={0} />
+          <meshStandardMaterial color="#0d0a14" roughness={1} metalness={0} />
         </mesh>
 
         <ContactShadows
-          position={[0, 0.005, 0]}
-          opacity={0.55}
+          position={[0, 0.012, 0]}
+          opacity={0.45}
           blur={2.4}
           scale={5}
-          far={3}
+          far={2.5}
           resolution={1024}
           color="#1a0c1f"
         />

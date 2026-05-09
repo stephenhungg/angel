@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 
-import { resolveCollision, groundProbe } from '@/lib/collision';
+import { resolveCollision, groundProbe, STEP_UP_MAX } from '@/lib/collision';
 import { useAngelStore } from '@/stores/angel';
 
 type PlayerProps = {
@@ -25,6 +25,9 @@ const SPRINT_MULT = 1.65;
 const ACCEL = 28;                // m/s² — stops feel snappy
 const FRICTION = 14;
 const MOUSE_SENSITIVITY = 0.0024;
+const GRAVITY = 22;              // m/s² (heavier than real life — feels less floaty)
+const TERMINAL_VY = -28;         // clamp fall speed
+const HARD_FLOOR_Y = 0;          // safety net: never let the player drop below world y=0
 
 const KEYS = {
   forward: ['KeyW', 'ArrowUp'],
@@ -49,7 +52,10 @@ export function Player({
   const setPlayerState = useAngelStore((s) => s.setPlayer);
 
   const positionRef = useRef(new THREE.Vector3(spawn[0], spawn[1], spawn[2]));
+  // horizontal velocity in xz; vyRef tracks vertical velocity separately
   const velocityRef = useRef(new THREE.Vector3());
+  const vyRef = useRef(0);
+  const groundedRef = useRef(true);
   const yawRef = useRef(spawnYaw);
   const pitchRef = useRef(0);
   const bobPhaseRef = useRef(0);
@@ -123,6 +129,7 @@ export function Player({
       if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
       positionRef.current.set(spawn[0], spawn[1], spawn[2]);
       velocityRef.current.set(0, 0, 0);
+      vyRef.current = 0;
       yawRef.current = spawnYaw;
       pitchRef.current = 0;
       console.info('[player] respawned');
@@ -165,38 +172,75 @@ export function Player({
     v.x = THREE.MathUtils.damp(v.x, targetVx, intentLen > 0 ? ACCEL / 4 : FRICTION / 2, dtClamped);
     v.z = THREE.MathUtils.damp(v.z, targetVz, intentLen > 0 ? ACCEL / 4 : FRICTION / 2, dtClamped);
 
-    // proposed next position
+    // ── horizontal movement ──────────────────────────────────────────────
     const next = positionRef.current.clone();
     next.x += v.x * dtClamped;
     next.z += v.z * dtClamped;
 
-    // collide
     const corrected = resolveCollision({
       current: positionRef.current,
       target: next,
       radius,
       colliders: collidersRef.current,
-      sampleY: 0.9,
     });
     // if we got blocked, kill velocity along that axis so we don't keep
     // pressing into the wall and waste cycles
     if (Math.abs(corrected.x - next.x) > 0.0001) v.x = 0;
     if (Math.abs(corrected.z - next.z) > 0.0001) v.z = 0;
 
-    // ground stick — keep feet on the floor mesh if possible
-    const groundY = groundProbe(corrected, collidersRef.current, 1.4, 2);
-    if (groundY != null) {
-      corrected.y = groundY;
-    } else {
-      corrected.y = 0;
+    // ── vertical movement (gravity + ground detection) ───────────────────
+    if (collidersRef.current.length > 0) {
+      // gravity is always integrating; we stop it when grounded.
+      vyRef.current = Math.max(vyRef.current - GRAVITY * dtClamped, TERMINAL_VY);
+
+      const candidateY = corrected.y + vyRef.current * dtClamped;
+      const groundY = groundProbe(corrected, collidersRef.current);
+
+      if (groundY != null) {
+        const stepUp = groundY - positionRef.current.y;
+        if (stepUp > STEP_UP_MAX) {
+          // ground would require teleporting up onto a desk/dresser/etc.
+          // revert horizontal motion — you bumped into it, you stop.
+          corrected.x = positionRef.current.x;
+          corrected.z = positionRef.current.z;
+          v.x = 0;
+          v.z = 0;
+          const curGround = groundProbe(positionRef.current, collidersRef.current);
+          corrected.y = curGround ?? candidateY;
+          vyRef.current = 0;
+          groundedRef.current = true;
+        } else if (candidateY <= groundY) {
+          // we'd fall into / through the ground this frame — snap to it
+          corrected.y = groundY;
+          vyRef.current = 0;
+          groundedRef.current = true;
+        } else {
+          // airborne above ground (e.g. just stepped off a ledge)
+          corrected.y = candidateY;
+          groundedRef.current = false;
+        }
+      } else {
+        // void — keep falling
+        corrected.y = candidateY;
+        groundedRef.current = false;
+      }
+
+      // hard safety: never let the player drop below world floor y=0
+      if (corrected.y < HARD_FLOOR_Y) {
+        corrected.y = HARD_FLOOR_Y;
+        vyRef.current = 0;
+        groundedRef.current = true;
+      }
     }
+    // (when no colliders are loaded yet we just keep current y so the player
+    // hovers in place rather than freefalling through an empty world.)
 
     positionRef.current.copy(corrected);
 
-    // camera placement (with subtle head bob while moving)
+    // camera placement (with subtle head bob while moving on the ground)
     const moving = Math.hypot(v.x, v.z) > 0.4 && locked;
     bobPhaseRef.current += dtClamped * (sprinting ? 11 : 7.5);
-    const bobAmp = moving ? (sprinting ? 0.045 : 0.028) : 0;
+    const bobAmp = moving && groundedRef.current ? (sprinting ? 0.045 : 0.028) : 0;
     const bobY = Math.sin(bobPhaseRef.current) * bobAmp;
     const bobX = Math.cos(bobPhaseRef.current * 0.5) * bobAmp * 0.5;
 
