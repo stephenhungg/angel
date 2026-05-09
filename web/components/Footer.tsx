@@ -95,10 +95,21 @@ export function Footer() {
       ref={sectionRef}
       className="relative flex min-h-screen flex-col overflow-hidden"
       style={{
-        background:
-          "radial-gradient(ellipse at 30% 20%, #ffd9e6 0%, #fff5fa 45%, #ffffff 100%)",
+        // tiled kawaii cherry pattern wallpaper, color-matched to sakura palette
+        backgroundImage: "url(/kawaii/cherry-pattern.png)",
+        backgroundRepeat: "repeat",
+        backgroundSize: "640px auto",
       }}
     >
+      {/* soft white wash so the tagline + cta read clean over the pattern */}
+      <div
+        aria-hidden
+        className="absolute inset-0"
+        style={{
+          background:
+            "radial-gradient(ellipse at 30% 30%, rgba(255,255,255,0.55) 0%, rgba(255,245,250,0.35) 45%, rgba(255,235,245,0.5) 100%)",
+        }}
+      />
       <div ref={sparklesRef} className="absolute inset-0">
         <SparkleField variant="ambient" density={48} />
       </div>

@@ -66,13 +66,19 @@ export function Hero() {
             scale: reducedMotion ? 1 : sceneScale,
           }}
         >
-          <StockScene seed="angel-hero-room" w={1600} h={1000} className="absolute inset-0" />
+          {/* her actual room — full-bleed kawaii bedroom render */}
+          <img
+            src="/kawaii/hero-room.png"
+            alt=""
+            aria-hidden
+            className="absolute inset-0 h-full w-full select-none object-cover"
+          />
           <div
             aria-hidden
             className="absolute inset-0"
             style={{
               background:
-                "linear-gradient(180deg, rgba(255,165,194,0) 35%, rgba(94,38,64,0.5) 100%)",
+                "linear-gradient(180deg, rgba(255,165,194,0) 45%, rgba(94,38,64,0.4) 100%)",
             }}
           />
         </motion.div>
