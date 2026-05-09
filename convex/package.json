@@ -1,0 +1,18 @@
+{
+  "name": "@angel/convex",
+  "version": "0.0.1",
+  "private": true,
+  "description": "convex realtime spine — schema, mutations, queries, scheduled bg jobs",
+  "scripts": {
+    "dev": "convex dev",
+    "deploy": "convex deploy",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@angel/shared": "workspace:*",
+    "convex": "^1.13.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "name": "@angel/shared",
+  "version": "0.0.1",
+  "private": true,
+  "description": "shared types — the contract between web, desktop, and convex",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./scene": "./src/scene.ts",
+    "./persona": "./src/persona.ts",
+    "./claim": "./src/claim.ts",
+    "./agent": "./src/agent.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0"
+  }
+}

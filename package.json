@@ -1,0 +1,24 @@
+{
+  "name": "angel",
+  "private": true,
+  "version": "0.0.1",
+  "description": "discovered, not designed — embodied personal AI agent",
+  "workspaces": [
+    "web",
+    "desktop",
+    "convex",
+    "shared"
+  ],
+  "scripts": {
+    "dev:web": "bun run --cwd web dev",
+    "dev:desktop": "bun run --cwd desktop dev",
+    "dev:convex": "bun run --cwd convex dev",
+    "build": "bun run --cwd web build && bun run --cwd desktop build",
+    "lint": "bun run --filter '*' lint || true",
+    "typecheck": "bun run --filter '*' typecheck || true"
+  },
+  "packageManager": "bun@1.1.0",
+  "engines": {
+    "node": ">=20"
+  }
+}
