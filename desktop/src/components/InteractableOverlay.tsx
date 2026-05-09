@@ -43,29 +43,51 @@ export function InteractableDebugMarkers({ visible = true }: { visible?: boolean
 
 function InteractableMarker({ it, focused }: { it: Interactable; focused: boolean }) {
   const ringRef = useRef<THREE.Mesh>(null);
+  const selectedId = useAngelStore((s) => s.selectedCalibrationId);
   const colors = KIND_COLORS[it.kind] ?? KIND_COLORS.use;
-  const color = focused ? colors.focus : colors.idle;
+  // selected (in calibration) gets the gold focus color; otherwise focused
+  // by reticle gets the kind's focus shade; idle gets the kind's base shade.
+  const isSelected = selectedId === it.id;
+  const color = isSelected ? '#ffe066' : focused ? colors.focus : colors.idle;
+  const opacity = isSelected ? 0.9 : focused ? 0.6 : 0.22;
 
   useFrame((_, dt) => {
     const m = ringRef.current;
     if (!m) return;
-    m.rotation.y += dt * (focused ? 1.6 : 0.4);
+    m.rotation.y += dt * (focused || isSelected ? 1.6 : 0.4);
   });
 
+  // OBB wireframe — a unit cube scaled to halfExtents*2 inside a parent
+  // group that holds the bbox center + yaw. Three's BoxGeometry is axis-
+  // aligned; the parent group orientation makes the box "oriented".
+  const sx = Math.max(0.05, it.bbox.halfExtents.x * 2);
+  const sy = Math.max(0.05, it.bbox.halfExtents.y * 2);
+  const sz = Math.max(0.05, it.bbox.halfExtents.z * 2);
+
   return (
-    <group position={[it.bbox.center.x, it.bbox.center.y, it.bbox.center.z]}>
-      {/* primary hit-radius wireframe */}
+    <group position={[it.bbox.center.x, it.bbox.center.y, it.bbox.center.z]} rotation={[0, it.bbox.yaw, 0]}>
+      {/* OBB wireframe (the visible prop bounds) */}
       <mesh>
-        <sphereGeometry args={[it.pickRadius, 16, 12]} />
-        <meshBasicMaterial color={color} wireframe transparent opacity={focused ? 0.55 : 0.18} />
+        <boxGeometry args={[sx, sy, sz]} />
+        <meshBasicMaterial color={color} wireframe transparent opacity={opacity} depthTest={false} />
       </mesh>
-      {/* spinning emphasis ring on the floor under the interactable */}
-      <mesh ref={ringRef} position={[0, -it.bbox.center.y + 0.005, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[it.pickRadius * 0.35, it.pickRadius * 0.45, 28]} />
-        <meshBasicMaterial color={color} side={THREE.DoubleSide} transparent opacity={focused ? 0.7 : 0.28} />
+      {/* faint solid fill to give the box body without occluding the room */}
+      <mesh>
+        <boxGeometry args={[sx, sy, sz]} />
+        <meshBasicMaterial color={color} transparent opacity={isSelected ? 0.06 : 0.0} depthWrite={false} />
+      </mesh>
+      {/* spinning emphasis ring on the floor under the interactable, sized
+       *  by the bbox footprint not the pickRadius so couches read as wide */}
+      <mesh ref={ringRef} position={[0, -it.bbox.center.y + 0.01, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[
+          Math.max(it.bbox.halfExtents.x, it.bbox.halfExtents.z) * 0.85,
+          Math.max(it.bbox.halfExtents.x, it.bbox.halfExtents.z) * 1.0,
+          32,
+        ]} />
+        <meshBasicMaterial color={color} side={THREE.DoubleSide} transparent opacity={isSelected ? 0.7 : focused ? 0.5 : 0.22} />
       </mesh>
       {/* floating 3D label */}
-      <Billboard position={[0, it.pickRadius + 0.18, 0]}>
+      <Billboard position={[0, sy / 2 + 0.18, 0]}>
         <Text
           fontSize={0.11}
           color={color}

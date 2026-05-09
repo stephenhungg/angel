@@ -93,7 +93,7 @@ export type SceneAction =
   /** macro: walk to an interactable's approach anchor and execute its verb.
    * The renderer handles the underlying choreography (walk → face → sit →
    * typing flow etc.) so the brain only needs to name the prop + verb. */
-  | { id: string; type: 'interact_with'; interactableId: string; verb: InteractableVerb; durationMs?: number }
+  | { id: string; type: 'interact_with'; interactableId: string; verb: InteractableVerb; durationMs?: number; approachLabel?: string }
   /** walk to where the player currently is, stopping at `stopDistance` and
    * facing them. Resolved at execution time so the avatar uses the player's
    * live position, not a stale snapshot. */

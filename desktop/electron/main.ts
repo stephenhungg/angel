@@ -253,6 +253,23 @@ ipcMain.handle('tool:invoke', async (_evt, payload: { name: string; args?: Recor
       void result;
       return { ok: true };
     }
+    case 'saveInteractableDefaults': {
+      // Persist the renderer's calibration snapshot to a JSON file in
+      // desktop/public so it ships in the repo. The renderer also keeps
+      // a localStorage copy for per-machine fine-tuning; the JSON file is
+      // the durable, source-of-truth seed every machine boots from.
+      try {
+        const snapshot = (args as { snapshot?: unknown }).snapshot ?? {};
+        const target = resolveDefaultsPath();
+        fs.mkdirSync(path.dirname(target), { recursive: true });
+        fs.writeFileSync(target, JSON.stringify(snapshot, null, 2), 'utf8');
+        console.info('[main] saved interactables defaults →', target);
+        return { ok: true, path: target } as const;
+      } catch (err) {
+        console.warn('[main] saveInteractableDefaults failed', err);
+        return { ok: false, error: String(err) } as const;
+      }
+    }
     case 'memory_recall':
     case 'verify':
     case 'deploy':
@@ -260,6 +277,17 @@ ipcMain.handle('tool:invoke', async (_evt, payload: { name: string; args?: Recor
       return { ok: false, error: `tool ${name} not implemented in mock` };
   }
 });
+
+/** Where calibration defaults live. In dev this is the in-tree
+ *  `desktop/public/interactables.default.json`; in a packaged build we
+ *  fall back to the user-data dir so we don't try to write into the
+ *  read-only resources folder. */
+function resolveDefaultsPath(): string {
+  if (isDev) {
+    return path.resolve(process.cwd(), 'public', 'interactables.default.json');
+  }
+  return path.resolve(app.getPath('userData'), 'interactables.default.json');
+}
 
 ipcMain.handle('claim:get-initial', async () => {
   return pendingClaim;

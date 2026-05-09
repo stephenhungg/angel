@@ -108,6 +108,10 @@ export type AngelStore = {
   // calibration mode (K) — releases pointer lock + freezes player movement
   calibrationOpen: boolean;
   setCalibrationOpen: (v: boolean) => void;
+
+  // currently-selected interactable in the calibration editor (null = none)
+  selectedCalibrationId: string | null;
+  setSelectedCalibrationId: (id: string | null) => void;
 };
 
 const initialState: AgentLiveState = {
@@ -203,6 +207,9 @@ export const useAngelStore = create<AngelStore>()(
 
     calibrationOpen: false,
     setCalibrationOpen: (v) => set({ calibrationOpen: v }),
+
+    selectedCalibrationId: null,
+    setSelectedCalibrationId: (id) => set({ selectedCalibrationId: id }),
   })),
 );
 

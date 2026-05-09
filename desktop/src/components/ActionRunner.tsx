@@ -9,7 +9,7 @@ import { resolveAnchor, isChairAnchor } from '@/lib/anchors';
 import type { AvatarHandle } from '@/components/Avatar';
 import { ipc } from '@/lib/ipc';
 import { resolveCollision } from '@/lib/collision';
-import { getInteractable } from '@/lib/interactables';
+import { getInteractable, approachByLabel, seatPoseOf } from '@/lib/interactables';
 import { getColliders } from '@/lib/colliders';
 import { planPath, isStraightShot, getActiveGrid } from '@/lib/pathfind';
 
@@ -362,7 +362,7 @@ export function ActionRunner({ avatarRef, roomRoot }: Props) {
           ctx.totalDuration = 0;
           break;
         }
-        const expanded = expandInteract(current, it.id, it.kind, it.anchorId, it.pairedChairId);
+        const expanded = expandInteract(current, it.id, it.kind, it.anchorId, it.pairedChairId, current.approachLabel);
         if (expanded.length > 0) {
           // push to the front (well, back — but no actions should be queued
           // behind interact_with by design) so the chain runs immediately
@@ -653,28 +653,38 @@ function expandInteract(
   kind: string,
   anchorId: AnchorId | undefined,
   pairedChairId: string | undefined,
+  approachLabel: string | undefined,
 ): SceneAction[] {
   const verb = src.verb;
   const out: SceneAction[] = [];
   const fallbackAnchor: AnchorId = anchorId ?? 'center';
 
-  /** Read the first calibrated approach (or bbox.center fallback) off an
-   *  interactable. This is the single source of truth — the legacy
-   *  resolveAnchor system is bypassed entirely so calibrated overrides
-   *  always win. */
+  /** Read the calibrated approach (where she stops BEFORE sitting),
+   *  honoring approachLabel when present. */
   function approachOf(id: string): { pos: [number, number, number]; yaw: number } | null {
     const it = getInteractable(id);
     if (!it) return null;
-    const a = it.approaches[0];
+    const a = approachByLabel(it, approachLabel);
     if (a) {
       return { pos: [a.pos.x, a.pos.y, a.pos.z], yaw: a.yaw };
     }
     return { pos: [it.bbox.center.x, 0, it.bbox.center.z], yaw: it.bbox.yaw };
   }
 
+  /** Read the calibrated seat pose (where she ends up AFTER sitting).
+   *  Falls back to approach if no explicit seat. */
+  function seatOf(id: string): { pos: [number, number, number]; yaw: number } | null {
+    const it = getInteractable(id);
+    if (!it) return null;
+    const seat = seatPoseOf(it);
+    if (seat) return { pos: [seat.pos.x, seat.pos.y, seat.pos.z], yaw: seat.yaw };
+    return approachOf(id);
+  }
+
   if (verb === 'sit_and_type') {
     const chairId = pairedChairId ?? interactableId;
     const a = approachOf(chairId);
+    const s = seatOf(chairId);
     const chair = getInteractable(chairId);
     const chairAnchor = (chair?.anchorId ?? fallbackAnchor) as AnchorId;
     out.push(
@@ -689,12 +699,13 @@ function expandInteract(
         id: newId('sit'),
         type: 'sit_at',
         anchor: chairAnchor,
-        ...(a ? { posOverride: a.pos, yawOverride: a.yaw } : {}),
+        ...(s ? { posOverride: s.pos, yawOverride: s.yaw } : {}),
       },
       { id: newId('type'), type: 'play_clip', clip: 'typing', durationMs: src.durationMs ?? 8000 },
     );
   } else if (verb === 'sit' || verb === 'sit_playful') {
     const a = approachOf(interactableId);
+    const s = seatOf(interactableId);
     out.push(
       {
         id: newId('walk'),
@@ -707,7 +718,7 @@ function expandInteract(
         id: newId('sit'),
         type: 'sit_at',
         anchor: fallbackAnchor,
-        ...(a ? { posOverride: a.pos, yawOverride: a.yaw } : {}),
+        ...(s ? { posOverride: s.pos, yawOverride: s.yaw } : {}),
       },
     );
     if (verb === 'sit_playful') {

@@ -1,7 +1,13 @@
 import { useEffect, useRef } from 'react';
 import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
-import { autoDiscoverFromRoom, resetInteractables, loadOverridesFromLocalStorage } from '../lib/interactables';
+import {
+  autoDiscoverFromRoom,
+  resetInteractables,
+  loadOverridesFromLocalStorage,
+  applyDefaultsSnapshot,
+  type InteractableOverride,
+} from '../lib/interactables';
 import { getColliders, summarizeLayers } from '../lib/colliders';
 import { bakeOccupancyGrid, setActiveGrid } from '../lib/pathfind';
 
@@ -92,18 +98,43 @@ export function Room({ url = '/room.glb', scale, targetFootprint = DEFAULT_TARGE
     // / asset swaps don't leave stale meshName tags around. Order matters:
     //   1. reset to hardcoded defaults
     //   2. auto-discover from mesh names (overrides default positions)
-    //   3. apply user-saved overrides last (manual calibration always wins)
+    //   3. apply repo-shipped defaults snapshot (interactables.default.json)
+    //   4. apply user-saved overrides last (manual per-machine calibration wins)
     resetInteractables();
     autoDiscoverFromRoom(root);
-    loadOverridesFromLocalStorage();
 
-    // bake the pathfinding occupancy grid against the WALL layer only so
-    // furniture doesn't appear as obstacles (the avatar passes through it
-    // during interact_with macros via the layered collider policy).
+    // load repo-shipped defaults (durable, committed). Best-effort fetch:
+    // if the file isn't there yet (fresh repo) we skip silently. The
+    // user's localStorage overrides still win on top.
+    void (async () => {
+      try {
+        const res = await fetch('/interactables.default.json', { cache: 'no-store' });
+        if (!res.ok) {
+          if (res.status !== 404) console.warn('[room] defaults fetch HTTP', res.status);
+          return;
+        }
+        const ct = res.headers.get('content-type') ?? '';
+        if (!ct.includes('json')) return; // SPA fallback served HTML
+        const snapshot = (await res.json()) as Record<string, InteractableOverride>;
+        applyDefaultsSnapshot(snapshot);
+      } catch {
+        /* nothing committed yet — fine */
+      }
+      loadOverridesFromLocalStorage();
+    })();
+
+    // bake the pathfinding occupancy grid against ALL colliders (walls +
+    // furniture) so free walks like "come here" route around props instead
+    // of charging straight through the couch. For interact_with macros the
+    // pathfinder still terminates at the calibrated approach point: if that
+    // cell is inside a piece of furniture, A*'s goal-snap ('nearestWalkable')
+    // snaps to the nearest free cell, and the final waypoint is overwritten
+    // with the literal goal so runtime collision (using the WALL-only layer
+    // for posOverride paths) can carry her the last few cm into the seat.
     const summary = summarizeLayers(root);
     console.info('[room] collider layers', summary);
-    const walls = getColliders(root, 'wall');
-    const grid = bakeOccupancyGrid(walls, { cellSize: 0.06, radius: 0.3, padding: 0.5 });
+    const allColliders = getColliders(root, 'all');
+    const grid = bakeOccupancyGrid(allColliders, { cellSize: 0.06, radius: 0.3, padding: 0.5 });
     setActiveGrid(grid);
 
     onLoadRef.current?.(root);

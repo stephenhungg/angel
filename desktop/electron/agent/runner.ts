@@ -175,13 +175,14 @@ const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: 'interact_with',
-    description: `Macro: walk to a prop in the room and use it (sit, type, look out the window, browse the bookshelf). Prefer this over chaining walk_to+sit_at+play_clip yourself — the renderer handles the underlying choreography (walking, facing, sitting, typing-flow transitions) for you.\n\nAvailable interactables:\n${INTERACTABLES.map((i) => `- ${i.id} (${i.kind}, ${i.label}) → verbs: [${i.verbs.join(', ')}]${i.note ? '. ' + i.note : ''}`).join('\n')}\n\nWhen the user asks you to code, work, type, or build something, call interact_with('desk_workstation', 'sit_and_type'). When they want you to chill on the couch, interact_with('couch_chair', 'sit_playful'). When they ask about the weather or to look outside, interact_with('window', 'look_out').`,
+    description: `Macro: walk to a prop in the room and use it (sit, type, look out the window, browse the bookshelf). Prefer this over chaining walk_to+sit_at+play_clip yourself — the renderer handles the underlying choreography (walking, facing, sitting, typing-flow transitions) for you.\n\nAvailable interactables:\n${INTERACTABLES.map((i) => `- ${i.id} (${i.kind}, ${i.label}) → verbs: [${i.verbs.join(', ')}]${i.note ? '. ' + i.note : ''}`).join('\n')}\n\nWhen the user asks you to code, work, type, or build something, call interact_with('desk_workstation', 'sit_and_type'). When they want you to chill on the couch, interact_with('couch_chair', 'sit_playful'). When they ask about the weather or to look outside, interact_with('window', 'look_out').\n\nFor multi-side props (couch with multiple seats, desk with two chairs), pass approachLabel to specify which side. If omitted, the renderer picks the closest approach to the avatar's current position.`,
     input_schema: {
       type: 'object',
       properties: {
         interactableId: { type: 'string', enum: INTERACTABLE_IDS, description: 'which prop to use' },
         verb: { type: 'string', enum: INTERACTABLE_VERBS, description: 'what to do with it' },
         durationMs: { type: 'number', description: 'optional: how long the typing/sitting loop runs before she stands' },
+        approachLabel: { type: 'string', description: "optional: which approach point to use (e.g. 'left', 'right', 'front'). only matters for props with multiple approach points; otherwise the closest one is auto-picked." },
       },
       required: ['interactableId', 'verb'],
     },
@@ -413,7 +414,7 @@ you are a vrm avatar in a small bedroom. you can:
 - use props (PREFERRED) via interact_with(id, verb). this auto-walks you, faces, sits, plays the right animation, and returns you to idle. props + verbs:
 ${INTERACTABLES.map((i) => `    • ${i.id} (${i.kind}) — verbs: ${i.verbs.join(', ')}${i.note ? `. ${i.note}` : ''}`).join('\n')}
 - walk to a raw anchor via walk_to(anchor) when no interactable applies. anchors: ${ANCHORS.join(', ')}
-- walk up to the user when they ask you to come over: walk_to(anchor='user'). this walks to their actual live position (they move around with WASD), stops ~1m short, and faces them. use for "come here", "come to me", "follow me", "get over here", etc.
+- walk up to the user when they ask you to come over: come_to_me. this walks to their actual live position (they move around with WASD), stops ~1.4m short, and faces them. use for "come here", "come to me", "follow me", "get over here", etc.
 - sit on a raw chair anchor via sit_at(anchor). chair anchors only: ${CHAIR_ANCHORS.join(', ')}
 - short body language clips via play_clip (wave, thinking, sitting_playful, reading). NEVER play_clip('walking') — it animates legs in place without moving you. use walk_to or interact_with instead.
 - face the user or any anchor with face()
@@ -454,8 +455,9 @@ when you ship code with delegate():
 → interact_with('window', 'look_out') + say("yeah it's pouring honestly.", soft)
 
 # example: "come here" / "come to me" / "get over here"
-→ walk_to(anchor='user') + say("coming.", soft)
-   (do NOT pair with a separate face(user) — walk_to('user') already orients toward them on arrival.)
+→ come_to_me() + say("coming.", soft)
+   (do NOT pair with a separate face(user) — come_to_me already orients toward them on arrival.)
+   (do NOT also call walk_to(anchor='user') — come_to_me is the only correct tool for this.)
 
 # your eyes — local awareness tools (use deliberately)
 you can SEE the user's actual machine. when they reference their work, look first, then react.
@@ -667,6 +669,7 @@ function toolUseToSceneAction(
         interactableId: String(input.interactableId ?? ''),
         verb: input.verb as InteractableVerb,
         ...(typeof input.durationMs === 'number' ? { durationMs: input.durationMs } : {}),
+        ...(typeof input.approachLabel === 'string' ? { approachLabel: input.approachLabel } : {}),
       };
     default:
       console.warn('[orchestrator] unknown tool', name);

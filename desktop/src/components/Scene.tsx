@@ -15,7 +15,8 @@ import {
   InteractablePromptHUD,
   PlayerInteractKeyHandler,
 } from '@/components/InteractableOverlay';
-import { CalibrationOverlay, CalibrationRaycaster } from '@/components/CalibrationOverlay';
+import { CalibrationOverlay, CalibrationRaycaster, CalibrationGhostPreview } from '@/components/CalibrationOverlay';
+import { isChairAnchor } from '@/lib/anchors';
 import { useAngelStore } from '@/stores/angel';
 
 // Original placeholder VRM, restored from git after the swipe-pipeline
@@ -109,6 +110,62 @@ function AvatarLookAtPlayer({
     if (la?.target) {
       la.target.position.copy(targetRef.current);
     }
+  });
+  return null;
+}
+
+/**
+ * Passive body-tracking — when the avatar is idle (no scripted action,
+ * no walking, no sitting clip), smoothly rotate her body yaw to face the
+ * user. Pairs with AvatarLookAtPlayer (eyes/head) so she actively gives
+ * the user attention even when nothing's been said. Bails out the moment
+ * any tool-driven action takes over so we don't fight scripted rotation.
+ */
+const BODY_TRACK_SPEED = 2.4; // rad/s of damping pull toward target yaw
+const BODY_TRACK_DEADZONE = 0.045; // rad ~2.6° below which we don't bother
+const BODY_TRACK_MIN_DIST = 0.18; // m below which atan2 jitter dominates
+const TWO_PI = Math.PI * 2;
+
+function shortestAngle(from: number, to: number): number {
+  let d = (to - from) % TWO_PI;
+  if (d > Math.PI) d -= TWO_PI;
+  else if (d < -Math.PI) d += TWO_PI;
+  return d;
+}
+
+function AvatarBodyTrackUser({
+  avatarRef,
+}: {
+  avatarRef: React.MutableRefObject<AvatarHandle | null>;
+}) {
+  useFrame((_, dt) => {
+    const root = avatarRef.current?.getRoot();
+    if (!root) return;
+
+    const s = useAngelStore.getState();
+    // bail when something else owns rotation:
+    //  - a scripted SceneAction is mid-flight
+    //  - she's walking (the walker drives yaw to motion direction)
+    //  - she's playing a non-idle clip (sitting / typing / wave / thinking)
+    //  - she's seated at a chair anchor (sitting pose has a fixed facing)
+    if (s.current) return;
+    if (s.state.isWalking) return;
+    if (s.currentClip !== 'idle') return;
+    if (isChairAnchor(s.state.location)) return;
+
+    const p = s.player;
+    const dx = p.x - root.position.x;
+    const dz = p.z - root.position.z;
+    const dist = Math.hypot(dx, dz);
+    if (dist < BODY_TRACK_MIN_DIST) return; // user standing on her — skip
+
+    const targetYaw = Math.atan2(dx, dz);
+    const delta = shortestAngle(root.rotation.y, targetYaw);
+    if (Math.abs(delta) < BODY_TRACK_DEADZONE) return;
+
+    // critically-damped lerp: never overshoots, eases in.
+    const k = Math.min(1, dt * BODY_TRACK_SPEED);
+    root.rotation.y += delta * k;
   });
   return null;
 }
@@ -238,6 +295,7 @@ export function Scene({ debug = true }: SceneProps) {
         <ActionRunner avatarRef={avatarRef} roomRoot={roomRoot} />
         <SpawnAvatarAtAnchor avatarRef={avatarRef} />
         <AvatarLookAtPlayer avatarRef={avatarRef} />
+        <AvatarBodyTrackUser avatarRef={avatarRef} />
         <Player roomRoot={roomRoot} locked={pointerLocked} />
 
         {/* interactables — only render the wireframe markers while the
@@ -246,6 +304,7 @@ export function Scene({ debug = true }: SceneProps) {
         <InteractablePicker />
         <InteractableDebugMarkers visible={calibrationOpen} />
         <CalibrationRaycaster colliders={colliders} />
+        <CalibrationGhostPreview />
 
         {/* desk monitor — codex stdout streams here when angel is delegating
             (the 30% bg-execution rubric). position is rough; tune live or
