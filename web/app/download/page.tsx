@@ -1,5 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
+import { InstallCommand } from "@/components/InstallCommand";
 
 export const metadata = {
   title: "download angel",
@@ -32,7 +33,6 @@ function AppleIntelIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden>
       <path d="M14.5 18.5c-.7.7-1.5.7-2.3.3-.8-.4-1.55-.36-2.42 0-1.07.46-1.64.33-2.28-.34C3.85 14.74 4.4 9 8.55 8.79c1.01.05 1.71.55 2.3.6.88-.18 1.72-.7 2.66-.63 1.13.09 1.98.54 2.54 1.35-2.33 1.4-1.78 4.46.36 5.32-.43 1.12-.98 2.23-1.91 3.07zM10.84 8.74c-.11-1.66 1.24-3.04 2.79-3.17.22 1.93-1.74 3.36-2.79 3.17z" />
-      {/* chip badge bottom-right */}
       <rect x="14" y="14" width="9" height="9" rx="1.6" fill="none" stroke="currentColor" strokeWidth="1.4" />
       <line x1="16" y1="14" x2="16" y2="13" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
       <line x1="19" y1="14" x2="19" y2="13" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
@@ -54,7 +54,7 @@ type Platform = {
 
 const platforms: Platform[] = [
   {
-    name: "macOS",
+    name: "macOS dmg",
     note: "apple silicon · 12+",
     href: MAC_DMG_URL,
     Icon: AppleIcon,
@@ -96,57 +96,65 @@ export default function DownloadPage() {
       </div>
 
       {/* bottom bar — releases link */}
-      <div className="absolute bottom-5 left-1/2 z-10 -translate-x-1/2 text-center font-sans text-[12px] text-muted-secondary">
+      <div className="absolute bottom-4 left-1/2 z-10 -translate-x-1/2 text-center font-sans text-[12px] text-muted-secondary">
         <a
           href={RELEASES}
           target="_blank"
           rel="noreferrer"
           className="text-sakura-600 underline-offset-4 hover:underline"
         >
-          github.com/stephenhungg/angel/releases
+          all releases on github →
         </a>
-        <span className="ml-3 text-muted-tertiary">
-          first launch on mac: <code className="font-mono">xattr -cr /Applications/Angel.app</code>
-        </span>
       </div>
 
       {/* center stack — fills remaining viewport */}
-      <div className="flex flex-1 flex-col items-center justify-center gap-8 px-6 text-center tablet:gap-10">
+      <div className="flex flex-1 flex-col items-center justify-center gap-6 px-6 text-center tablet:gap-8">
         <Image
           src="/kawaii/wordmark-pink-nano-t.png"
           alt="angel"
           width={800}
           height={400}
-          className="h-auto w-[min(60vw,360px)] select-none"
+          className="h-auto w-[min(50vw,300px)] select-none"
           priority
         />
 
-        <div className="flex flex-col items-center gap-3">
-          <h1 className="m-0 max-w-[820px] font-bagel text-[36px] font-normal leading-[1.05] tracking-[-0.01em] text-ink-near tablet:text-[52px] desktop:text-[64px]">
+        <div className="flex flex-col items-center gap-2">
+          <h1 className="m-0 max-w-[820px] font-bagel text-[32px] font-normal leading-[1.05] tracking-[-0.01em] text-ink-near tablet:text-[44px] desktop:text-[56px]">
             she lives on your machine.
           </h1>
-          <p className="m-0 max-w-[520px] font-sans text-[15px] leading-[1.5] text-muted-deep tablet:text-[16px]">
-            download, drag into <span className="font-mono">Applications</span>,
-            then come back and let her in.
+          <p className="m-0 max-w-[520px] font-sans text-[14px] leading-[1.5] text-muted-deep tablet:text-[15px]">
+            paste this in your terminal — installs in ~10 seconds.
           </p>
         </div>
 
-        <ul className="grid w-full max-w-[820px] grid-cols-1 gap-4 tablet:grid-cols-3">
+        {/* PRIMARY action: one-line installer */}
+        <InstallCommand />
+
+        <div className="flex items-center gap-3 font-sans text-[12px] uppercase tracking-[0.18em] text-muted-tertiary">
+          <span className="h-px w-10 bg-hairline" />
+          <span>or grab the dmg</span>
+          <span className="h-px w-10 bg-hairline" />
+        </div>
+
+        {/* SECONDARY: platform cards */}
+        <ul className="grid w-full max-w-[820px] grid-cols-1 gap-3 tablet:grid-cols-3">
           {platforms.map((p) => {
             const Icon = p.Icon;
             const cardInner = (
               <>
-                <Icon className="h-7 w-7 text-ink-near" />
+                <Icon className="h-6 w-6 text-ink-near" />
                 <div className="flex flex-col gap-0.5">
-                  <span className="font-bagel text-[20px] leading-none text-ink-near">
+                  <span className="font-bagel text-[18px] leading-none text-ink-near">
                     {p.name}
                   </span>
-                  <span className="font-sans text-[12px] text-muted-secondary">
+                  <span className="font-sans text-[11px] text-muted-secondary">
                     {p.note}
                   </span>
                 </div>
-                <span className="mt-2 inline-flex items-baseline gap-2 font-sans text-[13px] font-semibold text-sakura-600 transition-transform duration-200 group-hover:translate-x-0.5">
-                  <span>{p.available ? "download ↓" : "coming soon"}</span>
+                <span className="mt-1 inline-flex items-baseline gap-2 font-sans text-[12px] font-semibold text-sakura-600 transition-transform duration-200 group-hover:translate-x-0.5">
+                  <span>
+                    {p.available ? "download ↓" : "see us at the table"}
+                  </span>
                 </span>
               </>
             );
@@ -155,14 +163,14 @@ export default function DownloadPage() {
                 {p.available ? (
                   <a
                     href={p.href}
-                    className="group flex h-full flex-col items-start gap-2 rounded-2xl border border-hairline bg-cloud p-5 text-left transition-all duration-200 ease-out hover:-translate-y-1 hover:border-sakura-300 hover:shadow-[0_8px_0_rgba(199,78,122,0.18)]"
+                    className="group flex h-full flex-col items-start gap-1.5 rounded-2xl border border-hairline bg-cloud p-4 text-left transition-all duration-200 ease-out hover:-translate-y-1 hover:border-sakura-300 hover:shadow-[0_8px_0_rgba(199,78,122,0.18)]"
                   >
                     {cardInner}
                   </a>
                 ) : (
                   <div
                     aria-disabled
-                    className="group flex h-full cursor-not-allowed flex-col items-start gap-2 rounded-2xl border border-hairline bg-cloud/60 p-5 text-left opacity-60"
+                    className="group flex h-full cursor-not-allowed flex-col items-start gap-1.5 rounded-2xl border border-hairline bg-cloud/60 p-4 text-left opacity-60"
                   >
                     {cardInner}
                   </div>
