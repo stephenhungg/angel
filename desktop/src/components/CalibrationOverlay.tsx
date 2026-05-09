@@ -148,30 +148,29 @@ export function CalibrationOverlay() {
 
   function captureFeet() {
     if (!selected) return;
-    // P captures BOTH worldPos and the approach anchor when you're standing
-    // at the spot. For a chair this is exactly right ("here is the chair,
-    // here is where you walk to to use it"). If you really want the prop
-    // somewhere else but the approach to be where you are, use J for the
-    // prop position and L for the approach.
+    // P captures BOTH bbox center and the first approach anchor when you're
+    // standing at the spot. For a chair this is exactly right.
     setInteractableTransform(selected.id, {
-      worldPos: [player.x, 0, player.z],
-      approachAnchor: { pos: [player.x, 0, player.z], yaw: player.yaw },
+      bbox: { center: [player.x, 0, player.z] },
+      approaches: [{ pos: [player.x, 0, player.z], yaw: player.yaw, label: 'front' }],
     });
-    flash(`set ${selected.id} pos + approach to your feet`);
+    flash(`set ${selected.id} bbox + approach to your feet`);
   }
   function captureAim() {
     if (!selected) return;
     const h = aimHitRef.current;
     if (!h) return flash('aim at a surface first');
-    setInteractableTransform(selected.id, { worldPos: [h.point.x, h.point.y, h.point.z] });
-    flash(`set ${selected.id}.worldPos = aim hit`);
+    setInteractableTransform(selected.id, {
+      bbox: { center: [h.point.x, h.point.y, h.point.z] },
+    });
+    flash(`set ${selected.id}.bbox.center = aim hit`);
   }
   function captureApproach() {
     if (!selected) return;
     setInteractableTransform(selected.id, {
-      approachAnchor: { pos: [player.x, 0, player.z], yaw: player.yaw },
+      approaches: [{ pos: [player.x, 0, player.z], yaw: player.yaw, label: 'front' }],
     });
-    flash(`set ${selected.id}.approachAnchor`);
+    flash(`set ${selected.id} approach[0]`);
   }
   function save() {
     saveOverridesToLocalStorage();
@@ -284,7 +283,7 @@ export function CalibrationOverlay() {
                   <span style={{ opacity: 0.55, marginLeft: 6, fontSize: 10 }}>· {it.kind}</span>
                 </span>
                 <span style={{ fontSize: 10, opacity: 0.65, color: isSel ? 'rgba(13,10,20,0.7)' : 'inherit' }}>
-                  pos ({it.worldPos.x.toFixed(2)}, {it.worldPos.y.toFixed(2)}, {it.worldPos.z.toFixed(2)})
+                  pos ({it.bbox.center.x.toFixed(2)}, {it.bbox.center.y.toFixed(2)}, {it.bbox.center.z.toFixed(2)})
                   {it.meshName ? `  · mesh: ${it.meshName}` : ''}
                 </span>
               </button>
@@ -314,10 +313,10 @@ export function CalibrationOverlay() {
               <div style={readoutBlock}>
                 <Row label="kind" value={selected.kind} />
                 <Row label="actions" value={selected.actions.join(', ')} />
-                {selected.approachAnchor && (
+                {selected.approaches[0] && (
                   <Row
                     label="approach"
-                    value={`(${selected.approachAnchor.pos.x.toFixed(2)}, ${selected.approachAnchor.pos.y.toFixed(2)}, ${selected.approachAnchor.pos.z.toFixed(2)})  yaw ${selected.approachAnchor.yaw.toFixed(2)}`}
+                    value={`(${selected.approaches[0].pos.x.toFixed(2)}, ${selected.approaches[0].pos.y.toFixed(2)}, ${selected.approaches[0].pos.z.toFixed(2)})  yaw ${selected.approaches[0].yaw.toFixed(2)}`}
                   />
                 )}
                 {selected.pairedChairId && <Row label="paired" value={selected.pairedChairId} />}

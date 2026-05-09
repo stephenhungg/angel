@@ -10,7 +10,8 @@
     "./scene": "./src/scene.ts",
     "./persona": "./src/persona.ts",
     "./claim": "./src/claim.ts",
-    "./agent": "./src/agent.ts"
+    "./agent": "./src/agent.ts",
+    "./memory": "./src/memory.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

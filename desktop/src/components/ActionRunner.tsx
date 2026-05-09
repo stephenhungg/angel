@@ -10,6 +10,8 @@ import type { AvatarHandle } from '@/components/Avatar';
 import { ipc } from '@/lib/ipc';
 import { resolveCollision } from '@/lib/collision';
 import { getInteractable } from '@/lib/interactables';
+import { getColliders } from '@/lib/colliders';
+import { planPath, isStraightShot, getActiveGrid } from '@/lib/pathfind';
 
 type Props = {
   avatarRef: RefObject<AvatarHandle | null>;
@@ -27,11 +29,18 @@ const SPEED_M_S: Record<'slow' | 'normal' | 'urgent', number> = {
  * slip into chair anchors without bumping the desk leg. */
 const AVATAR_COLLIDER_RADIUS = 0.25;
 /** considered "arrived" when within this distance of the target xz */
-const ARRIVE_EPS = 0.08;
-/** safety cap so a stuck-on-furniture path can't run forever */
-const WALK_TIMEOUT_S = 8;
+const ARRIVE_EPS = 0.10;
+/** distance to the next waypoint at which we advance to the one after */
+const WAYPOINT_EPS = 0.18;
+/** absolute upper bound — even huge walks must finish inside this many sec */
+const WALK_TIMEOUT_S = 12;
+/** progress increments smaller than this don't reset the stuck timer */
+const PROGRESS_EPS = 0.012;
+/** if no real progress for this many seconds, give up and fail the action */
+const STUCK_THRESHOLD_S = 0.7;
 
 /** Per-action runtime — kept on the ref so we don't re-render on each frame. */
+type Vec2 = { x: number; z: number };
 type RunCtx = {
   startedAt: number;
   // walk_to
@@ -40,7 +49,16 @@ type RunCtx = {
   fromRotY: number;
   toRotY: number;
   totalDuration: number; // seconds
-  // wait
+  /** waypoints to follow, world (x,z). Last entry is the final target. */
+  path: Vec2[];
+  /** index of the waypoint we're currently steering toward */
+  pathIdx: number;
+  /** which collider layer the avatar is colliding against this walk */
+  walkColliders: THREE.Object3D[];
+  /** stuck-detection bookkeeping (in elapsed seconds) */
+  lastProgressAt: number;
+  lastDist: number;
+  /** wait (legacy, retained for clarity) */
   waitUntil: number;
 };
 
@@ -73,18 +91,22 @@ export function ActionRunner({ avatarRef, roomRoot }: Props) {
   const currentActionAtTimeoutRef = useRef<string | null>(null);
 
   // collect collider meshes from the room once it's loaded so the avatar's
-  // walks can slide along walls rather than clip through them
-  const collidersRef = useRef<THREE.Object3D[]>([]);
+  // walks can slide along walls rather than clip through them. Two layers:
+  //   - allColliders: every mesh; used for raw walk_to(anchor) where we
+  //     don't know whether the avatar is meant to dock at furniture.
+  //   - wallColliders: walls/floors/ceilings only; used for interact_with
+  //     macros (posOverride present) so the avatar doesn't bump into the
+  //     chair she's about to sit on.
+  const allCollidersRef = useRef<THREE.Object3D[]>([]);
+  const wallCollidersRef = useRef<THREE.Object3D[]>([]);
   useEffect(() => {
     if (!roomRoot) {
-      collidersRef.current = [];
+      allCollidersRef.current = [];
+      wallCollidersRef.current = [];
       return;
     }
-    const list: THREE.Object3D[] = [];
-    roomRoot.traverse((obj) => {
-      if ((obj as THREE.Mesh).isMesh) list.push(obj);
-    });
-    collidersRef.current = list;
+    allCollidersRef.current = getColliders(roomRoot, 'all');
+    wallCollidersRef.current = getColliders(roomRoot, 'wall');
   }, [roomRoot]);
 
   // when a new `current` lands, initialise context.
@@ -106,6 +128,11 @@ export function ActionRunner({ avatarRef, roomRoot }: Props) {
       fromRotY: root.rotation.y,
       toRotY: root.rotation.y,
       totalDuration: 0,
+      path: [],
+      pathIdx: 0,
+      walkColliders: allCollidersRef.current,
+      lastProgressAt: 0,
+      lastDist: 0,
       waitUntil: now,
     };
 
@@ -140,9 +167,12 @@ export function ActionRunner({ avatarRef, roomRoot }: Props) {
           ctx.toPos = anchor.position.clone();
           ctx.toRotY = anchor.rotationY;
         }
-        const dist = ctx.fromPos.distanceTo(ctx.toPos);
-        const speed = SPEED_M_S[current.speed ?? 'normal'];
-        ctx.totalDuration = Math.max(WALK_TIMEOUT_S, (dist / speed) * 1.6);
+        // furniture-passthrough: if the brain emitted a calibrated coord, the
+        // walk is part of an interact_with macro and the avatar is meant to
+        // dock at a piece of furniture — disable furniture collision so she
+        // can actually reach it.
+        ctx.walkColliders = current.posOverride ? wallCollidersRef.current : allCollidersRef.current;
+        initWalkPath(ctx, root.position, current.speed ?? 'normal');
         avatarRef.current?.play('walking', 200);
         setClip('walking');
         setStoreState({
@@ -170,9 +200,10 @@ export function ActionRunner({ avatarRef, roomRoot }: Props) {
           ctx.toPos.copy(root.position);
         }
         ctx.toRotY = Math.atan2(player.x - ctx.toPos.x, player.z - ctx.toPos.z);
-        const dist = ctx.fromPos.distanceTo(ctx.toPos);
-        const speed = SPEED_M_S[current.speed ?? 'normal'];
-        ctx.totalDuration = Math.max(WALK_TIMEOUT_S, (dist / speed) * 1.6);
+        // walk_to_user goes to a free space, not into a piece of furniture, so
+        // the avatar collides against everything (no furniture passthrough).
+        ctx.walkColliders = allCollidersRef.current;
+        initWalkPath(ctx, root.position, current.speed ?? 'normal');
         avatarRef.current?.play('walking', 200);
         setClip('walking');
         setStoreState({ isWalking: true, walkTarget: null });
@@ -369,8 +400,8 @@ export function ActionRunner({ avatarRef, roomRoot }: Props) {
       case 'walk_to':
       case 'walk_to_user': {
         // For walk_to_user we ALSO want the target to track the player live
-        // (they may have moved since action began). Recompute toPos every
-        // frame for that case.
+        // (they may have moved since action began). Recompute toPos and the
+        // path's terminal waypoint every frame for that case.
         if (current.type === 'walk_to_user') {
           const player = useAngelStore.getState().player;
           const stopShort = current.stopDistance ?? 1.4;
@@ -382,28 +413,51 @@ export function ActionRunner({ avatarRef, roomRoot }: Props) {
             ctx.toPos.set(root.position.x + dxP * t2, root.position.y, root.position.z + dzP * t2);
           }
           ctx.toRotY = Math.atan2(player.x - ctx.toPos.x, player.z - ctx.toPos.z);
+          // keep the final waypoint anchored to the live target
+          if (ctx.path.length > 0) {
+            ctx.path[ctx.path.length - 1] = { x: ctx.toPos.x, z: ctx.toPos.z };
+          }
         }
 
-        // velocity-driven walk with capsule collision. moves toward the
-        // target each frame, slides along walls if blocked, and rotates to
-        // face the direction of motion.
-        const speed = SPEED_M_S[current.speed ?? 'normal'];
-        const dx = ctx.toPos.x - root.position.x;
-        const dz = ctx.toPos.z - root.position.z;
-        const distToTarget = Math.hypot(dx, dz);
+        // pick the waypoint we're steering toward this frame
+        const waypoint = ctx.path[ctx.pathIdx] ?? { x: ctx.toPos.x, z: ctx.toPos.z };
+        const wpDx = waypoint.x - root.position.x;
+        const wpDz = waypoint.z - root.position.z;
+        const distToWp = Math.hypot(wpDx, wpDz);
 
-        const arrived = distToTarget < ARRIVE_EPS;
+        // arrival is judged by distance to the FINAL waypoint, regardless
+        // of where we are in the path — this lets the late waypoints'
+        // "close enough" eps fire even if pathfinding overshoots slightly.
+        const finalWp = ctx.path[ctx.path.length - 1] ?? { x: ctx.toPos.x, z: ctx.toPos.z };
+        const distToFinal = Math.hypot(
+          finalWp.x - root.position.x,
+          finalWp.z - root.position.z,
+        );
+
+        // stuck detection — track meaningful progress toward the final
+        // target. If we haven't moved closer in STUCK_THRESHOLD_S, the
+        // path is wedged against a collider and we should bail out.
+        if (ctx.lastDist - distToFinal > PROGRESS_EPS) {
+          ctx.lastDist = distToFinal;
+          ctx.lastProgressAt = elapsed;
+        }
+        const stuck = elapsed - ctx.lastProgressAt > STUCK_THRESHOLD_S;
+
+        const arrived = distToFinal < ARRIVE_EPS;
         const timedOut = elapsed >= ctx.totalDuration;
-        if (arrived || timedOut) {
+        if (arrived || timedOut || stuck) {
           console.info('[walk] done', {
             type: current.type,
             anchor: current.type === 'walk_to' ? current.anchor : 'user',
             arrived,
             timedOut,
+            stuck,
             elapsed: elapsed.toFixed(2),
             from: ctx.fromPos.toArray().map((n) => n.toFixed(2)),
             to: ctx.toPos.toArray().map((n) => n.toFixed(2)),
             final: root.position.toArray().map((n) => n.toFixed(2)),
+            pathLen: ctx.path.length,
+            pathIdx: ctx.pathIdx,
           });
           if (arrived) {
             root.position.x = ctx.toPos.x;
@@ -415,44 +469,55 @@ export function ActionRunner({ avatarRef, roomRoot }: Props) {
           if (current.type === 'walk_to_user' || current.anchor === 'user') {
             setStoreState({ isWalking: false, walkTarget: null });
           } else {
-            setStoreState({ isWalking: false, walkTarget: null, location: current.anchor });
-            currentLocationRef.current = current.anchor;
+            setStoreState({
+              isWalking: false,
+              walkTarget: null,
+              location: arrived ? current.anchor : currentLocationRef.current,
+            });
+            if (arrived) currentLocationRef.current = current.anchor;
           }
-          finish(current);
+          // brain feedback: tell the orchestrator whether we actually
+          // arrived. failure (stuck or timeout-without-arrived) flows back
+          // through the IPC so the agent can adjust strategy instead of
+          // silently chaining the next sit_at and teleporting.
+          finish(current, arrived, { stuck, timedOut, distToFinal });
           break;
         }
 
-        // step toward target this frame
-        const stepLen = Math.min(distToTarget, speed * dt);
-        const dirX = dx / distToTarget;
-        const dirZ = dz / distToTarget;
-        const next = root.position.clone();
-        next.x += dirX * stepLen;
-        next.z += dirZ * stepLen;
+        // advance to the next waypoint when we're close enough to the
+        // current one. The final waypoint uses ARRIVE_EPS above so we
+        // don't slam to a stop short of the target.
+        if (distToWp < WAYPOINT_EPS && ctx.pathIdx < ctx.path.length - 1) {
+          ctx.pathIdx += 1;
+        }
 
-        const corrected = resolveCollision({
-          current: root.position,
-          target: next,
-          radius: AVATAR_COLLIDER_RADIUS,
-          colliders: collidersRef.current,
-        });
-        root.position.x = corrected.x;
-        root.position.z = corrected.z;
+        // step toward the active waypoint this frame
+        const speed = SPEED_M_S[current.speed ?? 'normal'];
+        const stepLen = Math.min(distToWp, speed * dt);
+        if (distToWp > 1e-4) {
+          const dirX = wpDx / distToWp;
+          const dirZ = wpDz / distToWp;
+          const next = root.position.clone();
+          next.x += dirX * stepLen;
+          next.z += dirZ * stepLen;
+
+          const corrected = resolveCollision({
+            current: root.position,
+            target: next,
+            radius: AVATAR_COLLIDER_RADIUS,
+            colliders: ctx.walkColliders,
+          });
+          root.position.x = corrected.x;
+          root.position.z = corrected.z;
+        }
 
         // face direction of actual motion (after collision) so she pivots
         // along walls rather than facing through them
-        const moveDx = corrected.x - ctx.fromPos.x;
-        const moveDz = corrected.z - ctx.fromPos.z;
-        const lookDir = Math.atan2(
-          ctx.toPos.x - root.position.x,
-          ctx.toPos.z - root.position.z,
-        );
-        // mostly aim at the target, but blend in motion direction so she
-        // doesn't moon-walk against a wall
+        const moveDx = root.position.x - ctx.fromPos.x;
+        const moveDz = root.position.z - ctx.fromPos.z;
+        const lookDir = Math.atan2(wpDx, wpDz);
         const motionLen = Math.hypot(moveDx, moveDz);
         const motionDir = motionLen > 0.05 ? Math.atan2(moveDx, moveDz) : lookDir;
-        // blend look-at and motion-direction in shortest-angle space so we
-        // never get a 180° flip when the two angles straddle ±π
         const targetYaw = lookDir + shortestAngleDelta(lookDir, motionDir) * 0.4;
         const yawDelta = shortestAngleDelta(root.rotation.y, targetYaw);
         root.rotation.y += yawDelta * Math.min(1, dt * 8);
@@ -492,12 +557,82 @@ export function ActionRunner({ avatarRef, roomRoot }: Props) {
     }
   });
 
-  function finish(action: SceneAction) {
+  function finish(
+    action: SceneAction,
+    success = true,
+    failure?: { stuck: boolean; timedOut: boolean; distToFinal: number },
+  ) {
     completeCurrent();
-    ipc.reportActionComplete({ id: action.id, success: true });
+    if (success) {
+      ipc.reportActionComplete({ id: action.id, success: true });
+    } else {
+      // failure path: cancel any chained actions that were queued behind
+      // this walk (notably sit_at, which would otherwise teleport the
+      // avatar to a destination she never reached). The brain gets the
+      // failure signal so it can adapt.
+      console.warn('[walk] failed — clearing chained queue', failure);
+      useAngelStore.getState().cancelQueue();
+      ipc.reportActionComplete({ id: action.id, success: false });
+    }
   }
 
   return null;
+}
+
+/**
+ * Compute the path + duration budget for a walk_to / walk_to_user.
+ * Tries the occupancy-grid pathfinder first (so the avatar routes around
+ * walls); falls back to a single straight-line waypoint when the grid
+ * isn't baked yet or the start/goal are within line-of-sight anyway.
+ *
+ * Reads + writes ctx in place: ctx.path, ctx.pathIdx, ctx.totalDuration,
+ * ctx.lastDist, ctx.lastProgressAt, ctx.fromPos, ctx.toPos.
+ */
+function initWalkPath(ctx: RunCtx, fromPosWorld: THREE.Vector3, speedKey: 'slow' | 'normal' | 'urgent') {
+  const start = { x: fromPosWorld.x, z: fromPosWorld.z };
+  const goal = { x: ctx.toPos.x, z: ctx.toPos.z };
+  let path: Vec2[] | null = null;
+  const grid = getActiveGrid();
+  if (grid) {
+    if (isStraightShot(grid, start, goal)) {
+      path = [start, goal];
+    } else {
+      path = planPath(start, goal);
+    }
+  }
+  if (!path || path.length === 0) {
+    // grid not ready or unreachable — fall back to straight line. The
+    // collision tick will still slide us along walls; if we get truly
+    // stuck the stuck-detection will fail us cleanly.
+    path = [start, goal];
+  }
+  ctx.path = path;
+  ctx.pathIdx = path.length > 1 ? 1 : 0; // start steering toward 2nd waypoint
+  ctx.lastDist = Math.hypot(goal.x - start.x, goal.z - start.z);
+  ctx.lastProgressAt = 0;
+
+  // duration budget: expected travel time (path length / speed) with a
+  // sane floor (so a 30cm dock doesn't end instantly mid-step) and a
+  // hard cap (so a really long path can't run more than WALK_TIMEOUT_S).
+  const pathLen = pathLength(path);
+  const speed = SPEED_M_S[speedKey];
+  const expected = pathLen / speed + 0.4;
+  ctx.totalDuration = Math.max(1.5, Math.min(WALK_TIMEOUT_S, expected * 1.4));
+  console.info('[walk] init', {
+    speedKey,
+    speed,
+    pathLen: pathLen.toFixed(2),
+    waypoints: path.length,
+    duration: ctx.totalDuration.toFixed(2),
+  });
+}
+
+function pathLength(path: Vec2[]): number {
+  let total = 0;
+  for (let i = 1; i < path.length; i++) {
+    total += Math.hypot(path[i].x - path[i - 1].x, path[i].z - path[i - 1].z);
+  }
+  return total;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -523,20 +658,18 @@ function expandInteract(
   const out: SceneAction[] = [];
   const fallbackAnchor: AnchorId = anchorId ?? 'center';
 
-  /** Read the calibrated approach anchor (or worldPos fallback) off an
+  /** Read the first calibrated approach (or bbox.center fallback) off an
    *  interactable. This is the single source of truth — the legacy
    *  resolveAnchor system is bypassed entirely so calibrated overrides
    *  always win. */
   function approachOf(id: string): { pos: [number, number, number]; yaw: number } | null {
     const it = getInteractable(id);
     if (!it) return null;
-    if (it.approachAnchor) {
-      return {
-        pos: [it.approachAnchor.pos.x, it.approachAnchor.pos.y, it.approachAnchor.pos.z],
-        yaw: it.approachAnchor.yaw,
-      };
+    const a = it.approaches[0];
+    if (a) {
+      return { pos: [a.pos.x, a.pos.y, a.pos.z], yaw: a.yaw };
     }
-    return { pos: [it.worldPos.x, 0, it.worldPos.z], yaw: 0 };
+    return { pos: [it.bbox.center.x, 0, it.bbox.center.z], yaw: it.bbox.yaw };
   }
 
   if (verb === 'sit_and_type') {

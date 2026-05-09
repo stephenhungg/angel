@@ -1,20 +1,21 @@
 /**
- * Interactables — the semantic layer over the room's geometry.
+ * Interactables v2 — the semantic layer over the room's geometry.
  *
- * The room.glb is just polygons. This module overlays each prop with a
- * typed interaction record: what kind of thing it is, where to stand to use
- * it, what verbs it supports, and how the avatar's animation chain should
- * play out.
+ * v2 differs from v1 by giving every prop a real *oriented bounding box*
+ * (OBB) instead of a sphere, multiple *approach points* instead of one
+ * implicit approach anchor, and an explicit *seat* anchor for chairs.
+ * This separation finally lets us:
+ *   - render a tight wireframe around real furniture in calibration mode,
+ *   - route the avatar around solid props with the pathfinder,
+ *   - dock her cleanly at the seat without colliding with the chair mesh.
  *
- * The same registry is consumed by:
- *   1. The PLAYER (E-key interact in Player.tsx) — raycast + UI prompt + execute.
- *   2. The AI BRAIN (interact_with tool in electron/agent/runner.ts) —
- *      brain emits `interact_with(id, action)` and the renderer macros it
- *      into a SceneAction sequence.
+ * Legacy v1 overrides in localStorage are auto-migrated on first load.
  *
- * Source-of-truth precedence: hardcoded registry (this file) is the floor.
- * If room.glb meshes are named like "Chair_01" or "Desk", the auto-discovery
- * pass at room load time augments / repositions matching entries.
+ * Source-of-truth precedence (lowest → highest):
+ *   1. INTERACTABLES_DEFAULT (this file).
+ *   2. autoDiscoverFromRoom (mesh-name fuzzy bind from room.glb).
+ *   3. interactables.default.json (committed snapshot of calibration).
+ *   4. localStorage overrides (per-machine fine-tuning).
  */
 import * as THREE from 'three';
 import type { AnchorId } from '@angel/shared';
@@ -33,68 +34,113 @@ export type InteractableKind =
  * ("[E] sit") but the engine routes them to the right animation chain.
  */
 export type InteractableAction =
-  | 'sit' // sit at this chair (loop sitting)
-  | 'sit_playful' // alt sitting pose
-  | 'sit_and_type' // chair + paired desk → sit + typing flow
-  | 'look_out' // window → walk to + face + idle
-  | 'browse' // bookshelf → walk to + face + reading
-  | 'open' // door → narrate "leaving?" beat
-  | 'lay_down' // bed → loop sleeping (skipped if no clip)
-  | 'use'; // generic catch-all
+  | 'sit'
+  | 'sit_playful'
+  | 'sit_and_type'
+  | 'look_out'
+  | 'browse'
+  | 'open'
+  | 'lay_down'
+  | 'use';
+
+/* -------------------------------------------------------------------------- */
+/* primitive shapes                                                           */
+/* -------------------------------------------------------------------------- */
+
+/** Oriented bounding box around the prop. Yaw rotates around world Y. */
+export type OBB = {
+  center: THREE.Vector3;
+  halfExtents: THREE.Vector3; // x, y, z half-widths in object-local axes
+  yaw: number; // rotation around world Y, radians
+};
+
+/** A pre-arrival stand point: where the avatar's feet land just BEFORE the
+ * sit / look / browse action begins. Multiple per interactable lets a desk
+ * have a "left side" and "right side" entry, etc. */
+export type ApproachPoint = {
+  pos: THREE.Vector3;
+  yaw: number;
+  label?: string;
+};
+
+/* -------------------------------------------------------------------------- */
+/* Interactable                                                               */
+/* -------------------------------------------------------------------------- */
 
 export type Interactable = {
   id: string;
   kind: InteractableKind;
   /** human label shown in HUD prompts */
   label: string;
-  /** hitbox center in world space */
-  worldPos: THREE.Vector3;
-  /** sphere radius for raycast-pick + AI proximity tests */
-  hitRadius: number;
+
+  /** physical bounding box of the prop (visual + furniture-passthrough). */
+  bbox: OBB;
+  /** every supported pre-arrival stand point. order = priority for
+   *  tie-breaking when two are equally close to the avatar. */
+  approaches: ApproachPoint[];
+  /** for chairs only: the locked seated pose where the avatar / player ends
+   *  up after the sit transition. usually inside or above the bbox. */
+  seat?: { pos: THREE.Vector3; yaw: number };
+  /** sphere radius for E-key proximity gate + camera reticle picking. */
+  pickRadius: number;
+
   /** primary action — used as the default E-prompt label */
   primaryAction: InteractableAction;
   /** every supported action — order matters for prompt cycling */
   actions: InteractableAction[];
-  /** where the user/avatar's feet end up when interacting */
-  approachAnchor?: { pos: THREE.Vector3; yaw: number };
   /** for desks/computers: the chair to actually occupy */
   pairedChairId?: string;
-  /** if this interactable also corresponds to a named scene anchor (legacy
-   *  ANCHOR system) we record it so the brain can use either lookup. */
+  /** legacy ANCHOR id for free walk_to(anchor) compat */
   anchorId?: AnchorId;
   /** filled in by auto-discovery if a matching mesh was found in room.glb */
   meshName?: string;
 };
 
-const v = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
+const v3 = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
+
+/* -------------------------------------------------------------------------- */
+/* defaults                                                                   */
+/* -------------------------------------------------------------------------- */
 
 /**
- * Hardcoded baseline. The autoDiscover pass (called from Room.tsx) replaces
- * `worldPos` and tags `meshName` if a matching mesh exists in the room glb.
+ * Hardcoded baseline. The autoDiscover pass replaces `bbox.center` (and
+ * tags `meshName`) when a matching mesh exists in the room glb; manual
+ * calibration overrides stomp both.
  */
-export const INTERACTABLES_DEFAULT: Interactable[] = [
+export const INTERACTABLES_DEFAULT: readonly Interactable[] = [
   {
     id: 'desk_chair',
     kind: 'chair',
     label: 'desk chair',
-    worldPos: v(-1.6, 0, -1.05),
-    hitRadius: 0.55,
+    bbox: {
+      center: v3(-1.6, 0.45, -1.05),
+      halfExtents: v3(0.28, 0.45, 0.28),
+      yaw: -Math.PI / 2,
+    },
+    approaches: [
+      { pos: v3(-1.25, 0, -1.05), yaw: -Math.PI / 2, label: 'front' },
+    ],
+    seat: { pos: v3(-1.55, 0, -1.05), yaw: -Math.PI / 2 },
+    pickRadius: 0.55,
     primaryAction: 'sit',
     actions: ['sit', 'sit_and_type'],
-    approachAnchor: { pos: v(-1.6, 0, -1.05), yaw: -Math.PI / 2 },
     anchorId: 'desk_sit',
   },
   {
     id: 'desk_workstation',
     kind: 'desk',
     label: 'workstation',
-    // sits on the wall near the desk chair so a forward-cone raycast
-    // catches it from the room interior
-    worldPos: v(-2.05, 0.8, -1.1),
-    hitRadius: 0.85,
+    bbox: {
+      center: v3(-2.0, 0.45, -1.1),
+      halfExtents: v3(0.4, 0.45, 0.6),
+      yaw: 0,
+    },
+    approaches: [
+      { pos: v3(-1.25, 0, -1.05), yaw: -Math.PI / 2, label: 'chair side' },
+    ],
+    pickRadius: 0.85,
     primaryAction: 'sit_and_type',
     actions: ['sit_and_type'],
-    approachAnchor: { pos: v(-1.6, 0, -1.05), yaw: -Math.PI / 2 },
     pairedChairId: 'desk_chair',
     anchorId: 'desk_stand',
   },
@@ -102,53 +148,88 @@ export const INTERACTABLES_DEFAULT: Interactable[] = [
     id: 'couch_chair',
     kind: 'chair',
     label: 'couch',
-    worldPos: v(1.4, 0, 1.0),
-    hitRadius: 0.7,
+    bbox: {
+      center: v3(1.4, 0.4, 1.0),
+      halfExtents: v3(0.5, 0.4, 0.5),
+      yaw: -Math.PI / 4,
+    },
+    approaches: [
+      { pos: v3(0.85, 0, 0.65), yaw: -Math.PI / 4, label: 'front' },
+    ],
+    seat: { pos: v3(1.4, 0, 1.0), yaw: -Math.PI / 4 },
+    pickRadius: 0.7,
     primaryAction: 'sit',
     actions: ['sit', 'sit_playful'],
-    approachAnchor: { pos: v(1.4, 0, 1.0), yaw: -Math.PI / 4 },
     anchorId: 'couch_sit',
   },
   {
     id: 'window',
     kind: 'window',
     label: 'window',
-    worldPos: v(0, 1.4, -2.4),
-    hitRadius: 1.0,
+    bbox: {
+      center: v3(0, 1.4, -2.4),
+      halfExtents: v3(0.7, 0.6, 0.1),
+      yaw: 0,
+    },
+    approaches: [{ pos: v3(0, 0, -1.8), yaw: Math.PI, label: 'inside' }],
+    pickRadius: 1.0,
     primaryAction: 'look_out',
     actions: ['look_out'],
-    approachAnchor: { pos: v(0, 0, -1.8), yaw: Math.PI },
     anchorId: 'window',
   },
   {
     id: 'bookshelf',
     kind: 'bookshelf',
     label: 'bookshelf',
-    worldPos: v(1.95, 1.2, -1.2),
-    hitRadius: 0.85,
+    bbox: {
+      center: v3(2.05, 1.1, -1.2),
+      halfExtents: v3(0.18, 1.0, 0.5),
+      yaw: 0,
+    },
+    approaches: [
+      { pos: v3(1.6, 0, -1.2), yaw: Math.PI / 2, label: 'front' },
+    ],
+    pickRadius: 0.85,
     primaryAction: 'browse',
     actions: ['browse'],
-    approachAnchor: { pos: v(1.8, 0, -1.2), yaw: Math.PI / 2 },
     anchorId: 'bookshelf',
   },
   {
     id: 'door',
     kind: 'door',
     label: 'door',
-    worldPos: v(0, 1.0, 2.6),
-    hitRadius: 1.0,
+    bbox: {
+      center: v3(0, 1.0, 2.6),
+      halfExtents: v3(0.5, 1.0, 0.1),
+      yaw: 0,
+    },
+    approaches: [{ pos: v3(0, 0, 2.0), yaw: 0, label: 'inside' }],
+    pickRadius: 1.0,
     primaryAction: 'open',
     actions: ['open'],
-    approachAnchor: { pos: v(0, 0, 2.0), yaw: 0 },
     anchorId: 'door',
   },
 ];
 
-/* ------------------------------------------------------------------ */
-/* registry                                                            */
-/* ------------------------------------------------------------------ */
+/* -------------------------------------------------------------------------- */
+/* registry                                                                   */
+/* -------------------------------------------------------------------------- */
 
-let _registry: Interactable[] = INTERACTABLES_DEFAULT.map((i) => ({ ...i, worldPos: i.worldPos.clone(), approachAnchor: i.approachAnchor && { ...i.approachAnchor, pos: i.approachAnchor.pos.clone() } }));
+function cloneInteractable(i: Interactable): Interactable {
+  return {
+    ...i,
+    bbox: {
+      center: i.bbox.center.clone(),
+      halfExtents: i.bbox.halfExtents.clone(),
+      yaw: i.bbox.yaw,
+    },
+    approaches: i.approaches.map((a) => ({ pos: a.pos.clone(), yaw: a.yaw, label: a.label })),
+    seat: i.seat && { pos: i.seat.pos.clone(), yaw: i.seat.yaw },
+    actions: [...i.actions],
+  };
+}
+
+let _registry: Interactable[] = INTERACTABLES_DEFAULT.map(cloneInteractable);
 
 export function getInteractables(): readonly Interactable[] {
   return _registry;
@@ -158,13 +239,10 @@ export function getInteractable(id: string): Interactable | undefined {
   return _registry.find((i) => i.id === id);
 }
 
-/**
- * Auto-discovery: walk the loaded room and try to bind interactables to
- * actual meshes by name fuzzy-match. We update worldPos to each match's
- * mesh-bbox center so anchors line up with whatever room.glb is actually
- * loaded — no more "the chair is invisible because the room is scaled
- * weird".
- */
+/* -------------------------------------------------------------------------- */
+/* auto-discovery (room.glb mesh → bbox)                                      */
+/* -------------------------------------------------------------------------- */
+
 const KIND_PATTERNS: Array<{ kind: InteractableKind; rx: RegExp }> = [
   { kind: 'chair', rx: /chair|stool/i },
   { kind: 'desk', rx: /desk|table\b(?!\s*lamp)/i },
@@ -181,10 +259,15 @@ export type DiscoveryReport = {
   totalMeshes: number;
 };
 
-/** Re-bind hardcoded interactables to discovered mesh positions when names match. */
+/** Re-bind hardcoded interactables to discovered mesh bounds when names match. */
 export function autoDiscoverFromRoom(root: THREE.Object3D): DiscoveryReport {
   const matched = new Set<string>();
-  const tagged: Array<{ name: string; kind: InteractableKind; center: THREE.Vector3; bbox: THREE.Box3 }> = [];
+  const tagged: Array<{
+    name: string;
+    kind: InteractableKind;
+    center: THREE.Vector3;
+    bbox: THREE.Box3;
+  }> = [];
   let totalMeshes = 0;
 
   root.traverse((obj) => {
@@ -202,19 +285,27 @@ export function autoDiscoverFromRoom(root: THREE.Object3D): DiscoveryReport {
     }
   });
 
-  // greedy assignment: for each interactable, pick the closest tagged mesh
-  // of the matching kind. We allow reuse across registry entries (e.g., a
-  // single 'chair' mesh can satisfy both 'desk_chair' and a future 'reading_chair'
-  // if the registry has multiples) but consume one match per id.
+  // greedy assignment — for each registry entry, pick the closest tagged
+  // mesh of matching kind. We update bbox.center and meshName, but keep
+  // halfExtents/yaw from defaults (calibration overrides them).
   for (const it of _registry) {
-    let best: { name: string; center: THREE.Vector3; d: number } | null = null;
+    let best: { name: string; center: THREE.Vector3; bbox: THREE.Box3; d: number } | null = null;
     for (const t of tagged) {
       if (t.kind !== it.kind) continue;
-      const d = t.center.distanceTo(it.worldPos);
-      if (!best || d < best.d) best = { name: t.name, center: t.center, d };
+      const d = t.center.distanceTo(it.bbox.center);
+      if (!best || d < best.d) best = { name: t.name, center: t.center, bbox: t.bbox, d };
     }
     if (best) {
-      it.worldPos.copy(best.center);
+      it.bbox.center.copy(best.center);
+      // also tighten halfExtents to the discovered bbox if we never had
+      // an explicit override yet (saves the user from "fit to mesh" if
+      // the room's authored shape is already correct).
+      const size = best.bbox.getSize(new THREE.Vector3());
+      it.bbox.halfExtents.set(
+        Math.max(0.1, size.x * 0.5),
+        Math.max(0.1, size.y * 0.5),
+        Math.max(0.1, size.z * 0.5),
+      );
       it.meshName = best.name;
       matched.add(it.id);
     }
@@ -235,78 +326,121 @@ export function autoDiscoverFromRoom(root: THREE.Object3D): DiscoveryReport {
 
 /** Reset registry to the hardcoded baseline (for HMR / room swaps). */
 export function resetInteractables(): void {
-  _registry = INTERACTABLES_DEFAULT.map((i) => ({
-    ...i,
-    worldPos: i.worldPos.clone(),
-    approachAnchor: i.approachAnchor && { ...i.approachAnchor, pos: i.approachAnchor.pos.clone() },
-  }));
+  _registry = INTERACTABLES_DEFAULT.map(cloneInteractable);
+  _overrides = {};
 }
 
-/* ------------------------------------------------------------------ */
-/* live calibration — set positions from the running app              */
-/* ------------------------------------------------------------------ */
+/* -------------------------------------------------------------------------- */
+/* live calibration overrides                                                 */
+/* -------------------------------------------------------------------------- */
+
+export type Vec3T = [number, number, number];
+
+export type ApproachOverride = { pos: Vec3T; yaw: number; label?: string };
 
 export type InteractableOverride = {
-  worldPos?: [number, number, number];
-  hitRadius?: number;
-  approachAnchor?: { pos: [number, number, number]; yaw: number };
+  bbox?: { center: Vec3T; halfExtents: Vec3T; yaw: number };
+  approaches?: ApproachOverride[];
+  seat?: { pos: Vec3T; yaw: number } | null; // null clears seat
+  pickRadius?: number;
 };
 
-const STORAGE_KEY = 'angel:interactable_overrides:v1';
+/** Patch shape exposed to consumers. All fields optional and merged. */
+export type InteractablePatch = {
+  bbox?: Partial<{ center: Vec3T; halfExtents: Vec3T; yaw: number }>;
+  approaches?: ApproachOverride[]; // full replacement
+  seat?: { pos: Vec3T; yaw: number } | null;
+  pickRadius?: number;
+};
+
+const STORAGE_KEY = 'angel:interactable_overrides:v2';
+const STORAGE_KEY_V1 = 'angel:interactable_overrides:v1';
 
 let _overrides: Record<string, InteractableOverride> = {};
 
-/** Mutate the live registry entry. Marker overlays + raycasts update next frame. */
-export function setInteractableTransform(id: string, patch: InteractableOverride): boolean {
+/** Apply a patch to the live registry entry AND merge into `_overrides`. */
+export function setInteractableTransform(id: string, patch: InteractablePatch): boolean {
   const it = _registry.find((i) => i.id === id);
   if (!it) {
     console.warn('[interactables] setTransform: unknown id', id);
     return false;
   }
-  if (patch.worldPos) it.worldPos.set(patch.worldPos[0], patch.worldPos[1], patch.worldPos[2]);
-  if (patch.hitRadius != null) it.hitRadius = patch.hitRadius;
-  if (patch.approachAnchor) {
-    it.approachAnchor = {
-      pos: new THREE.Vector3(...patch.approachAnchor.pos),
-      yaw: patch.approachAnchor.yaw,
+
+  if (patch.bbox) {
+    if (patch.bbox.center) it.bbox.center.set(...patch.bbox.center);
+    if (patch.bbox.halfExtents) it.bbox.halfExtents.set(...patch.bbox.halfExtents);
+    if (patch.bbox.yaw != null) it.bbox.yaw = patch.bbox.yaw;
+  }
+  if (patch.approaches) {
+    it.approaches = patch.approaches.map((a) => ({
+      pos: new THREE.Vector3(...a.pos),
+      yaw: a.yaw,
+      label: a.label,
+    }));
+  }
+  if (patch.seat !== undefined) {
+    if (patch.seat === null) it.seat = undefined;
+    else it.seat = { pos: new THREE.Vector3(...patch.seat.pos), yaw: patch.seat.yaw };
+  }
+  if (patch.pickRadius != null) it.pickRadius = patch.pickRadius;
+
+  // merge into the override snapshot — accumulate edits across frames.
+  const prev = _overrides[id] ?? {};
+  const next: InteractableOverride = { ...prev };
+  if (patch.bbox) {
+    next.bbox = {
+      center: vec3ToTuple(it.bbox.center),
+      halfExtents: vec3ToTuple(it.bbox.halfExtents),
+      yaw: it.bbox.yaw,
     };
   }
-  // merge with existing override
-  const prev = _overrides[id] ?? {};
-  _overrides[id] = {
-    ...prev,
-    ...(patch.worldPos ? { worldPos: patch.worldPos } : {}),
-    ...(patch.hitRadius != null ? { hitRadius: patch.hitRadius } : {}),
-    ...(patch.approachAnchor ? { approachAnchor: patch.approachAnchor } : {}),
-  };
+  if (patch.approaches) {
+    next.approaches = it.approaches.map((a) => ({
+      pos: vec3ToTuple(a.pos),
+      yaw: a.yaw,
+      label: a.label,
+    }));
+  }
+  if (patch.seat !== undefined) {
+    next.seat = it.seat ? { pos: vec3ToTuple(it.seat.pos), yaw: it.seat.yaw } : null;
+  }
+  if (patch.pickRadius != null) next.pickRadius = it.pickRadius;
+  _overrides[id] = next;
   return true;
 }
 
-/** Snapshot of current overrides (the diff you'd save). */
+function vec3ToTuple(v: THREE.Vector3): Vec3T {
+  return [v.x, v.y, v.z];
+}
+
+/** Snapshot of just the override deltas. */
 export function getOverrides(): Record<string, InteractableOverride> {
   return _overrides;
 }
 
-/** Snapshot of every interactable's current full transform — useful as a
- *  paste-back format ("here's the new defaults"). */
+/** Snapshot of every interactable's full current transform (for export). */
 export function exportTransforms(): Record<string, Required<InteractableOverride>> {
   const out: Record<string, Required<InteractableOverride>> = {};
   for (const it of _registry) {
     out[it.id] = {
-      worldPos: [it.worldPos.x, it.worldPos.y, it.worldPos.z],
-      hitRadius: it.hitRadius,
-      approachAnchor: it.approachAnchor
-        ? {
-            pos: [it.approachAnchor.pos.x, it.approachAnchor.pos.y, it.approachAnchor.pos.z],
-            yaw: it.approachAnchor.yaw,
-          }
-        : { pos: [it.worldPos.x, 0, it.worldPos.z], yaw: 0 },
+      bbox: {
+        center: vec3ToTuple(it.bbox.center),
+        halfExtents: vec3ToTuple(it.bbox.halfExtents),
+        yaw: it.bbox.yaw,
+      },
+      approaches: it.approaches.map((a) => ({
+        pos: vec3ToTuple(a.pos),
+        yaw: a.yaw,
+        label: a.label,
+      })),
+      seat: it.seat ? { pos: vec3ToTuple(it.seat.pos), yaw: it.seat.yaw } : null,
+      pickRadius: it.pickRadius,
     };
   }
   return out;
 }
 
-/** Persist the override delta to localStorage so we resume next launch. */
+/** Persist override deltas to localStorage so we resume next launch. */
 export function saveOverridesToLocalStorage(): void {
   try {
     if (typeof localStorage === 'undefined') return;
@@ -317,26 +451,90 @@ export function saveOverridesToLocalStorage(): void {
   }
 }
 
-/** Hydrate from localStorage on app boot. Call once before any picker runs. */
+/** Hydrate from localStorage on app boot. v1 → v2 migration is automatic. */
 export function loadOverridesFromLocalStorage(): void {
   try {
     if (typeof localStorage === 'undefined') return;
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return;
-    const parsed = JSON.parse(raw) as Record<string, InteractableOverride>;
-    for (const [id, patch] of Object.entries(parsed)) {
-      setInteractableTransform(id, patch);
+    if (raw) {
+      const parsed = JSON.parse(raw) as Record<string, InteractableOverride>;
+      let count = 0;
+      for (const [id, ov] of Object.entries(parsed)) {
+        applyOverride(id, ov);
+        count += 1;
+      }
+      console.info('[interactables] hydrated', count, 'v2 overrides from storage');
+      return;
     }
-    console.info('[interactables] hydrated', Object.keys(parsed).length, 'overrides from storage');
+    // v1 migration path
+    const rawV1 = localStorage.getItem(STORAGE_KEY_V1);
+    if (rawV1) {
+      const parsed = JSON.parse(rawV1) as Record<
+        string,
+        {
+          worldPos?: Vec3T;
+          hitRadius?: number;
+          approachAnchor?: { pos: Vec3T; yaw: number };
+        }
+      >;
+      let count = 0;
+      for (const [id, v1] of Object.entries(parsed)) {
+        const it = _registry.find((i) => i.id === id);
+        if (!it) continue;
+        const patch: InteractablePatch = {};
+        if (v1.worldPos) {
+          patch.bbox = { ...patch.bbox, center: v1.worldPos };
+        }
+        if (v1.hitRadius != null) {
+          patch.pickRadius = v1.hitRadius;
+          // also widen bbox to roughly match v1 sphere if no v2 bbox lands
+          patch.bbox = {
+            ...patch.bbox,
+            halfExtents: [v1.hitRadius * 0.7, v1.hitRadius, v1.hitRadius * 0.7],
+          };
+        }
+        if (v1.approachAnchor) patch.approaches = [v1.approachAnchor];
+        setInteractableTransform(id, patch);
+        count += 1;
+      }
+      console.info('[interactables] migrated', count, 'v1 → v2 overrides');
+      // persist the migrated state under the v2 key + drop the v1 key.
+      saveOverridesToLocalStorage();
+      try {
+        localStorage.removeItem(STORAGE_KEY_V1);
+      } catch {
+        /* ignore */
+      }
+    }
   } catch (err) {
     console.warn('[interactables] load failed', err);
   }
 }
 
-/** Clear the saved overrides + reset the registry to defaults. */
+/** Pull a saved-defaults JSON in (typically loaded from
+ * /interactables.default.json). Layered BEFORE localStorage. */
+export function applyDefaultsSnapshot(snapshot: Record<string, InteractableOverride>): void {
+  let count = 0;
+  for (const [id, ov] of Object.entries(snapshot)) {
+    if (applyOverride(id, ov)) count += 1;
+  }
+  console.info('[interactables] applied defaults snapshot', count, 'entries');
+}
+
+function applyOverride(id: string, ov: InteractableOverride): boolean {
+  const patch: InteractablePatch = {};
+  if (ov.bbox) patch.bbox = { ...ov.bbox };
+  if (ov.approaches) patch.approaches = ov.approaches;
+  if (ov.seat !== undefined) patch.seat = ov.seat;
+  if (ov.pickRadius != null) patch.pickRadius = ov.pickRadius;
+  return setInteractableTransform(id, patch);
+}
+
+/** Clear saved overrides + reset the registry to defaults. */
 export function clearOverrides(): void {
   try {
     localStorage?.removeItem(STORAGE_KEY);
+    localStorage?.removeItem(STORAGE_KEY_V1);
   } catch {
     /* ignore */
   }
@@ -344,38 +542,108 @@ export function clearOverrides(): void {
   resetInteractables();
 }
 
-/* ------------------------------------------------------------------ */
-/* lookup helpers used by Player + Brain                               */
-/* ------------------------------------------------------------------ */
+/* -------------------------------------------------------------------------- */
+/* lookup helpers                                                             */
+/* -------------------------------------------------------------------------- */
 
 /**
- * Raycast from a camera direction and return the nearest interactable
- * hit within `maxDist`. Uses sphere intersection on hitRadius — cheaper
- * than mesh raycasting and more forgiving for "almost looking at it".
+ * Pick by camera ray. Tests against each interactable's OBB first (for
+ * solid props you should be able to click directly on); falls back to the
+ * pickRadius sphere for things like the window where the OBB is intentionally
+ * thin and you want a generous reticle.
  */
 export function pickInteractable(
   origin: THREE.Vector3,
   direction: THREE.Vector3,
   maxDist = 3.5,
 ): Interactable | null {
-  let best: { it: Interactable; t: number } | null = null;
   const dir = direction.clone().normalize();
-  const o = origin;
-
+  let best: { it: Interactable; t: number } | null = null;
   for (const it of _registry) {
-    // ray-sphere intersection
-    const oc = o.clone().sub(it.worldPos);
-    const b = oc.dot(dir);
-    const c = oc.dot(oc) - it.hitRadius * it.hitRadius;
-    const disc = b * b - c;
-    if (disc < 0) continue;
-    const sqrtDisc = Math.sqrt(disc);
-    let t = -b - sqrtDisc;
-    if (t < 0) t = -b + sqrtDisc; // origin inside sphere
-    if (t < 0 || t > maxDist) continue;
+    const tBox = rayOBBIntersect(origin, dir, it.bbox);
+    const tSphere = raySphereIntersect(origin, dir, it.bbox.center, it.pickRadius);
+    const t = tBox != null && tSphere != null ? Math.min(tBox, tSphere) : (tBox ?? tSphere);
+    if (t == null || t < 0 || t > maxDist) continue;
     if (!best || t < best.t) best = { it, t };
   }
   return best?.it ?? null;
+}
+
+/** Camera-ray pick that returns ONLY OBB hits (no sphere). Used by the
+ * calibration editor where the user expects to click on the visible box. */
+export function pickInteractableByOBB(
+  origin: THREE.Vector3,
+  direction: THREE.Vector3,
+  maxDist = 12,
+): Interactable | null {
+  const dir = direction.clone().normalize();
+  let best: { it: Interactable; t: number } | null = null;
+  for (const it of _registry) {
+    const t = rayOBBIntersect(origin, dir, it.bbox);
+    if (t == null || t < 0 || t > maxDist) continue;
+    if (!best || t < best.t) best = { it, t };
+  }
+  return best?.it ?? null;
+}
+
+/** Closest approach point to a given world position (defaults to first
+ *  approach if there are no spatial preferences yet). */
+export function nearestApproachTo(it: Interactable, p: THREE.Vector3): ApproachPoint | null {
+  if (it.approaches.length === 0) return null;
+  let best: ApproachPoint | null = null;
+  let bestD = Infinity;
+  for (const a of it.approaches) {
+    const d = a.pos.distanceToSquared(p);
+    if (d < bestD) {
+      bestD = d;
+      best = a;
+    }
+  }
+  return best;
+}
+
+/** Look up an approach by label; falls back to first if no match. */
+export function approachByLabel(it: Interactable, label?: string): ApproachPoint | null {
+  if (it.approaches.length === 0) return null;
+  if (!label) return it.approaches[0];
+  return it.approaches.find((a) => a.label === label) ?? it.approaches[0];
+}
+
+/** Convert OBB to an axis-aligned Box3 (loses orientation — useful only as
+ * a coarse bounding-box approximation; for accurate rendering, use a yawed
+ * group + a Box3Helper as in InteractableOverlay). */
+export function obbToBox3(obb: OBB): THREE.Box3 {
+  // we ignore yaw here — caller is expected to apply yaw via parent
+  // group.rotation if exact bounds matter. Safe for grid baking.
+  const min = obb.center.clone().sub(obb.halfExtents);
+  const max = obb.center.clone().add(obb.halfExtents);
+  return new THREE.Box3(min, max);
+}
+
+/** Test whether a world-space point is inside an OBB. */
+export function obbContainsPoint(obb: OBB, p: THREE.Vector3): boolean {
+  const local = p.clone().sub(obb.center);
+  // un-rotate by -yaw around Y
+  const c = Math.cos(-obb.yaw);
+  const s = Math.sin(-obb.yaw);
+  const lx = local.x * c - local.z * s;
+  const lz = local.x * s + local.z * c;
+  const ly = local.y;
+  return (
+    Math.abs(lx) <= obb.halfExtents.x &&
+    Math.abs(ly) <= obb.halfExtents.y &&
+    Math.abs(lz) <= obb.halfExtents.z
+  );
+}
+
+/** Get the avatar's seat target for a chair-kind interactable, or null. */
+export function seatPoseOf(it: Interactable): { pos: THREE.Vector3; yaw: number } | null {
+  if (it.seat) return it.seat;
+  // fallback for chairs without explicit seat: bbox.center projected to floor.
+  if (it.kind === 'chair') {
+    return { pos: new THREE.Vector3(it.bbox.center.x, 0, it.bbox.center.z), yaw: it.bbox.yaw };
+  }
+  return null;
 }
 
 /** Friendly verb for HUD prompts. */
@@ -398,4 +666,68 @@ export function actionLabel(action: InteractableAction): string {
     case 'use':
       return 'use';
   }
+}
+
+/* -------------------------------------------------------------------------- */
+/* ray intersection primitives                                                */
+/* -------------------------------------------------------------------------- */
+
+const _tmpInv = new THREE.Quaternion();
+const _tmpLocalOrigin = new THREE.Vector3();
+const _tmpLocalDir = new THREE.Vector3();
+
+/** Ray vs. OBB intersection. Returns the nearest positive t along the ray
+ * (in world units) or null if no hit. The OBB is treated as an AABB after
+ * we transform the ray into the box's local frame (yaw around Y only). */
+export function rayOBBIntersect(
+  origin: THREE.Vector3,
+  dir: THREE.Vector3,
+  obb: OBB,
+): number | null {
+  // Build world → local rotation: invert a yaw-only quaternion.
+  _tmpInv.setFromAxisAngle(new THREE.Vector3(0, 1, 0), -obb.yaw);
+  _tmpLocalOrigin.copy(origin).sub(obb.center).applyQuaternion(_tmpInv);
+  _tmpLocalDir.copy(dir).applyQuaternion(_tmpInv);
+
+  // slab test against [-halfExtents, +halfExtents]
+  let tMin = -Infinity;
+  let tMax = Infinity;
+  for (const axis of ['x', 'y', 'z'] as const) {
+    const o = _tmpLocalOrigin[axis];
+    const d = _tmpLocalDir[axis];
+    const h = obb.halfExtents[axis];
+    if (Math.abs(d) < 1e-8) {
+      if (o < -h || o > h) return null;
+      continue;
+    }
+    const inv = 1 / d;
+    let t1 = (-h - o) * inv;
+    let t2 = (h - o) * inv;
+    if (t1 > t2) [t1, t2] = [t2, t1];
+    if (t1 > tMin) tMin = t1;
+    if (t2 < tMax) tMax = t2;
+    if (tMin > tMax) return null;
+  }
+  if (tMax < 0) return null;
+  return tMin >= 0 ? tMin : tMax;
+}
+
+/** Ray-sphere intersection helper. */
+function raySphereIntersect(
+  origin: THREE.Vector3,
+  dir: THREE.Vector3,
+  center: THREE.Vector3,
+  radius: number,
+): number | null {
+  const oc = origin.clone().sub(center);
+  const b = oc.dot(dir);
+  const c = oc.dot(oc) - radius * radius;
+  const disc = b * b - c;
+  if (disc < 0) return null;
+  const sqrtDisc = Math.sqrt(disc);
+  const t1 = -b - sqrtDisc;
+  const t2 = -b + sqrtDisc;
+  if (t1 >= 0) return t1;
+  if (t2 >= 0) return t2;
+  return null;
 }
