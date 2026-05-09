@@ -78,51 +78,100 @@ function distance(a: NumericTraits, b: NumericTraits): number {
 
 /**
  * Pick 4 cards for a round. Strategy:
- *   round 1: max-variance — one card per archetype slot (A1, A2, A3, A4)
- *   round 2: narrow — 4 cards from the user's leading archetype, varying disposition
- *   round 3: lock — 4 cards near the current centroid, varying along style axes
+ *   round 1: max-variance — one card per archetype slot (A1, A2, A3, A4),
+ *            FRESH RANDOM each session so the deck never repeats
+ *   round 2: narrow — 4 cards near the centroid, top-8 pool (was 16)
+ *   round 3: lock  — 4 cards even tighter, top-6 pool, weighted toward nearest
  *
- * deterministic per (round, seed). seed is the user's session id so reloads
- * see the same deck.
+ * randomized per call (Math.random) — no seed determinism. reloading the
+ * page during the flow gives a fresh deck.
  */
 export function composeRound(
   round: 1 | 2 | 3,
-  seed: string,
+  _seed: string, // kept for signature compat — no longer used
   centroid: NumericTraits | null,
   alreadySeen: Set<string>,
 ): LibraryEntry[] {
   const pool = DEMO_LIBRARY.filter((e) => !alreadySeen.has(e.id));
-  const rng = mulberry32(hashSeed(seed) + round);
 
   if (round === 1 || !centroid) {
-    // one card per archetype, max-variance
+    // one card per archetype, max-variance, randomized each call
     const byArch: Record<AestheticArchetype, LibraryEntry[]> = { A1: [], A2: [], A3: [], A4: [] };
     for (const e of pool) byArch[archetypeOf(e)].push(e);
     const picks: LibraryEntry[] = [];
     for (const slot of ['A1', 'A2', 'A3', 'A4'] as const) {
       const bucket = byArch[slot];
       if (!bucket.length) continue;
-      // bias toward higher art_quality + a deterministic shuffle
+      // bias toward higher art_quality, then random pick from top quartile
       bucket.sort((a, b) => b.tags.art_quality - a.tags.art_quality);
-      const top = bucket.slice(0, 8);
-      const idx = Math.floor(rng() * top.length);
+      const topN = Math.max(1, Math.floor(bucket.length * 0.5));
+      const top = bucket.slice(0, topN);
+      const idx = Math.floor(Math.random() * top.length);
       picks.push(top[idx]!);
     }
     return picks;
   }
 
-  // round 2 + 3: cards near current centroid, prefer variety
+  // rounds 2 + 3: cards near current centroid. tighter pool than before.
+  // round 2 → top 8, round 3 → top 6 (locked-in feel).
+  const poolSize = round === 2 ? 8 : 6;
   const ranked = pool
     .map((e) => ({ e, d: distance(centroid, vectorOf(e)) }))
     .sort((a, b) => a.d - b.d);
-  // grab top 16, shuffle to 4
-  const top = ranked.slice(0, 16).map((r) => r.e);
+  const top = ranked.slice(0, poolSize).map((r) => r.e);
   const out: LibraryEntry[] = [];
   while (out.length < 4 && top.length) {
-    const i = Math.floor(rng() * top.length);
+    // weighted random toward nearer cards: square-bias selection
+    const r = Math.random() ** 1.6; // skews toward 0 → earlier (closer) indices
+    const i = Math.min(top.length - 1, Math.floor(r * top.length));
     out.push(top.splice(i, 1)[0]!);
   }
   return out;
+}
+
+/**
+ * Refresh the un-swiped tail of the current round's deck after a yes-swipe.
+ * Called mid-round so the next cards under the user's finger get more similar
+ * to what they just liked.
+ *
+ *   currentCards: the round's deck as it exists right now
+ *   cursor: which index the user is currently looking at (already swiped 0..cursor-1)
+ *   centroid: the running centroid (recomputed from yesPicks-so-far)
+ *   alreadySeen: every card id ever shown across rounds
+ *
+ * keeps the cards already passed (cards[0..cursor-1]) and the immediate top
+ * card (cards[cursor]) intact, replaces cards[cursor+1..] with closer picks.
+ */
+export function refreshDeckTail(
+  currentCards: LibraryEntry[],
+  cursor: number,
+  centroid: NumericTraits | null,
+  alreadySeen: Set<string>,
+): LibraryEntry[] {
+  if (!centroid || cursor >= currentCards.length - 1) return currentCards;
+
+  // keep card at cursor (current top) — swap only what comes after
+  const keepHead = currentCards.slice(0, cursor + 1);
+  const slotsToFill = currentCards.length - keepHead.length;
+
+  // build seen set from all already-seen + cards we're keeping
+  const seen = new Set(alreadySeen);
+  for (const c of keepHead) seen.add(c.id);
+
+  const pool = DEMO_LIBRARY.filter((e) => !seen.has(e.id));
+  const ranked = pool
+    .map((e) => ({ e, d: distance(centroid, vectorOf(e)) }))
+    .sort((a, b) => a.d - b.d);
+  const top = ranked.slice(0, Math.max(slotsToFill * 3, 6)).map((r) => r.e);
+
+  const tail: LibraryEntry[] = [];
+  while (tail.length < slotsToFill && top.length) {
+    const r = Math.random() ** 1.6;
+    const i = Math.min(top.length - 1, Math.floor(r * top.length));
+    tail.push(top.splice(i, 1)[0]!);
+  }
+
+  return [...keepHead, ...tail];
 }
 
 /**

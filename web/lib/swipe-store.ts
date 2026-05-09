@@ -10,7 +10,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { LibraryEntry, NumericTraits, AestheticArchetype } from '@angel/shared';
-import { centroidOf, composeRound, nearestArchetype } from './library';
+import { centroidOf, composeRound, nearestArchetype, refreshDeckTail } from './library';
 
 type Decision = 'yes' | 'no';
 
@@ -91,7 +91,21 @@ export const useSwipeStore = create<SwipeState>()(
         const nextCursor = s.cursor + 1;
 
         if (nextCursor < s.cards.length) {
-          set({ history: newHistory, yesPicks: newYes, cursor: nextCursor });
+          // mid-round: if it was a yes, recompute the running centroid and
+          // refresh the un-swiped tail of the deck so the next cards under
+          // the user's finger drift toward what they just liked.
+          let nextCards = s.cards;
+          if (decision === 'yes' && newYes.length > 0) {
+            const runningCentroid = centroidOf(newYes);
+            const seen = new Set(newHistory.map((h) => h.cardId));
+            nextCards = refreshDeckTail(s.cards, nextCursor, runningCentroid, seen);
+          }
+          set({
+            history: newHistory,
+            yesPicks: newYes,
+            cursor: nextCursor,
+            cards: nextCards,
+          });
           return 'next-card';
         }
 

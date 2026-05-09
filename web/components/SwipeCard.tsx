@@ -104,7 +104,9 @@ export function SwipeCard({ entry, onSwipe, onHover, isTop, zIndex }: SwipeCardP
 
   const keywords = isTop ? extractKeywords(entry.tags.personality_blurb) : [];
 
-  const thumbSrc = `/library/${entry.id}.jpg`;
+  // portraits are the head + shoulders crops generated from _frames/.
+  // they sit in /library/_portraits/<id>.jpg, named by vroid id.
+  const thumbSrc = `/library/_portraits/${entry.id}.jpg`;
 
   return (
     <motion.div
