@@ -47,6 +47,10 @@ export type AngelStore = {
   persona: PersonaState;
   setPersona: (p: PersonaState) => void;
   applyClaim: (claim: ClaimTokenPayload, vrmUrl?: string) => void;
+  /** swap just the avatar body without touching personality. Used by the
+   *  esc-menu's body picker to preview different VRMs against the same
+   *  persona. Persists via setupPersonaPersist's subscription. */
+  swapVrm: (vrmUrl: string, paletteHex?: string) => void;
 
   // chat
   chat: ChatMessage[];
@@ -143,12 +147,31 @@ export const useAngelStore = create<AngelStore>()(
         },
       });
     },
+    swapVrm: (vrmUrl, paletteHex) =>
+      set((s) => {
+        if (!s.persona) return s;
+        if (paletteHex) applyPaletteToDocument(paletteHex);
+        return {
+          persona: {
+            ...s.persona,
+            vrmUrl,
+            ...(paletteHex ? { paletteHex } : {}),
+          },
+        };
+      }),
 
     chat: [],
     appendChat: (msg) =>
-      set((s) => ({
-        chat: [...s.chat, { ts: Date.now(), ...msg } as ChatMessage].slice(-80),
-      })),
+      set((s) => {
+        // dedupe by id — React Strict Mode double-invokes setup effects in
+        // dev, which causes ActionRunner's `speak` branch to call appendChat
+        // twice with the same SceneAction.id. Use patchChat to mutate an
+        // existing entry; appendChat is strictly add-once-per-id.
+        if (s.chat.some((m) => m.id === msg.id)) return s;
+        return {
+          chat: [...s.chat, { ts: Date.now(), ...msg } as ChatMessage].slice(-80),
+        };
+      }),
     patchChat: (id, patch) =>
       set((s) => ({
         chat: s.chat.map((m) => (m.id === id ? { ...m, ...patch } : m)),

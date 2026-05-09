@@ -41,11 +41,6 @@ export const ANCHOR_FALLBACKS: Record<AnchorId, AnchorTransform> = {
     sit: true,
     label: 'desk chair',
   },
-  bookshelf: {
-    position: new THREE.Vector3(1.8, 0, -1.2),
-    rotationY: Math.PI / 2,
-    label: 'bookshelf',
-  },
   window: {
     position: new THREE.Vector3(0, 0, -1.8),
     rotationY: Math.PI, // facing out the window
@@ -104,7 +99,6 @@ export const ALL_ANCHORS: AnchorId[] = [
   'center',
   'desk_stand',
   'desk_sit',
-  'bookshelf',
   'window',
   'couch_stand',
   'couch_sit',
@@ -113,7 +107,7 @@ export const ALL_ANCHORS: AnchorId[] = [
 
 /** Anchors the avatar can actually sit on. Source of truth for the
  *  orchestrator's "what is a chair" knowledge — the brain is told this
- *  whitelist so it never asks her to sit on the door or the bookshelf,
+ *  whitelist so it never asks her to sit on the door or the window,
  *  and the runtime guards against it too. */
 export const CHAIR_ANCHORS: AnchorId[] = ALL_ANCHORS.filter(
   (id) => ANCHOR_FALLBACKS[id]?.sit === true,
@@ -121,4 +115,22 @@ export const CHAIR_ANCHORS: AnchorId[] = ALL_ANCHORS.filter(
 
 export function isChairAnchor(id: AnchorId): boolean {
   return ANCHOR_FALLBACKS[id]?.sit === true;
+}
+
+/**
+ * VRM forward-axis convention for this app.
+ *
+ * `@pixiv/three-vrm` normalizes both VRM 0.x and VRM 1.0 so that the
+ * avatar's face points down world -Z when the wrapping group's
+ * `rotation.y === 0`. That means a naive `atan2(dx, dz)` — which assumes
+ * +Z forward — points her *back* at the target, not her face.
+ *
+ * `yawToFace(dx, dz)` returns the `rotation.y` value that makes the
+ * avatar's nose point along the world-space delta `(dx, dz)`. Use it
+ * anywhere we want her to face a target (faces, walks, body-tracking,
+ * etc.). Literal yaws baked into anchors / calibrations are already
+ * stored as direct `rotation.y` values, so they don't go through here.
+ */
+export function yawToFace(dx: number, dz: number): number {
+  return Math.atan2(dx, dz) + Math.PI;
 }

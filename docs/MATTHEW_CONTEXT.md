@@ -56,7 +56,6 @@ landing + swipe + vector  ─────►  pair via claim token
 - single glb scene (sketchfab/booth.pm, anime-styled bedroom or apartment)
 - in blender, add named empties as anchors:
   - `Anchor_Desk_Sit`, `Anchor_Desk_Stand`
-  - `Anchor_Bookshelf`
   - `Anchor_Window`
   - `Anchor_Couch_Sit`, `Anchor_Couch_Stand`
   - `Anchor_Door`
@@ -108,7 +107,7 @@ Lock this down with Stephen — both sides code against it. Add new actions only
 ```ts
 type AnchorId =
   | 'desk_sit' | 'desk_stand'
-  | 'bookshelf' | 'window'
+  | 'window'
   | 'couch_sit' | 'couch_stand'
   | 'door' | 'center'
 

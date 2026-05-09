@@ -5,7 +5,7 @@ import type { RefObject } from 'react';
 import type { AnchorId, SceneAction } from '@angel/shared';
 
 import { useAngelStore } from '@/stores/angel';
-import { resolveAnchor, isChairAnchor } from '@/lib/anchors';
+import { resolveAnchor, isChairAnchor, yawToFace } from '@/lib/anchors';
 import type { AvatarHandle } from '@/components/Avatar';
 import { ipc } from '@/lib/ipc';
 import { resolveCollision } from '@/lib/collision';
@@ -161,7 +161,7 @@ export function ActionRunner({ avatarRef, roomRoot }: Props) {
           } else {
             ctx.toPos.copy(root.position);
           }
-          ctx.toRotY = Math.atan2(player.x - ctx.toPos.x, player.z - ctx.toPos.z);
+          ctx.toRotY = yawToFace(player.x - ctx.toPos.x, player.z - ctx.toPos.z);
         } else {
           const anchor = resolveAnchor(current.anchor, roomRoot);
           ctx.toPos = anchor.position.clone();
@@ -199,7 +199,7 @@ export function ActionRunner({ avatarRef, roomRoot }: Props) {
         } else {
           ctx.toPos.copy(root.position);
         }
-        ctx.toRotY = Math.atan2(player.x - ctx.toPos.x, player.z - ctx.toPos.z);
+        ctx.toRotY = yawToFace(player.x - ctx.toPos.x, player.z - ctx.toPos.z);
         // walk_to_user goes to a free space, not into a piece of furniture, so
         // the avatar collides against everything (no furniture passthrough).
         ctx.walkColliders = allCollidersRef.current;
@@ -211,7 +211,7 @@ export function ActionRunner({ avatarRef, roomRoot }: Props) {
       }
       case 'sit_at': {
         // chair guard — refuse to sit on non-chair anchors (window, door,
-        // bookshelf...). Logs and degrades to an idle pose.
+        // window...). Logs and degrades to an idle pose.
         if (!isChairAnchor(current.anchor)) {
           console.warn('[scene] refused sit_at on non-chair anchor', current.anchor);
           if (current.posOverride) {
@@ -298,7 +298,7 @@ export function ActionRunner({ avatarRef, roomRoot }: Props) {
         }
         const dx = targetWorldPos.x - root.position.x;
         const dz = targetWorldPos.z - root.position.z;
-        ctx.toRotY = Math.atan2(dx, dz);
+        ctx.toRotY = yawToFace(dx, dz);
         ctx.totalDuration = 0.35;
         break;
       }
@@ -412,7 +412,7 @@ export function ActionRunner({ avatarRef, roomRoot }: Props) {
             const t2 = (distP - stopShort) / distP;
             ctx.toPos.set(root.position.x + dxP * t2, root.position.y, root.position.z + dzP * t2);
           }
-          ctx.toRotY = Math.atan2(player.x - ctx.toPos.x, player.z - ctx.toPos.z);
+          ctx.toRotY = yawToFace(player.x - ctx.toPos.x, player.z - ctx.toPos.z);
           // keep the final waypoint anchored to the live target
           if (ctx.path.length > 0) {
             ctx.path[ctx.path.length - 1] = { x: ctx.toPos.x, z: ctx.toPos.z };
@@ -512,12 +512,14 @@ export function ActionRunner({ avatarRef, roomRoot }: Props) {
         }
 
         // face direction of actual motion (after collision) so she pivots
-        // along walls rather than facing through them
+        // along walls rather than facing through them. yawToFace bakes in
+        // the VRM's -Z forward axis so her nose, not her back, points along
+        // the walk direction.
         const moveDx = root.position.x - ctx.fromPos.x;
         const moveDz = root.position.z - ctx.fromPos.z;
-        const lookDir = Math.atan2(wpDx, wpDz);
+        const lookDir = yawToFace(wpDx, wpDz);
         const motionLen = Math.hypot(moveDx, moveDz);
-        const motionDir = motionLen > 0.05 ? Math.atan2(moveDx, moveDz) : lookDir;
+        const motionDir = motionLen > 0.05 ? yawToFace(moveDx, moveDz) : lookDir;
         const targetYaw = lookDir + shortestAngleDelta(lookDir, motionDir) * 0.4;
         const yawDelta = shortestAngleDelta(root.rotation.y, targetYaw);
         root.rotation.y += yawDelta * Math.min(1, dt * 8);
@@ -724,7 +726,7 @@ function expandInteract(
     if (verb === 'sit_playful') {
       out.push({ id: newId('clip'), type: 'play_clip', clip: 'sitting_playful', durationMs: 4000 });
     }
-  } else if (verb === 'look_out' || verb === 'browse') {
+  } else if (verb === 'look_out') {
     const a = approachOf(interactableId);
     out.push({
       id: newId('walk'),
@@ -733,11 +735,7 @@ function expandInteract(
       speed: 'normal',
       ...(a ? { posOverride: a.pos, yawOverride: a.yaw } : {}),
     });
-    if (verb === 'browse') {
-      out.push({ id: newId('read'), type: 'play_clip', clip: 'reading', durationMs: 4000 });
-    } else {
-      out.push({ id: newId('thk'), type: 'play_clip', clip: 'thinking', durationMs: 2400 });
-    }
+    out.push({ id: newId('thk'), type: 'play_clip', clip: 'thinking', durationMs: 2400 });
   } else if (verb === 'open' || verb === 'lay_down') {
     const a = approachOf(interactableId);
     out.push({

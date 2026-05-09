@@ -109,7 +109,6 @@ const KIND_COLORS: Record<string, { idle: string; focus: string }> = {
   desk: { idle: '#ff7eb6', focus: '#ffe066' },
   computer: { idle: '#7eeaff', focus: '#ffe066' },
   window: { idle: '#7fffaf', focus: '#ffe066' },
-  bookshelf: { idle: '#ffd166', focus: '#fff7c2' },
   door: { idle: '#ff9b6d', focus: '#ffe066' },
   bed: { idle: '#d8a4ff', focus: '#ffe066' },
   use: { idle: '#cccccc', focus: '#ffe066' },
@@ -157,10 +156,10 @@ export function InteractablePicker({
     const p = useAngelStore.getState().player;
     playerPosRef.current.set(p.x, p.y - 1.5, p.z); // approx feet
     const dist = playerPosRef.current.distanceTo(hit.bbox.center);
-    // big props (workstation, window, bookshelf) get a slightly longer reach
+    // big props (workstation, window, door) get a slightly longer reach
     // since their hitbox center is up high or behind the interactable
     const kindReach =
-      hit.kind === 'window' || hit.kind === 'bookshelf' || hit.kind === 'desk' || hit.kind === 'door'
+      hit.kind === 'window' || hit.kind === 'desk' || hit.kind === 'door'
         ? reach + 0.8
         : reach;
     if (dist > kindReach) {

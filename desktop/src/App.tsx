@@ -4,10 +4,12 @@ import { Scene } from '@/components/Scene';
 import { ChatOverlay } from '@/components/ChatOverlay';
 import { Subtitle } from '@/components/Subtitle';
 import { StateBars } from '@/components/StateBars';
+import { Onboarding } from '@/components/onboarding/Onboarding';
 import { useAngelStore } from '@/stores/angel';
 import { ipc } from '@/lib/ipc';
 import { unlockAudio } from '@/lib/animalese';
 import { setupConversationLayer } from '@/lib/conversationLayer';
+import { setupPersonaPersist } from '@/lib/personaPersist';
 import type { SceneAction } from '@angel/shared';
 
 /** Composition root. Wires the IPC bridge → store, mounts 3D + HUD. */
@@ -69,6 +71,11 @@ export function App() {
       heartbeatMs: 60_000, // demo cadence — bump to 300_000 for prod
     });
 
+    // hydrate the persona from localStorage if a previous session committed
+    // one (so re-opening the app skips onboarding) + write back on future
+    // commits. Needs to run after the store mounts.
+    const disposePersist = setupPersonaPersist();
+
     return () => {
       offAction();
       offChat();
@@ -76,8 +83,18 @@ export function App() {
       offClaim();
       window.removeEventListener('pointerdown', onFirstClick);
       disposeLayer();
+      disposePersist();
     };
   }, [enqueue, appendChat, patchChat, setStoreState, applyClaim]);
+
+  // Pre-room overlay: until the user has committed a persona (either via
+  // the swipe flow or a saved one from a previous launch), skip the 3D
+  // scene entirely and run the onboarding flow. Loading the room costs an
+  // expensive VRM + glb fetch, so gating it here also makes first-launch
+  // feel snappy.
+  if (!persona) {
+    return <Onboarding />;
+  }
 
   return (
     <>

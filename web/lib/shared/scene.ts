@@ -7,7 +7,6 @@
 export type AnchorId =
   | 'desk_sit'
   | 'desk_stand'
-  | 'bookshelf'
   | 'window'
   | 'couch_sit'
   | 'couch_stand'

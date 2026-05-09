@@ -7,7 +7,6 @@
 export type AnchorId =
   | 'desk_sit'
   | 'desk_stand'
-  | 'bookshelf'
   | 'window'
   | 'couch_sit'
   | 'couch_stand'
@@ -55,7 +54,6 @@ export type InteractableVerb =
   | 'sit_playful'
   | 'sit_and_type'
   | 'look_out'
-  | 'browse'
   | 'open'
   | 'lay_down';
 

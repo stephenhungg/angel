@@ -52,9 +52,12 @@ export async function loadVRM(url: string): Promise<VRM> {
     }
   });
 
-  // VRM 0.x avatars face -Z by default in three; VRM 1.0 face +Z. Both
-  // appear authored to face the user (camera at +Z looking at origin),
-  // so we leave rotation alone and let the action runner orient on demand.
+  // @pixiv/three-vrm normalizes both VRM 0.x and VRM 1.0 so that the
+  // avatar faces world -Z when its wrapping group's `rotation.y === 0`.
+  // This means a naïve `Math.atan2(dx, dz)` to "face a point" will point
+  // her *back* at the target, not her face. Use `yawToFace(dx, dz)` from
+  // `@/lib/anchors` for any "look toward target" yaw computation; literal
+  // yaws stored on anchors / calibrations don't need the offset.
 
   // log final bbox so we can see where the avatar landed
   const bbox = new THREE.Box3().setFromObject(vrm.scene);

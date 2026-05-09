@@ -16,8 +16,9 @@ import {
   PlayerInteractKeyHandler,
 } from '@/components/InteractableOverlay';
 import { CalibrationOverlay, CalibrationRaycaster, CalibrationGhostPreview } from '@/components/CalibrationOverlay';
-import { isChairAnchor } from '@/lib/anchors';
+import { isChairAnchor, yawToFace } from '@/lib/anchors';
 import { useAngelStore } from '@/stores/angel';
+import { listVrms, type VrmMatch } from '@/lib/vrmMatcher';
 
 // Original placeholder VRM, restored from git after the swipe-pipeline
 // merge clobbered it. The abison-curated pool (cottagecore, academia,
@@ -159,7 +160,7 @@ function AvatarBodyTrackUser({
     const dist = Math.hypot(dx, dz);
     if (dist < BODY_TRACK_MIN_DIST) return; // user standing on her — skip
 
-    const targetYaw = Math.atan2(dx, dz);
+    const targetYaw = yawToFace(dx, dz);
     const delta = shortestAngle(root.rotation.y, targetYaw);
     if (Math.abs(delta) < BODY_TRACK_DEADZONE) return;
 
@@ -355,6 +356,7 @@ function VrmLoadProbe({
 function PointerLockPrompt() {
   const persona = useAngelStore((s) => s.persona);
   const stateEmotion = useAngelStore((s) => s.state.emotion);
+  const swapVrm = useAngelStore((s) => s.swapVrm);
   const accent = persona?.paletteHex ?? '#ff7eb6';
 
   const controls: Array<{ keys: string[]; label: string }> = [
@@ -486,7 +488,26 @@ function PointerLockPrompt() {
         {/* divider */}
         <div
           style={{
-            margin: '26px auto 18px',
+            margin: '26px auto 14px',
+            height: 1,
+            width: '70%',
+            background: `linear-gradient(90deg, transparent, ${accent}66, transparent)`,
+          }}
+        />
+
+        {/* body picker — swap which VRM she's wearing without losing
+            personality. Useful for testing all 5 curated bodies against the
+            same persona. The currently-loaded vrm gets a glowing accent ring. */}
+        <VrmBodyPicker
+          currentVrmUrl={persona?.vrmUrl}
+          onSelect={(match) => swapVrm(match.vrmUrl)}
+          accent={accent}
+        />
+
+        {/* divider 2 */}
+        <div
+          style={{
+            margin: '14px auto 18px',
             height: 1,
             width: '70%',
             background: `linear-gradient(90deg, transparent, ${accent}66, transparent)`,
@@ -530,6 +551,46 @@ function PointerLockPrompt() {
             </div>
           ))}
         </div>
+
+        {/* rediscover — wipes saved persona + swipe state, sends back to
+            title. Pointer-events on so it's clickable through the otherwise
+            click-through pause backdrop. */}
+        <button
+          type="button"
+          data-no-lock
+          onClick={(e) => {
+            e.stopPropagation();
+            void import('@/lib/personaPersist').then((m) => m.rediscoverAngel());
+          }}
+          style={{
+            marginTop: 22,
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            padding: '6px 14px',
+            borderRadius: 999,
+            background: 'transparent',
+            border: `1px solid ${accent}55`,
+            color: 'var(--angel-fg-muted)',
+            fontFamily: 'var(--font-ui)',
+            fontSize: 10,
+            letterSpacing: '0.18em',
+            textTransform: 'uppercase',
+            cursor: 'pointer',
+            pointerEvents: 'auto',
+            transition: 'border-color 180ms ease, color 180ms ease',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.borderColor = accent;
+            e.currentTarget.style.color = 'var(--angel-fg)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.borderColor = `${accent}55`;
+            e.currentTarget.style.color = 'var(--angel-fg-muted)';
+          }}
+        >
+          ↺ rediscover
+        </button>
       </div>
     </div>
   );
@@ -586,6 +647,113 @@ function CornerSparkle({ accent, style }: { accent: string; style: React.CSSProp
     >
       ✦
     </span>
+  );
+}
+
+/**
+ * Body picker — five tappable VRM thumbnails for swapping which model is
+ * loaded into the scene. Currently-loaded one gets a glowing accent ring.
+ * Personality (voice, palette, traits) stays put — only the model file
+ * swaps. Useful for testing all 5 curated bodies without re-running the
+ * full swipe flow each time.
+ */
+function VrmBodyPicker({
+  currentVrmUrl,
+  onSelect,
+  accent,
+}: {
+  currentVrmUrl: string | undefined;
+  onSelect: (match: VrmMatch) => void;
+  accent: string;
+}) {
+  const vrms = listVrms();
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center', pointerEvents: 'auto' }}>
+      <div
+        style={{
+          fontFamily: 'var(--font-ui)',
+          fontSize: 9,
+          letterSpacing: '0.32em',
+          textTransform: 'uppercase',
+          color: 'var(--angel-fg-muted)',
+          opacity: 0.7,
+        }}
+      >
+        body
+      </div>
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
+        {vrms.map((v) => {
+          const selected = currentVrmUrl === v.vrmUrl;
+          return (
+            <button
+              key={v.id}
+              type="button"
+              data-no-lock
+              title={`${v.name} · ${v.blurb}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                onSelect(v);
+              }}
+              style={{
+                position: 'relative',
+                width: 56,
+                height: 56,
+                padding: 0,
+                borderRadius: 14,
+                overflow: 'hidden',
+                cursor: 'pointer',
+                background: 'rgba(20,12,28,0.9)',
+                border: selected
+                  ? `2px solid ${accent}`
+                  : '2px solid rgba(255,255,255,0.08)',
+                boxShadow: selected
+                  ? `0 0 0 1px rgba(255,255,255,0.06) inset, 0 0 18px -4px ${accent}, 0 4px 12px -4px rgba(0,0,0,0.6)`
+                  : '0 1px 0 rgba(255,255,255,0.06) inset, 0 4px 12px -6px rgba(0,0,0,0.5)',
+                transition: 'transform 140ms ease, border-color 180ms ease, box-shadow 180ms ease',
+                pointerEvents: 'auto',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'translateY(-2px)';
+                if (!selected) e.currentTarget.style.borderColor = `${accent}88`;
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'translateY(0)';
+                if (!selected) e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)';
+              }}
+            >
+              <img
+                src={v.previewUrl}
+                alt={v.name}
+                draggable={false}
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'cover',
+                  objectPosition: 'top',
+                  pointerEvents: 'none',
+                  display: 'block',
+                }}
+              />
+              {selected && (
+                <span
+                  aria-hidden
+                  style={{
+                    position: 'absolute',
+                    bottom: 3,
+                    right: 3,
+                    width: 8,
+                    height: 8,
+                    borderRadius: 999,
+                    background: accent,
+                    boxShadow: `0 0 6px ${accent}`,
+                  }}
+                />
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 

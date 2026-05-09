@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { registerProtocolHandler, parseClaimFromArgs } from './persona/claim';
 import type { SceneAction, SceneActionComplete, ClaimTokenPayload } from '@angel/shared';
 import { runMockOrchestrator, registerMockHandlers, bootAutonomyBeat } from './agent/mock';
+import { synthesizePersonality, respondToName } from './agent/onboarding';
 import {
   runOrchestrator,
   isAvailable as isBrainAvailable,
@@ -268,6 +269,22 @@ ipcMain.handle('tool:invoke', async (_evt, payload: { name: string; args?: Recor
       } catch (err) {
         console.warn('[main] saveInteractableDefaults failed', err);
         return { ok: false, error: String(err) } as const;
+      }
+    }
+    case 'onboarding:synthesize-personality': {
+      try {
+        return await synthesizePersonality(args as Parameters<typeof synthesizePersonality>[0]);
+      } catch (err) {
+        console.warn('[main] synthesize-personality failed', err);
+        return { personalityMd: '', fallback: true, error: String(err) };
+      }
+    }
+    case 'onboarding:naming-response': {
+      try {
+        return await respondToName(args as Parameters<typeof respondToName>[0]);
+      } catch (err) {
+        console.warn('[main] naming-response failed', err);
+        return { response: '' };
       }
     }
     case 'memory_recall':

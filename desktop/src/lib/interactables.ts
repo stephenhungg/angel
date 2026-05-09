@@ -25,7 +25,6 @@ export type InteractableKind =
   | 'desk'
   | 'computer'
   | 'window'
-  | 'bookshelf'
   | 'door'
   | 'bed';
 
@@ -38,7 +37,6 @@ export type InteractableAction =
   | 'sit_playful'
   | 'sit_and_type'
   | 'look_out'
-  | 'browse'
   | 'open'
   | 'lay_down'
   | 'use';
@@ -55,7 +53,7 @@ export type OBB = {
 };
 
 /** A pre-arrival stand point: where the avatar's feet land just BEFORE the
- * sit / look / browse action begins. Multiple per interactable lets a desk
+ * sit / look action begins. Multiple per interactable lets a desk
  * have a "left side" and "right side" entry, etc. */
 export type ApproachPoint = {
   pos: THREE.Vector3;
@@ -178,23 +176,6 @@ export const INTERACTABLES_DEFAULT: readonly Interactable[] = [
     anchorId: 'window',
   },
   {
-    id: 'bookshelf',
-    kind: 'bookshelf',
-    label: 'bookshelf',
-    bbox: {
-      center: v3(2.05, 1.1, -1.2),
-      halfExtents: v3(0.18, 1.0, 0.5),
-      yaw: 0,
-    },
-    approaches: [
-      { pos: v3(1.6, 0, -1.2), yaw: Math.PI / 2, label: 'front' },
-    ],
-    pickRadius: 0.85,
-    primaryAction: 'browse',
-    actions: ['browse'],
-    anchorId: 'bookshelf',
-  },
-  {
     id: 'door',
     kind: 'door',
     label: 'door',
@@ -248,7 +229,6 @@ const KIND_PATTERNS: Array<{ kind: InteractableKind; rx: RegExp }> = [
   { kind: 'desk', rx: /desk|table\b(?!\s*lamp)/i },
   { kind: 'computer', rx: /computer|monitor|laptop|pc\b|screen/i },
   { kind: 'window', rx: /window/i },
-  { kind: 'bookshelf', rx: /bookshelf|shelf|bookcase/i },
   { kind: 'door', rx: /door|exit/i },
   { kind: 'bed', rx: /\bbed\b|mattress/i },
 ];
@@ -458,12 +438,28 @@ export function loadOverridesFromLocalStorage(): void {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw) as Record<string, InteractableOverride>;
-      let count = 0;
+      let applied = 0;
+      let pruned = 0;
       for (const [id, ov] of Object.entries(parsed)) {
-        applyOverride(id, ov);
-        count += 1;
+        if (applyOverride(id, ov)) {
+          applied += 1;
+        } else {
+          // id no longer exists in the registry (e.g. removed prop) — drop
+          // it from the persisted blob so the warning doesn't fire on
+          // every reload forever.
+          delete parsed[id];
+          pruned += 1;
+        }
       }
-      console.info('[interactables] hydrated', count, 'v2 overrides from storage');
+      if (pruned > 0) {
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
+          console.info('[interactables] pruned', pruned, 'stale override(s) from storage');
+        } catch {
+          /* ignore quota/serialization errors */
+        }
+      }
+      console.info('[interactables] hydrated', applied, 'v2 overrides from storage');
       return;
     }
     // v1 migration path
@@ -657,8 +653,6 @@ export function actionLabel(action: InteractableAction): string {
       return 'work at desk';
     case 'look_out':
       return 'look outside';
-    case 'browse':
-      return 'browse';
     case 'open':
       return 'open';
     case 'lay_down':

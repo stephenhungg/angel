@@ -79,12 +79,30 @@ export function DeskMonitor({
 
   // wire main-process delegate/verify streams → store. Each codex stdout
   // chunk lands as a fresh log line so the monitor paints live.
+  //
+  // The preload bridge can lag behind the renderer when Electron is
+  // started off a stale dist-electron build (before HMR picked up new
+  // bridge functions). Guard each subscriber so a missing channel
+  // becomes a console warn instead of unmounting the whole canvas.
   useEffect(() => {
     if (typeof window === 'undefined' || !window.angel) return;
-    const offStream = window.angel.onCodexStream(({ chunk }) => {
+    const angel = window.angel as Partial<typeof window.angel>;
+
+    const offs: Array<() => void> = [];
+    const safeOn = <T,>(name: string, fn: ((cb: (e: T) => void) => () => void) | undefined, cb: (e: T) => void) => {
+      if (typeof fn !== 'function') {
+        // surface a one-time hint so the dev knows the preload is stale,
+        // but don't throw — DeskMonitor still renders without streams.
+        console.warn(`[DeskMonitor] window.angel.${name} unavailable — preload may be stale, restart Electron`);
+        return;
+      }
+      offs.push(fn(cb));
+    };
+
+    safeOn<{ jobId: string; chunk: string }>('onCodexStream', angel.onCodexStream, ({ chunk }) => {
       if (typeof chunk === 'string' && chunk.length > 0) appendTaskLog(chunk);
     });
-    const offComplete = window.angel.onCodexComplete(({ result }) => {
+    safeOn<{ jobId: string; result: unknown }>('onCodexComplete', angel.onCodexComplete, ({ result }) => {
       const r = result as { exitCode?: number; durationMs?: number; mocked?: boolean } | null;
       if (!r) return;
       const tag = r.mocked ? 'mock' : 'codex';
@@ -92,14 +110,13 @@ export function DeskMonitor({
         `[${tag}] complete — exit ${r.exitCode ?? '?'} in ${Math.round((r.durationMs ?? 0) / 100) / 10}s`,
       );
     });
-    const offVerify = window.angel.onVerifyResult(({ check, ok, evidence }) => {
+    safeOn<{ check: string; ok: boolean; evidence: string }>('onVerifyResult', angel.onVerifyResult, ({ check, ok, evidence }) => {
       const badge = ok ? 'verify ok' : 'verify FAIL';
       appendTaskLog(`[${badge}] ${check}: ${evidence}`);
     });
+
     return () => {
-      offStream();
-      offComplete();
-      offVerify();
+      offs.forEach((off) => off());
     };
   }, [appendTaskLog]);
 

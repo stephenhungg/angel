@@ -66,7 +66,6 @@ const ANCHORS: AnchorId[] = [
   'center',
   'desk_stand',
   'desk_sit',
-  'bookshelf',
   'window',
   'couch_stand',
   'couch_sit',
@@ -107,12 +106,11 @@ const INTERACTABLES: Array<{ id: string; kind: string; label: string; verbs: Int
   { id: 'desk_workstation', kind: 'desk', label: 'workstation (chair + computer)', verbs: ['sit_and_type'], note: 'use this when matthew asks you to code, write, or work on the computer' },
   { id: 'couch_chair', kind: 'chair', label: 'couch', verbs: ['sit', 'sit_playful'] },
   { id: 'window', kind: 'window', label: 'window', verbs: ['look_out'] },
-  { id: 'bookshelf', kind: 'bookshelf', label: 'bookshelf', verbs: ['browse'] },
   { id: 'door', kind: 'door', label: 'door', verbs: ['open'] },
 ];
 
 const INTERACTABLE_IDS = INTERACTABLES.map((i) => i.id);
-const INTERACTABLE_VERBS: InteractableVerb[] = ['sit', 'sit_playful', 'sit_and_type', 'look_out', 'browse', 'open', 'lay_down'];
+const INTERACTABLE_VERBS: InteractableVerb[] = ['sit', 'sit_playful', 'sit_and_type', 'look_out', 'open', 'lay_down'];
 
 const TOOLS: Anthropic.Tool[] = [
   {
@@ -175,7 +173,7 @@ const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: 'interact_with',
-    description: `Macro: walk to a prop in the room and use it (sit, type, look out the window, browse the bookshelf). Prefer this over chaining walk_to+sit_at+play_clip yourself — the renderer handles the underlying choreography (walking, facing, sitting, typing-flow transitions) for you.\n\nAvailable interactables:\n${INTERACTABLES.map((i) => `- ${i.id} (${i.kind}, ${i.label}) → verbs: [${i.verbs.join(', ')}]${i.note ? '. ' + i.note : ''}`).join('\n')}\n\nWhen the user asks you to code, work, type, or build something, call interact_with('desk_workstation', 'sit_and_type'). When they want you to chill on the couch, interact_with('couch_chair', 'sit_playful'). When they ask about the weather or to look outside, interact_with('window', 'look_out').\n\nFor multi-side props (couch with multiple seats, desk with two chairs), pass approachLabel to specify which side. If omitted, the renderer picks the closest approach to the avatar's current position.`,
+    description: `Macro: walk to a prop in the room and use it (sit, type, look out the window, open the door). Prefer this over chaining walk_to+sit_at+play_clip yourself — the renderer handles the underlying choreography (walking, facing, sitting, typing-flow transitions) for you.\n\nAvailable interactables:\n${INTERACTABLES.map((i) => `- ${i.id} (${i.kind}, ${i.label}) → verbs: [${i.verbs.join(', ')}]${i.note ? '. ' + i.note : ''}`).join('\n')}\n\nWhen the user asks you to code, work, type, or build something, call interact_with('desk_workstation', 'sit_and_type'). When they want you to chill on the couch, interact_with('couch_chair', 'sit_playful'). When they ask about the weather or to look outside, interact_with('window', 'look_out').\n\nFor multi-side props (couch with multiple seats, desk with two chairs), pass approachLabel to specify which side. If omitted, the renderer picks the closest approach to the avatar's current position.`,
     input_schema: {
       type: 'object',
       properties: {
@@ -420,7 +418,7 @@ ${INTERACTABLES.map((i) => `    • ${i.id} (${i.kind}) — verbs: ${i.verbs.joi
 - face the user or any anchor with face()
 - speak with the 'say' tool — never as plain assistant text
 
-if the user asks you to sit somewhere that isn't a chair (window, door, bookshelf), gently push back in character ("can't sit on a window goofy") and offer a chair. the engine will refuse the action regardless.
+if the user asks you to sit somewhere that isn't a chair (window, door), gently push back in character ("can't sit on a window goofy") and offer a chair. the engine will refuse the action regardless.
 
 # action flow rules
 1. WALKING IS NOT play_clip. To physically move, you MUST call either walk_to(anchor) or interact_with(prop, verb). play_clip('walking') just makes her shuffle in place — useless.
@@ -609,6 +607,78 @@ const HISTORY_LIMIT = 20; // last 20 messages — enough for context, cheap to s
 function pushHistory(msg: Anthropic.MessageParam): void {
   history.push(msg);
   while (history.length > HISTORY_LIMIT) history.shift();
+}
+
+/**
+ * Anthropic invariant: every assistant message containing `tool_use`
+ * blocks MUST be immediately followed by a user message containing a
+ * matching `tool_result` block for each tool_use id. If we ever push an
+ * assistant message with tool_use and forget the tool_results (e.g. the
+ * orchestrator loop exited on stop_reason === 'end_turn' before pushing
+ * follow-up results), the very NEXT user turn fails with HTTP 400 and
+ * the brain falls back to mock forever.
+ *
+ * This guard scans the entire `history` and inserts synthetic stub
+ * tool_results immediately after any assistant message that has unpaired
+ * tool_use ids. Once the corruption has occurred (and the user has
+ * accumulated a few brain-hiccup turns on top), it isn't always at the
+ * tail anymore — a full scan is required to dig everything out.
+ *
+ * Idempotent. Safe to call before every API request.
+ */
+function repairHistory(): void {
+  let i = 0;
+  while (i < history.length) {
+    const msg = history[i];
+    const content = Array.isArray(msg.content) ? msg.content : null;
+    if (msg.role !== 'assistant' || !content) {
+      i += 1;
+      continue;
+    }
+    const toolUseIds = content
+      .filter((b): b is Anthropic.ToolUseBlock => (b as { type?: string }).type === 'tool_use')
+      .map((b) => b.id);
+    if (toolUseIds.length === 0) {
+      i += 1;
+      continue;
+    }
+
+    // gather any tool_result ids already present in the next message
+    const next = history[i + 1];
+    const nextContent = next && Array.isArray(next.content) ? next.content : null;
+    const presentResultIds = new Set<string>();
+    if (next?.role === 'user' && nextContent) {
+      for (const b of nextContent) {
+        if ((b as { type?: string }).type === 'tool_result') {
+          presentResultIds.add((b as { tool_use_id: string }).tool_use_id);
+        }
+      }
+    }
+
+    const missing = toolUseIds.filter((id) => !presentResultIds.has(id));
+    if (missing.length === 0) {
+      i += 1;
+      continue;
+    }
+
+    const stubs = missing.map((id) => ({
+      type: 'tool_result' as const,
+      tool_use_id: id,
+      content: 'ok',
+    }));
+
+    if (next?.role === 'user' && nextContent) {
+      // the next message is a user — extend its content with stub results
+      // so all tool_use ids are paired.
+      next.content = [...nextContent, ...stubs];
+    } else {
+      // splice in a synthetic user message between assistant and whatever
+      // came next (or at end of history).
+      history.splice(i + 1, 0, { role: 'user', content: stubs });
+    }
+    console.warn('[orchestrator] repaired orphan tool_use ids:', missing.join(', '));
+    i += 1;
+  }
 }
 
 /** Convert a single tool_use block into a SceneAction we can ship. */
@@ -1171,6 +1241,13 @@ export async function runOrchestrator(input: {
     lastDelegateWorkingDir: '',
   };
 
+  // self-heal any prior turn that exited mid-tool-use; otherwise the
+  // append below would create an invalid messages[] (orphan tool_use → 400).
+  repairHistory();
+  // snapshot history depth so we can roll back cleanly if the turn errors
+  // mid-flight — otherwise we'd leave half-finished tool_use chains and
+  // a stale user message that pollutes the next turn.
+  const historyDepth = history.length;
   pushHistory({ role: 'user', content: input.text });
 
   try {
@@ -1278,11 +1355,22 @@ export async function runOrchestrator(input: {
       pushHistory({ role: 'assistant', content: resp.content });
       lastAssistantContent = resp.content as Anthropic.ContentBlock[];
 
-      // if model is done, exit. we don't need to feed tool results back unless
-      // it asked to continue (stop_reason === 'tool_use')
-      if (resp.stop_reason === 'tool_use' && toolResults.length > 0) {
+      // CRITICAL: if the model emitted any tool_use blocks, the very next
+      // history message MUST contain matching tool_results — even if we're
+      // about to break out of the tool-call loop. Otherwise a future user
+      // turn replays the assistant message with orphan tool_use blocks and
+      // Anthropic returns HTTP 400 ("tool_use ids were found without
+      // tool_result blocks immediately after"). This used to be gated on
+      // stop_reason === 'tool_use' which is too narrow — end_turn /
+      // max_tokens responses also frequently include tool_use blocks.
+      if (toolResults.length > 0) {
         pushHistory({ role: 'user', content: toolResults });
-        continue; // let the model react to tool results (e.g., chain a follow-up)
+      }
+
+      // if the model wants to react to tool results (chain a follow-up),
+      // keep looping. Otherwise we're done with this turn.
+      if (resp.stop_reason === 'tool_use' && toolResults.length > 0) {
+        continue;
       }
       // surface any naked text the model emitted (rare — system prompt forbids)
       if (textBudget.trim()) {
@@ -1295,6 +1383,10 @@ export async function runOrchestrator(input: {
     void writeTurnMemory(userId, input.text, lastAssistantContent, turnId);
   } catch (err) {
     console.error('[orchestrator] anthropic call failed', err);
+    // roll history back to the state we entered with so the next user
+    // turn isn't crippled by a half-finished tool_use chain or a stale
+    // unanswered user message.
+    history.length = historyDepth;
     // surface failure as a system chat line and a soft spoken fallback
     input.sendChat({ id: randomUUID(), text: '(angel: brain hiccup — falling back)', done: true });
     const { runMockOrchestrator } = await import('./mock');
@@ -1336,15 +1428,30 @@ export async function runBootGreeting(input: {
       tools: TOOLS,
       messages: [{ role: 'user', content: primer }],
     });
+    const toolUseIds: string[] = [];
     for (const block of resp.content) {
       if (block.type === 'tool_use') {
+        toolUseIds.push(block.id);
         const action = toolUseToSceneAction(block.name, (block.input ?? {}) as Record<string, unknown>);
         if (action) input.send(action);
       }
     }
-    // seed rolling history so subsequent user turns have continuity
+    // seed rolling history so subsequent user turns have continuity. Every
+    // tool_use block must be paired with a tool_result in the next message
+    // (Anthropic invariant) — otherwise the first real user turn would
+    // ship an invalid messages[] and 400.
     pushHistory({ role: 'user', content: primer });
     pushHistory({ role: 'assistant', content: resp.content });
+    if (toolUseIds.length > 0) {
+      pushHistory({
+        role: 'user',
+        content: toolUseIds.map((id) => ({
+          type: 'tool_result' as const,
+          tool_use_id: id,
+          content: 'ok',
+        })),
+      });
+    }
     void writeTurnMemory(
       input.userId ?? 'stephen',
       '<boot greeting>',
