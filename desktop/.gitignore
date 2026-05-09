@@ -1,0 +1,5 @@
+# synced from web/ — regenerate via `bun run scripts/sync-library.ts`
+public/library/*.jpg
+public/library/library.json
+src/data/library.json
+electron/data/library.json

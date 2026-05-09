@@ -4,16 +4,20 @@ import { useEffect, useRef } from "react";
 import gsap from "gsap";
 
 /**
- * MaskedLine — gsap masked-lines reveal for a single line of text.
+ * MaskedLine — gsap masked-line reveal for a single line of text.
  *
- * Wraps the child in an `overflow:hidden` mask. The inner element starts at
- * `yPercent: 100` (below the mask) + `opacity: 0`, then animates up into view
- * once it scrolls into the viewport. Result: the line "rises from behind a
- * curtain."
+ *   <div overflow:hidden>      ← mask
+ *     <div yPercent: 100>      ← inner, slides up from below
+ *       {children}
+ *     </div>
+ *   </div>
  *
- * lifted from portfolio-temp; uses IntersectionObserver in place of the
- * portfolio's useLoaderReady gate so it works post-bait without a global
- * loader bus.
+ * Plays on enter via IntersectionObserver, BUT also checks if already in
+ * viewport at mount (e.g. above-fold sections) and plays immediately.
+ * That way headers don't "despawn" if hydration happens with the section
+ * already on-screen — the IO would never fire in that case.
+ *
+ * lifted from portfolio-temp + hardened for SSR-paint cases.
  */
 type Props = {
   children: React.ReactNode;
@@ -21,7 +25,7 @@ type Props = {
   duration?: number;
   ease?: string;
   className?: string;
-  /** play immediately on mount instead of waiting for IO. use for above-fold lines. */
+  /** play on mount, skip the IO entirely */
   immediate?: boolean;
 };
 
@@ -50,6 +54,15 @@ export function MaskedLine({
       return;
     }
 
+    // if the node is already (mostly) in the viewport at mount, fire now
+    const rect = node.getBoundingClientRect();
+    const vh = window.innerHeight || 800;
+    const alreadyVisible = rect.top < vh * 0.9 && rect.bottom > 0;
+    if (alreadyVisible) {
+      play();
+      return;
+    }
+
     const io = new IntersectionObserver(
       (entries) => {
         for (const e of entries) {
@@ -60,12 +73,17 @@ export function MaskedLine({
           }
         }
       },
-      { rootMargin: "0px 0px -10% 0px", threshold: 0.05 },
+      { rootMargin: "0px 0px -5% 0px", threshold: 0.01 },
     );
     io.observe(node);
 
+    // safety: if IO somehow never fires (rare), force play after 3s so
+    // the header never stays invisible forever
+    const safety = window.setTimeout(play, 3000);
+
     return () => {
       io.disconnect();
+      window.clearTimeout(safety);
     };
   }, [delay, duration, ease, immediate]);
 

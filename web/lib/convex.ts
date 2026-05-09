@@ -63,6 +63,7 @@ export interface OnboardingMirrorInput {
   numericTraits?: unknown;
   voiceConfig?: unknown;
   personalityMd?: string;
+  phoneNumber?: string;
 }
 
 export async function saveOnboarding(input: OnboardingMirrorInput): Promise<void> {

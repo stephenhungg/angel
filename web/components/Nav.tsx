@@ -95,9 +95,7 @@ export function Nav() {
 
   return (
     <header
-      className={`absolute inset-x-0 top-0 z-30 ${
-        drawerVisible ? "bg-paper" : "bg-transparent"
-      }`}
+      className="fixed inset-x-0 top-0 z-30 border-b border-hairline bg-paper/95 backdrop-blur-md"
       style={{ transition: "background-color 200ms linear" }}
     >
       <div className="w-full px-6 tablet:px-9">

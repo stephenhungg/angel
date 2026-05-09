@@ -56,7 +56,8 @@ export function Hero() {
 
   return (
     <section className="relative">
-      <div className="relative h-[88vh] min-h-[640px] w-full overflow-hidden">
+      {/* full-viewport scene — fills 100vh under the fixed nav */}
+      <div className="relative h-screen min-h-[640px] w-full overflow-hidden">
         {/* moving scene layer (parallax + scroll-zoom) */}
         <motion.div
           className="hero-bg absolute inset-0"
