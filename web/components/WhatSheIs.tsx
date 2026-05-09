@@ -64,7 +64,7 @@ export function WhatSheIs() {
               <article className="flex h-full flex-col items-start gap-6">
                 {/* sticker card — TiltedCard adds 3d tilt-on-hover. perspective
                     + spring physics from portfolio-temp/TiltedCard. */}
-                <div className="kawaii-card relative aspect-square w-full" data-cursor-grow>
+                <div className="kawaii-card relative aspect-square w-full">
                   <TiltedCard
                     rotateAmplitude={10}
                     scaleOnHover={1.04}

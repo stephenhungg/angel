@@ -50,7 +50,7 @@ export function Archetypes() {
           {archetypes.map((a, i) => (
             <Reveal as="li" key={a.title} delay={i * 0.08}>
               <article className="flex flex-col items-start gap-5">
-                <div className="relative aspect-square w-full max-w-[560px]" data-cursor-grow>
+                <div className="relative aspect-square w-full max-w-[560px]">
                   <TiltedCard
                     rotateAmplitude={9}
                     scaleOnHover={1.03}
@@ -84,7 +84,7 @@ export function Archetypes() {
           <Link
             href="/download"
             className="group inline-flex items-baseline gap-3 font-sans text-[20px] font-medium tracking-[-0.005em] text-ink-near transition-colors duration-200 ease-linear hover:text-sakura-600"
-            data-cursor-grow
+           
           >
             <span>see all archetypes</span>
             <span className="transition-transform duration-200 ease-linear group-hover:translate-x-1">→</span>

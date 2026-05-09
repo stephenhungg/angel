@@ -43,7 +43,7 @@ export default function DownloadPage() {
         <Link
           href="/"
           className="font-sans text-[14px] font-medium text-muted-deep transition-colors hover:text-sakura-600"
-          data-cursor-grow
+         
         >
           ← back
         </Link>
@@ -72,7 +72,7 @@ export default function DownloadPage() {
                 <a
                   href={p.href}
                   className="group flex h-full flex-col items-start gap-3 rounded-2xl border border-hairline bg-cloud p-7 text-left transition-all duration-200 ease-out hover:-translate-y-1 hover:border-sakura-300 hover:shadow-[0_8px_0_rgba(199,78,122,0.18)]"
-                  data-cursor-grow
+                 
                 >
                   <span className="text-[28px] leading-none">{p.icon}</span>
                   <div className="flex flex-col gap-1">

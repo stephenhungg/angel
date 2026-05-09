@@ -172,7 +172,7 @@ export function Origin() {
               <a
                 href={slide.viewHref}
                 className="font-sans text-[15px] font-medium text-ink-near underline underline-offset-[6px] decoration-ink-near transition-colors hover:text-sakura-600 hover:decoration-sakura-600"
-                data-cursor-grow
+               
               >
                 Read more
               </a>
@@ -192,7 +192,7 @@ export function Origin() {
                 <a
                   href={slide.viewHref}
                   className="font-sans text-[15px] font-medium text-ink-near underline underline-offset-[6px] decoration-ink-near transition-colors hover:text-sakura-600 hover:decoration-sakura-600"
-                  data-cursor-grow
+                 
                 >
                   {slide.viewLabel} →
                 </a>
@@ -234,7 +234,7 @@ export function Origin() {
                 className={`group inline-flex items-center gap-2 transition-colors ${
                   i === active ? "text-ink-near" : "text-muted-tertiary hover:text-muted-deep"
                 }`}
-                data-cursor-grow
+               
               >
                 <span
                   className={`block h-[2px] transition-all duration-500 ease-out ${
@@ -254,7 +254,7 @@ export function Origin() {
               onClick={() => setActive((a) => (a - 1 + slides.length) % slides.length)}
               aria-label="previous"
               className="flex h-12 w-12 items-center justify-center rounded-full border border-hairline bg-cloud text-ink-near transition-all duration-200 hover:border-sakura-400 hover:bg-sakura-50 hover:text-sakura-600"
-              data-cursor-grow
+             
             >
               ←
             </button>
@@ -263,7 +263,7 @@ export function Origin() {
               onClick={() => setActive((a) => (a + 1) % slides.length)}
               aria-label="next"
               className="flex h-12 w-12 items-center justify-center rounded-full border border-hairline bg-cloud text-ink-near transition-all duration-200 hover:border-sakura-400 hover:bg-sakura-50 hover:text-sakura-600"
-              data-cursor-grow
+             
             >
               →
             </button>

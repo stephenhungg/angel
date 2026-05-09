@@ -41,7 +41,7 @@ export function Showcase() {
           {scenes.map((s, i) => (
             <Reveal as="li" key={s.title} delay={i * 0.08}>
               <article className="flex h-full flex-col items-start gap-5">
-                <div className="relative aspect-square w-full" data-cursor-grow>
+                <div className="relative aspect-square w-full">
                   <TiltedCard
                     rotateAmplitude={10}
                     scaleOnHover={1.04}

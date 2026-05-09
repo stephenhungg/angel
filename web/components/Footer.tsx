@@ -143,21 +143,21 @@ export function Footer() {
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex min-h-11 min-w-11 items-center justify-center px-2 transition-colors hover:text-sakura-600"
-            data-cursor-grow
+           
           >
             github
           </a>
           <Link
             href="/about"
             className="inline-flex min-h-11 min-w-11 items-center justify-center px-2 transition-colors hover:text-sakura-600"
-            data-cursor-grow
+           
           >
             about
           </Link>
           <Link
             href="/privacy"
             className="inline-flex min-h-11 min-w-11 items-center justify-center px-2 transition-colors hover:text-sakura-600"
-            data-cursor-grow
+           
           >
             privacy
           </Link>
@@ -182,7 +182,7 @@ export function Footer() {
             <Link
               href="/download"
               className="inline-flex h-14 items-center gap-2 rounded-pill bg-sakura-500 px-8 font-sans text-[16px] font-semibold tracking-[-0.005em] text-cloud transition-colors duration-200 ease-linear hover:bg-sakura-600"
-              data-cursor-grow
+             
             >
               <span>download angel</span>
               <span aria-hidden>↓</span>

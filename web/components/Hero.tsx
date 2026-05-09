@@ -113,12 +113,18 @@ export function Hero() {
               By Stephen Hung &amp; Matthew · 天使
             </p>
 
-            {/* primary download cta — pink pill on the hero */}
+            {/* primary download cta — pink pill on the hero with a kawaii
+                strawberry tucked at the leading edge */}
             <a
               href="/download"
-              className="hero-cta group mt-4 inline-flex h-14 items-center gap-2 rounded-pill bg-sakura-500 px-8 font-sans text-[16px] font-semibold tracking-[-0.005em] text-cloud shadow-[0_8px_0_rgba(155,58,95,0.35)] transition-all duration-200 ease-linear hover:-translate-y-0.5 hover:bg-sakura-600 hover:shadow-[0_10px_0_rgba(155,58,95,0.45)] tablet:h-16 tablet:px-10 tablet:text-[18px]"
-              data-cursor-grow
+              className="hero-cta group mt-4 inline-flex h-14 items-center gap-3 rounded-pill bg-sakura-500 pl-3 pr-7 font-sans text-[16px] font-semibold tracking-[-0.005em] text-cloud shadow-[0_8px_0_rgba(155,58,95,0.35)] transition-all duration-200 ease-linear hover:-translate-y-0.5 hover:bg-sakura-600 hover:shadow-[0_10px_0_rgba(155,58,95,0.45)] tablet:h-16 tablet:pl-4 tablet:pr-9 tablet:text-[18px]"
             >
+              <img
+                src="/kawaii/cute-strawberry-t.png"
+                alt=""
+                aria-hidden
+                className="h-10 w-10 select-none transition-transform duration-300 ease-out group-hover:rotate-12 group-hover:scale-110 tablet:h-12 tablet:w-12"
+              />
               <span>download angel</span>
               <span aria-hidden className="transition-transform duration-200 group-hover:translate-y-0.5">
                 ↓
@@ -127,18 +133,8 @@ export function Hero() {
           </header>
         </div>
 
-        {/* technical metadata — sentence case, no caps, mono font for vibe.
-            left = subject meta, right = stack line. */}
-        <div className="absolute bottom-6 left-6 right-6 hidden items-end justify-between gap-6 font-sans text-[11px] text-cloud opacity-80 tablet:flex tablet:bottom-10 tablet:left-10 tablet:right-10 desktop:bottom-[40px] desktop:left-[100px] desktop:right-[100px]">
-          <div className="hero-meta-l flex flex-col gap-1">
-            <span>her room · 1440 × 900</span>
-            <span>cloud-resident</span>
-          </div>
-          <div className="hero-meta-r hidden flex-col items-end gap-1 desktop:flex">
-            <span>sonnet 4.6 · nia · convex</span>
-            <span>768d · always-on</span>
-          </div>
-        </div>
+        {/* hero metadata removed — was disconnected from the wordmark+cta stack.
+            stack info still shows in the LogoMarquee strip below. */}
 
         {/* dust grain overlay */}
         <div
