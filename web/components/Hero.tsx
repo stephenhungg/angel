@@ -48,13 +48,9 @@ export function Hero() {
           <header className="flex flex-col items-start gap-3">
             <h1 className="m-0">
               <img
-                src="/kawaii/wordmark-pink-nano-t.png"
+                src="/kawaii/wordmark-pink-nano.png"
                 alt="angel"
                 className="h-[180px] w-auto select-none tablet:h-[280px] desktop:h-[360px]"
-                style={{
-                  filter:
-                    "drop-shadow(0 12px 0 rgba(155, 58, 95, 0.35)) drop-shadow(0 24px 40px rgba(199, 78, 122, 0.18))",
-                }}
               />
             </h1>
             <p
