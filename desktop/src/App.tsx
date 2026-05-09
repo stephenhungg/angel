@@ -96,29 +96,18 @@ function RoomShell() {
     };
     window.addEventListener('pointerdown', onFirstClick);
 
-    // L2 conversation layer: Esc-interrupt, filler, bg autonomy, persona
-    // cascade, animalese DI. Single setup call wires every dependency.
-    //
-    // When the real brain is alive (Sonnet + Nia memory), the main process
-    // already runs `runBootGreeting` which generates a memory-grounded
-    // greeting from actual recall. The renderer's canned "while you were
-    // gone..." boot greeting + 60s "still watching your repo" heartbeat
-    // are *fallbacks* for the no-key path — they'd just talk over the real
-    // greeting otherwise. Gate both on a brain:status probe.
-    let cancelled = false;
-    let disposeLayer: () => void = () => {};
-    void ipc
-      .invoke<{ source?: 'claude' | 'mock' }>('brain:status')
-      .then((status) => {
-        if (cancelled) return;
-        const brainAvailable = status?.source === 'claude';
-        disposeLayer = setupConversationLayer({
-          // 0 disables the +2s boot greeting (personaApply.ts checks delay > 0)
-          bootGreetingDelayMs: brainAvailable ? 0 : 2000,
-          // 0 disables the recurring heartbeat (bgAutonomy.ts checks interval > 0)
-          heartbeatMs: brainAvailable ? 0 : 60_000,
-        });
-      });
+    // L2 conversation layer: Esc-interrupt, filler, persona cascade,
+    // animalese DI. Both canned beats are HARD-OFF regardless of backend:
+    //   bootGreetingDelayMs=0 → no "+2s persona-apply 'while you were
+    //                            gone' greeting ever fires
+    //   heartbeatMs=0         → no recurring 60s "still watching your
+    //                            repo" idle chatter ever fires
+    // The L2 layer was originally written as a hackathon fallback when no
+    // LLM was wired; with Sonnet + Nia live, the brain owns greetings.
+    const disposeLayer = setupConversationLayer({
+      bootGreetingDelayMs: 0,
+      heartbeatMs: 0,
+    });
 
     // hydrate the persona from localStorage if a previous session committed
     // one (so re-opening the app skips onboarding) + write back on future
@@ -126,7 +115,6 @@ function RoomShell() {
     const disposePersist = setupPersonaPersist();
 
     return () => {
-      cancelled = true;
       offAction();
       offChat();
       offState();

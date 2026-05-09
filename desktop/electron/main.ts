@@ -140,14 +140,13 @@ async function createMainWindow() {
 
   mainWindow.once('ready-to-show', () => {
     mainWindow?.show();
-    // fire the 30%-weighted bg autonomy beat: avatar greets the user on
-    // launch like she was watching repo activity while they were away.
-    // When ANTHROPIC_API_KEY + memory are both live, Claude weaves the
-    // portfolio callback from the seeded memory block (no hardcoded line).
-    // Otherwise we fall back to mock.bootAutonomyBeat — and we feed it the
-    // Tensorlake portfolio observation we kicked off at app-ready, so the
-    // canned line is replaced with a real, specific finding from the bg job.
-    if (mainWindow) {
+    // One-shot boot greeting — only when the real brain is alive (so the
+    // line is generated against actual Nia recall, never a canned demo
+    // beat). The primer in runner.ts tells Sonnet to greet briefly and
+    // ONLY reference memory that's actually present, never to invent
+    // "while you were away" activity. If brain isn't available, stay
+    // silent — no canned fallback, no mock greeting.
+    if (mainWindow && isBrainAvailable()) {
       const sender = {
         send: (a: SceneAction) => mainWindow?.webContents.send('scene:action', a),
         sendChat: (t: { id: string; text: string; done?: boolean }) =>
@@ -155,40 +154,7 @@ async function createMainWindow() {
         sendState: (p: Record<string, unknown>) =>
           mainWindow?.webContents.send('state:update', p),
       };
-      if (isBrainAvailable()) {
-        void runBootGreeting({ ...sender, userId: DEFAULT_USER_ID });
-      } else {
-        // Wait for the in-flight tensorlake bg job (kicked off in
-        // app.whenReady), then thread its findings into the spoken beat.
-        // If it fails or hasn't returned, bootAutonomyBeat falls back to
-        // the canned line.
-        void (async () => {
-          const obs = (await observationInFlight) ?? null;
-          if (obs) {
-            // emit a structured bg:autonomy event the renderer can also
-            // pick up via lib/bgAutonomy.ts (extends the existing payload
-            // with `findings` + `suggestion` per task 5).
-            mainWindow?.webContents.send('bg:autonomy', {
-              kind: 'while_you_were_away',
-              payload: {
-                commits: 3,
-                repos: ['portfolio'],
-                name: DEFAULT_USER_ID,
-                findings: obs.findings,
-                suggestion: obs.suggestion,
-                summary: obs.summary,
-                backend: obs.backend,
-              },
-            });
-            await bootAutonomyBeat(sender, {
-              greetingLine: pickGreetingLine(obs),
-              suggestion: obs.suggestion,
-            });
-          } else {
-            await bootAutonomyBeat(sender);
-          }
-        })();
-      }
+      void runBootGreeting({ ...sender, userId: DEFAULT_USER_ID });
     }
   });
 

@@ -1456,10 +1456,18 @@ export async function runBootGreeting(input: {
     const { bootAutonomyBeat } = await import('./mock');
     return bootAutonomyBeat(input);
   }
+  // Honest, low-bias primer:
+  //   - one short greeting in her voice
+  //   - reference memory ONLY if something specific is genuinely in the
+  //     memory block above (which is built from real Nia recall)
+  //   - explicit ban on inventing "while you were away" activity, repos,
+  //     commits, or anything else that isn't in the actual memory
   const primer =
-    'angel just woke up. stephen is back at the desk. greet him warmly and naturally, then reference something from your recent shared history — especially anything about his portfolio or recent projects.';
-  // bias the semantic search toward the demo callback path
-  const memCtx = await gatherMemoryContext('portfolio site project deploy');
+    "you just opened your eyes. greet the user — one short line in your voice, that's it. if (and only if) something specific in the memory block above feels worth bringing up right now, weave it in naturally. if nothing genuinely stands out, just say hi. NEVER invent things you supposedly did 'while they were away' — you didn't do anything, you were off. NEVER mention specific repos, commits, projects, or events that aren't already in your memory block.";
+  // No biased semantic seed — let the memory block reflect whatever is
+  // actually in Nia (recent episodic + reflective summary). If recall is
+  // empty, she just says hi and stops.
+  const memCtx = await gatherMemoryContext('');
   const turnId = randomUUID();
   try {
     const resp = await c.messages.create({
