@@ -4,7 +4,9 @@
 
 a personal ai agent you don't prompt — you discover. swipe through generated archetypes, converge on a persona vector, and instantiate an embodied companion who lives in a 3d room on your machine, remembers you across sessions, and ships your code by walking to the desk and actually doing it.
 
-built for the **nozomio "build the future of ai agents" hackathon** — may 9 2026, sf.
+built for the **nozomio hackathon — always-on agents track** (sponsors: nia + tensorlake) — may 9 2026, EF office, sf. submission deadline **6:00 pm sharp**, judging 6:10–7:30 pm.
+
+see [HACKATHON.md](HACKATHON.md) for full event details, rubric, sponsor credits, and rules.
 
 ## the thesis
 
@@ -28,6 +30,7 @@ next.js web for landing+swipe. electron + r3f + three-vrm for the room. claude s
 
 ## doc index
 
+- [HACKATHON.md](HACKATHON.md) — official event reference (track, rubric, rules, credits)
 - [VISION.md](VISION.md) — thesis + problem statement
 - [ARCHITECTURE.md](ARCHITECTURE.md) — full system diagram + component split
 - [STACK.md](STACK.md) — concrete tech choices + why

@@ -1,87 +1,106 @@
-# demo arc — 90 seconds
+# demo arc — 3 minutes (judging slot)
+
+## context
+
+**track:** always-on agents (nia + tensorlake) — see [HACKATHON.md](HACKATHON.md) for full rubric.
+
+**judging slot:** 3 min in-person at 6:10pm. judges score on: bg execution 30%, statefulness 25%, agentic depth 25%, demo & presentation 10%, judge personal 10%.
+
+**track-agnostic finals:** top 6 across all tracks present live. don't optimize only for track judges — universal appeal matters.
 
 ## judge psychology
 
 **target feeling:** *"i want one."*
 
-**after 43 demos that day, judges are tired.** they want to feel something, not understand something. don't lecture them on persona vectors — let them watch you discover her.
+**after dozens of demos that day, judges are tired.** they want to feel something, not understand something. don't lecture them on persona vectors — let them watch you discover her.
 
-**three specific dopamine hits to land:**
-1. **0:18** — vector converges, fade-to-white. recognition: "oh she's *mine*."
-2. **0:35** — first memory callback. recognition: "she remembered."
-3. **1:20** — `✓ deployed` lands in-world. recognition: "she actually did it."
+**four specific dopamine hits to land (mapped to rubric):**
+1. **swipe → vector converges, fade-to-white** — recognition: "oh she's *mine*." → demo & presentation 10%
+2. **bg autonomy beat** ("while you were away, i prepared 3 commits and watched your repo") → **bg execution 30%** — heaviest criterion, do not skip
+3. **memory callback** ("how'd that portfolio thing land?") → **statefulness 25%** — proves removing memory breaks demo
+4. **`✓ deployed` lands in-world** → **agentic depth 25%** — proves full agentic loop (plan, execute, verify, narrate)
 
-if any one of these doesn't land, the demo is mid. all three = win.
+if any one of these doesn't land, the demo is mid. all four = win.
 
-## beat-by-beat
+## beat-by-beat (3 min)
 
-### [0:00 – 0:20] swipe onboarding
+### [0:00 – 0:15] thesis hook
 
-- web app full-screen
-- "meet your angel" — chunky cartoon title
-- 4 archetype cards appear, swipe left/right (or click)
-- 3 rounds, 4 cards each = 12 swipes total
-- vector visualizer in corner: small glowing orb, particles converge each swipe
+**voice-over (stephen):** *"agents today are converging on capability — but they're terminals. they don't live anywhere. they don't remember. they don't care. angel is the missing primitive. discovered, not designed."*
+
+### [0:15 – 0:35] swipe onboarding (web)
+
+- vercel-deployed swipe webapp, full screen
+- 3 rounds × 4 archetypes (sped up if needed)
+- vector visualizer in corner converges each swipe
 - after final swipe: orb pulses, fade to white
 
-**voice-over (you):** *"she's not designed. she's discovered."*
+**voice-over:** *"you don't pick her. you converge on her."*
 
-### [0:20 – 0:35] reveal in room
+### [0:35 – 0:50] download → app launches
 
-- electron app launches (in demo, faked w/ 2-second download progress for narrative)
-- first-person camera, room reveal — soft warm lighting, sketchfab bedroom
+- "download angel.app" cta → fake 3sec download → electron app launches via `angel://` deep link
+- first-person camera, room reveal — soft warm lighting
 - she's at the window, looking out
-- turns at the sound of you entering
 - her outfit + room palette match your vector
-- big subtitle drops in: **"oh — finally. you're back."**
-- animalese blips per char, mouth pulses
-- she walks a few steps toward you
 
-**memory callback hits next:** **"how'd that portfolio thing land?"**
-(seeded fake history in nia — judges think you've used her for weeks)
+### [0:50 – 1:10] BG AUTONOMY BEAT *(30% scoring weight)*
 
-**voice-over:** *"she remembers. always."*
+- she turns at the sound of you entering
+- big subtitle: **"oh — you're back. while you were gone, i watched your portfolio repo and prepared 3 commits to review."**
+- *(in-world detail: monitor on desk shows pre-prepared diff, ready to review — proves she was working autonomously)*
 
-### [0:35 – 0:50] assign task
+**voice-over:** *"she runs in the background. nia for memory, tensorlake for the loop. removing either of those breaks her."*
 
-- you (in chat or push-to-talk): *"add a project card for angel to my portfolio and deploy it"*
+### [1:10 – 1:25] memory callback *(25% scoring weight)*
+
+- subtitle: **"how'd that portfolio thing land last week, by the way?"**
+- *(seeded fake history in nia — judges think you've used her for weeks. cross-session memory.)*
+
+**voice-over:** *"every interaction is in nia. she gets sharper across weeks, not sessions."*
+
+### [1:25 – 1:40] assign new task
+
+- you: *"add a project card for angel to my portfolio and deploy it."*
 - subtitle: **"oh fun. let me."**
-- emotion: *thinking*, slight smile
-- she walks to desk (camera dollies behind her, smooth follow)
+- she walks to desk (camera dollies behind her)
 - sits down
 
-### [0:50 – 1:20] she works
+### [1:40 – 2:30] she works *(25% agentic depth)*
 
-- desk monitor lights up
-- real codex stdout streams in chunky font on the screen
-- typing anim syncs to keystroke pulses
-- occasional glance back at you (subtle head turn anim)
-- subtitle every ~5 sec with status:
+- desk monitor lights up — **real codex stdout streams**
+- typing anim syncs to keystrokes
+- subtitles every ~10 sec:
   - **"reading the repo..."**
   - **"writing the card component..."**
   - **"running tests..."**
   - **"pushing to vercel..."**
-- background music swells slightly
+- occasional glance back at you
 
-### [1:20 – 1:30] payoff
+### [2:30 – 2:45] payoff
 
-- monitor shows: `✓ deployed to https://stephen.dev`
-- in-world browser plane unfolds beside the desk, shows the live site with her project card
-- she leans back in the chair
-- subtitle: **"shipped. want me to tweet it?"**
-- camera pulls back, she glances at you, soft smile
-- title card: **angel. discovered, not designed.**
+- monitor: `✓ deployed to https://stephen.dev`
+- in-world browser plane opens to live site
+- she leans back: **"shipped. want me to tweet it?"**
+
+### [2:45 – 3:00] closer
+
+**voice-over:** *"agents are converging on capability. the moat is presence. angel is the missing primitive — embodied, persistent, alive between sessions."*
+
+title card: **angel. discovered, not designed.**
 
 ## demo prep checklist
 
 - [ ] persona vector pre-tuned (don't risk live convergence to weird outfit)
 - [ ] nia seeded with 5-10 fake "past interactions" referencing portfolio + previous projects
+- [ ] **bg autonomy seed:** fake 3 commits ready in repo + diff visible on desk monitor at app launch
 - [ ] codex task prompt pre-tested on actual repo, deploys clean every time
 - [ ] vercel deploy hook tested
 - [ ] backup: pre-recorded screen capture of the codex run (in case live fails)
-- [ ] dress rehearsal at 7:00 pm sharp, full 90 sec, no exceptions
+- [ ] dress rehearsal at 5:00 pm, full 3-min runs (3x), no exceptions
 - [ ] mic levels, font legibility from 10ft, animalese volume balanced w/ music
-- [ ] kill-switch: if vrm rigging breaks at 4pm, swap to 2d sprite mode
+- [ ] kill-switch: if vrm rigging breaks at 1:30pm, swap to 2d portrait mode
+- [ ] **submission url ready:** vercel-deployed swipe webapp link working (NOT localhost)
 
 ## script (the lines you say out loud)
 
@@ -100,7 +119,8 @@ if any one of these doesn't land, the demo is mid. all three = win.
 - don't say "persona vector" or "embedding"
 - don't explain animalese
 - don't apologize for anything
-- don't go over 90 seconds — judges have seen 42 demos already
+- **don't exceed 3 minutes** — judges cut you off
+- don't skip the bg autonomy beat — that's 30% of your score
 
 ## fallbacks if shit breaks
 
