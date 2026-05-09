@@ -14,14 +14,15 @@
  * fingerprint" is closest to the user's numeric centroid. The MATCH (id,
  * name, blurb, previewUrl, fingerprint) drives the reveal cascade.
  *
- * KNOWN BUG — bind-pose drift on abison's pool. All five curated VRMs ship
- * with arms-up bind poses that bleed through whenever the active idle clip
- * doesn't drive every shoulder/upper-arm bone — so the avatar reads as a
- * T-pose-ish "arms in the air" stance until a richer clip fires. Until we
- * ship a bind-pose normalization pass on top of the retargeter, every
- * `vrmUrl` field below points to the original placeholder so the body the
- * room actually loads survives our pipeline cleanly. The portrait (`previewUrl`)
- * still shows the matched character — only the loaded body is shared.
+ * Bind-pose drift fix: All five abison VRMs ship with non-T-pose bind
+ * poses out of VRoid Studio (arms angled, shoulders rotated). The Mixamo
+ * retargeter assumed clean T-pose at rest, so bones the active idle didn't
+ * drive (shoulders especially) read as "arms in the air". This is now
+ * neutralized in `vrm-load.ts#normalizeHumanoidToTPose` — every VRM is
+ * forced to identity-local on its normalized humanoid skeleton at load
+ * time, giving Mixamo a clean T-pose to animate from. So the per-VRM
+ * `vrmUrl` below points to the actual matched character, and the body
+ * picker (Scene.tsx#VrmBodyPicker) can swap between all five live.
  *
  * Personality (voice, dialogue, vibe phrase, palette) still comes from the
  * heroCard the user actually swiped on — those two sources are deliberately
@@ -44,16 +45,11 @@ export interface VrmMatch {
   fingerprint: NumericTraits;
 }
 
-/** The single VRM body the room loads regardless of swipe match — see file
- *  header for the bind-pose-drift caveat. Keep in sync with
- *  `shared/src/persona.ts#WORKING_VRM` and `desktop/src/components/Scene.tsx#FALLBACK_VRM`. */
-const WORKING_VRM = '/vrm/2068967230566994300.vrm';
-
 const VRMS: VrmMatch[] = [
   {
     id: 'cottagecore',
     slot: 'A1',
-    vrmUrl: WORKING_VRM,
+    vrmUrl: '/vrm/cottagecore.vrm',
     previewUrl: '/vrm/cottagecore.png',
     name: 'cecil',
     blurb: 'soft warmth + quiet attention.',
@@ -64,7 +60,7 @@ const VRMS: VrmMatch[] = [
   {
     id: 'tech-minimal',
     slot: 'A2',
-    vrmUrl: WORKING_VRM,
+    vrmUrl: '/vrm/tech-minimal.vrm',
     previewUrl: '/vrm/tech-minimal.png',
     name: 'ayu',
     blurb: 'precision + late-night softness.',
@@ -75,7 +71,7 @@ const VRMS: VrmMatch[] = [
   {
     id: 'cyber',
     slot: 'A3',
-    vrmUrl: WORKING_VRM,
+    vrmUrl: '/vrm/cyber.vrm',
     previewUrl: '/vrm/cyber.png',
     name: 'sample',
     blurb: 'electric edge + watchful calm.',
@@ -86,7 +82,7 @@ const VRMS: VrmMatch[] = [
   {
     id: 'academia',
     slot: 'A4',
-    vrmUrl: WORKING_VRM,
+    vrmUrl: '/vrm/academia.vrm',
     previewUrl: '/vrm/academia.png',
     name: 'izumi',
     blurb: 'measured restraint + quiet care.',
@@ -97,7 +93,7 @@ const VRMS: VrmMatch[] = [
   {
     id: 'alt-abison-5',
     slot: 'alt',
-    vrmUrl: WORKING_VRM,
+    vrmUrl: '/vrm/alt-abison-5.vrm',
     previewUrl: '/vrm/alt-abison-5.png',
     name: 'ikuno',
     blurb: 'casual cozy + just hanging out.',
@@ -106,6 +102,10 @@ const VRMS: VrmMatch[] = [
     fingerprint: { warmth: 6, energy: 6, edge: 4, sophistication: 4, playfulness: 7 },
   },
 ];
+
+/** Set of VRM URLs that the body picker accepts. Used by personaPersist
+ *  to recognize valid persisted choices vs stale ones. */
+export const VALID_VRM_URLS = new Set<string>(VRMS.map((v) => v.vrmUrl));
 
 function distance(a: NumericTraits, b: NumericTraits): number {
   const d2 =

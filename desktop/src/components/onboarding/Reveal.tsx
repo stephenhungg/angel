@@ -222,12 +222,10 @@ export function Reveal() {
       iat: Math.floor(Date.now() / 1000),
       exp: Math.floor(Date.now() / 1000) + 3600,
     };
-    // pass vrmMatch.vrmUrl explicitly. NOTE: until the abison pool's
-    // arms-up bind pose is normalized in the retargeter, vrmMatcher
-    // itself routes every `vrmUrl` to the working placeholder VRM (see
-    // vrmMatcher.ts#WORKING_VRM). The character's identity (id, name,
-    // portrait, blurb, palette) still flows through the reveal — only
-    // the loaded body is shared.
+    // pass vrmMatch.vrmUrl explicitly so we load the actual matched
+    // character body. Bind-pose drift on the abison pool is normalized
+    // at VRM load (vrm-load.ts#normalizeHumanoidToTPose), so every
+    // matched body now reads cleanly during idle.
     applyClaim(claim, vrmMatch.vrmUrl);
     // mark onboarding complete — the Onboarding root component switches
     // out of the reveal screen and into the 3D room

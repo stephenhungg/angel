@@ -8,12 +8,12 @@ import { VRM_BY_AESTHETIC, PALETTE_BY_AESTHETIC } from '@angel/shared';
  *
  * The /public/vrm/ pool is keyed by aesthetic archetype (see manifest.json).
  * If a claim's archetype is missing or the VRM file fails to parse, we fall
- * back to the original placeholder VRM (restored from git after the
- * swipe-pipeline merge clobbered it). The abison pool ships with arms-up
- * bind poses that don't survive our retargeter cleanly during idle.
+ * back to a known-good curated body. Bind-pose drift on the abison pool is
+ * now neutralized at load time (vrm-load.ts#normalizeHumanoidToTPose), so
+ * any of the five works.
  */
 
-const FALLBACK_VRM = '/vrm/2068967230566994300.vrm';
+const FALLBACK_VRM = '/vrm/cottagecore.vrm';
 
 export function vrmForTraits(traits: Pick<PersonaTraits, 'aesthetic'>): string {
   const candidate = VRM_BY_AESTHETIC[traits.aesthetic];

@@ -16,15 +16,15 @@
 import type { ClaimTokenPayload, PersonaTraits } from '@angel/shared';
 import { useAngelStore } from '@/stores/angel';
 import { useSwipeStore } from '@/stores/swipe';
+import { VALID_VRM_URLS } from '@/lib/vrmMatcher';
 
 const STORAGE_KEY = 'angel-persona-v1';
 
-/** The single working VRM body the room loads — see vrmMatcher.ts for the
- *  bind-pose-drift caveat. Any persisted persona that points elsewhere is
- *  silently rewritten to this on hydrate so old saves can't keep an
- *  arms-up VRM alive across reloads. Keep in sync with
- *  vrmMatcher.ts#WORKING_VRM and Scene.tsx#FALLBACK_VRM. */
-const WORKING_VRM = '/vrm/2068967230566994300.vrm';
+/** Fallback if a persisted vrmUrl doesn't match any of the 5 curated
+ *  bodies — happens when an older build saved the placeholder URL or
+ *  someone hand-edited localStorage. Keep in sync with
+ *  Scene.tsx#FALLBACK_VRM. */
+const FALLBACK_VRM = '/vrm/cottagecore.vrm';
 
 interface SavedPersona {
   userId: string;
@@ -76,9 +76,13 @@ export function hydratePersonaFromStorageOnce(): void {
     exp: Math.floor(saved.savedAt / 1000) + 60 * 60 * 24 * 365,
   };
   try {
-    const sanitized = saved.vrmUrl && saved.vrmUrl !== WORKING_VRM ? WORKING_VRM : saved.vrmUrl;
-    if (sanitized !== saved.vrmUrl) {
-      console.info('[personaPersist] sanitized stale vrmUrl', saved.vrmUrl, '→', sanitized);
+    // accept any vrmUrl that's a known curated body, otherwise rewrite to
+    // FALLBACK_VRM. This handles old saves that pointed at the placeholder
+    // (`2068967230566994300.vrm`) which is no longer in the picker.
+    let sanitized = saved.vrmUrl;
+    if (sanitized && !VALID_VRM_URLS.has(sanitized)) {
+      console.info('[personaPersist] unknown vrmUrl, falling back', sanitized, '→', FALLBACK_VRM);
+      sanitized = FALLBACK_VRM;
       write({ ...saved, vrmUrl: sanitized });
     }
     useAngelStore.getState().applyClaim(claim, sanitized);
@@ -160,6 +164,15 @@ export function setupPersonaPersist(): () => void {
         const m = await import('./interactables');
         m.clearOverrides();
         console.info('[__angel] cleared interactable overrides — reload the window to re-read defaults');
+      },
+      // monitor pose tuner — broadcasts a custom event that DeskMonitor
+      // listens to and re-derives its position on. nudge depth/height
+      // /anchor live without rebuilding. examples:
+      //   window.__angel.tuneMonitor({ depth: 0.5, height: 1.45 })
+      //   window.__angel.tuneMonitor({ anchorTo: 'desk_workstation' })
+      tuneMonitor: (patch: { depth?: number; height?: number; anchorTo?: 'desk_chair' | 'desk_workstation' }) => {
+        window.dispatchEvent(new CustomEvent('angel:monitor-tune', { detail: patch }));
+        console.info('[__angel] tuneMonitor →', patch);
       },
     };
   }
