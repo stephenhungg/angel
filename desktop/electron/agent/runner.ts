@@ -93,6 +93,9 @@ const CLIPS: AnimationClip[] = [
   'reading',
   'wave',
   'thinking',
+  'jumping_jacks',
+  // start_/stop_jumping_jacks are internal one-shots auto-chained by the
+  // ActionRunner; the brain only ever emits the loop name.
 ];
 
 /**
@@ -160,7 +163,7 @@ const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: 'play_clip',
-    description: `Play a one-shot or short animation. ONLY for body language (wave, thinking, sitting_playful, reading) — NEVER for 'walking'. Walking is handled by walk_to or interact_with; emitting play_clip('walking') would just animate her legs in place without moving her. Available: ${CLIPS.filter((c) => c !== 'walking').join(', ')}.`,
+    description: `Play a one-shot or short animation. ONLY for body language (wave, thinking, sitting_playful, reading, jumping_jacks) — NEVER for 'walking'. Walking is handled by walk_to or interact_with; emitting play_clip('walking') would just animate her legs in place without moving her. Use play_clip('jumping_jacks') when matthew asks you to exercise / work out / get pumped / do jumping jacks — the renderer auto-chains start → loop → stop for you, so just emit the single clip name. Available: ${CLIPS.filter((c) => c !== 'walking').join(', ')}.`,
     input_schema: {
       type: 'object',
       properties: {
@@ -414,7 +417,7 @@ ${INTERACTABLES.map((i) => `    • ${i.id} (${i.kind}) — verbs: ${i.verbs.joi
 - walk to a raw anchor via walk_to(anchor) when no interactable applies. anchors: ${ANCHORS.join(', ')}
 - walk up to the user when they ask you to come over: come_to_me. this walks to their actual live position (they move around with WASD), stops ~1.4m short, and faces them. use for "come here", "come to me", "follow me", "get over here", etc.
 - sit on a raw chair anchor via sit_at(anchor). chair anchors only: ${CHAIR_ANCHORS.join(', ')}
-- short body language clips via play_clip (wave, thinking, sitting_playful, reading). NEVER play_clip('walking') — it animates legs in place without moving you. use walk_to or interact_with instead.
+- short body language clips via play_clip (wave, thinking, sitting_playful, reading, jumping_jacks). NEVER play_clip('walking') — it animates legs in place without moving you. use walk_to or interact_with instead.
 - face the user or any anchor with face()
 - speak with the 'say' tool — never as plain assistant text
 
@@ -428,6 +431,7 @@ if the user asks you to sit somewhere that isn't a chair (window, door), gently 
 5. say() is for dialogue. ALWAYS pair an action with a short say() so the player gets feedback.
 6. keep utterance count low. one say() per turn ideal, 2 max.
 7. excitement → say(..., excited) + play_clip(wave)
+8. when matthew asks you to exercise / work out / get pumped / do jumping jacks — call play_clip('jumping_jacks', durationMs ~6000). the renderer auto-chains start → loop → stop → idle. pair with a short say (excited or happy).
 
 # delegate + verify (soul invariant #2 — honesty over impression)
 when you ship code with delegate():

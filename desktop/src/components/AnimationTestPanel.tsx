@@ -17,6 +17,9 @@ const CLIPS: { name: AnimationClip; label: string; oneShot?: boolean }[] = [
   { name: 'sit_to_type', label: 'sit → type', oneShot: true },
   { name: 'typing', label: 'typing' },
   { name: 'type_to_sit', label: 'type → sit', oneShot: true },
+  { name: 'start_jumping_jacks', label: 'jacks → start', oneShot: true },
+  { name: 'jumping_jacks', label: 'jumping jacks' },
+  { name: 'stop_jumping_jacks', label: 'jacks → stop', oneShot: true },
   { name: 'wave', label: 'wave', oneShot: true },
 ];
 

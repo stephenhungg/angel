@@ -33,7 +33,10 @@ export type AnimationClip =
   | 'type_to_sit'
   | 'reading'
   | 'wave'
-  | 'thinking';
+  | 'thinking'
+  | 'start_jumping_jacks'
+  | 'jumping_jacks'
+  | 'stop_jumping_jacks';
 
 export type Expression =
   | 'smile'

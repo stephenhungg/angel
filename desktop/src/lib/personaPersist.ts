@@ -153,6 +153,14 @@ export function setupPersonaPersist(): () => void {
       ...(w.__angel ?? {}),
       rediscover: rediscoverAngel,
       clearSavedPersona,
+      // hop-in helper for clearing the calibration localStorage cache —
+      // localStorage takes priority over interactables.default.json, so any
+      // bad in-session calibration sticks until cleared.
+      clearInteractableOverrides: async () => {
+        const m = await import('./interactables');
+        m.clearOverrides();
+        console.info('[__angel] cleared interactable overrides — reload the window to re-read defaults');
+      },
     };
   }
 

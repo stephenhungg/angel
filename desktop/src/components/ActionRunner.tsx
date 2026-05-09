@@ -280,6 +280,30 @@ export function ActionRunner({ avatarRef, roomRoot }: Props) {
           currentActionAtTimeoutRef.current = current.id;
           break;
         }
+        // jumping jacks auto-chain: start_jumping_jacks → jumping_jacks(loop)
+        // → stop_jumping_jacks → idle. Brain emits one play_clip:'jumping_jacks'.
+        if (current.clip === 'jumping_jacks') {
+          const handle = avatarRef.current;
+          const totalMs = current.durationMs ?? 5000;
+          ctx.totalDuration = totalMs / 1000;
+          (async () => {
+            if (!handle) return;
+            await handle.playOnce('start_jumping_jacks', 160);
+            handle.play('jumping_jacks', 200);
+            setClip('jumping_jacks');
+            const remainingMs = Math.max(700, totalMs - 1400);
+            window.setTimeout(() => {
+              if (currentActionAtTimeoutRef.current === current.id) {
+                handle.playOnce('stop_jumping_jacks', 200).then(() => {
+                  handle.play('idle', 220);
+                  setClip('idle');
+                });
+              }
+            }, remainingMs);
+          })();
+          currentActionAtTimeoutRef.current = current.id;
+          break;
+        }
         avatarRef.current?.play(current.clip, 200);
         setClip(current.clip);
         ctx.totalDuration = (current.durationMs ?? 800) / 1000;

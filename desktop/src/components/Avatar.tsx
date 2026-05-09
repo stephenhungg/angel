@@ -45,6 +45,9 @@ const DEFAULT_CLIPS: Partial<Record<ClipName, string>> = {
   sit_to_type: '/animations/typing%20flow/Sit%20To%20Type.fbx',
   typing: '/animations/typing%20flow/Typing.fbx',
   type_to_sit: '/animations/typing%20flow/Type%20To%20Sit.fbx',
+  start_jumping_jacks: '/animations/exercise%20flow/Start%20Jumping%20Jacks.fbx',
+  jumping_jacks: '/animations/exercise%20flow/Jumping%20Jacks.fbx',
+  stop_jumping_jacks: '/animations/exercise%20flow/Stop%20Jumping%20Jacks.fbx',
   wave: '/animations/celebration.fbx',
 };
 
@@ -116,7 +119,12 @@ export const Avatar = forwardRef<AvatarHandle, AvatarProps>(function Avatar(
               const retargeted = retargetMixamoClip(src, v, fbx);
               const action = mixer.clipAction(retargeted);
               // transition clips are one-shot; everything else loops
-              const isOneShot = name === 'sit_to_type' || name === 'type_to_sit' || name === 'wave';
+              const isOneShot =
+                name === 'sit_to_type' ||
+                name === 'type_to_sit' ||
+                name === 'start_jumping_jacks' ||
+                name === 'stop_jumping_jacks' ||
+                name === 'wave';
               if (isOneShot) {
                 action.setLoop(THREE.LoopOnce, 1);
                 action.clampWhenFinished = true;
