@@ -1,28 +1,36 @@
 import { BaitIntro } from "@/components/BaitIntro";
 import { SmoothScroll } from "@/components/SmoothScroll";
+import { Cursor } from "@/components/Cursor";
 import { Nav } from "@/components/Nav";
 import { Hero } from "@/components/Hero";
 import { Origin } from "@/components/Origin";
 import { WhatSheIs } from "@/components/WhatSheIs";
 import { Archetypes } from "@/components/Archetypes";
-import { Voices } from "@/components/Voices";
 import { Showcase } from "@/components/Showcase";
+import { LogoMarquee } from "@/components/LogoMarquee";
 import { Footer } from "@/components/Footer";
 
-// landing assembly — section order is a 1:1 mirror of moment.framer.photos's
-// home flow (verified against /reference/moment/page-structure.md):
-//
-//   nav → hero → 01 origin (about teaser) → 02 what-she-is (dark services grid
-//   + primary cta) → archetypes (gallery list, 2x2) → 03 voices (testimonial)
-//   → 04 showcase (pexels) → footer
-//
-// the dark-band cta that used to live in a separate Discover section is now
-// folded into 02/what-she-is, which matches moment's pattern of putting the
-// primary cta inside the dark services grid.
+const stack: { name: string; image?: string }[] = [
+  { name: "next.js" },
+  { name: "convex" },
+  { name: "sonnet 4.6" },
+  { name: "nia memory" },
+  { name: "tensorlake" },
+  { name: "codex" },
+  { name: "framer-motion" },
+  { name: "gsap" },
+  { name: "tailwind" },
+  { name: "lenis" },
+  { name: "noto serif jp" },
+  { name: "bagel fat one" },
+  { name: "天使" },
+];
+
 export default function HomePage() {
   return (
     <>
       <SmoothScroll />
+      <Cursor />
       <BaitIntro>
         <main className="min-h-screen bg-paper">
           <Nav />
@@ -30,8 +38,11 @@ export default function HomePage() {
           <Origin />
           <WhatSheIs />
           <Archetypes />
-          <Voices />
           <Showcase />
+          {/* credit-roll marquee — silent moving strip of the stack she runs on */}
+          <section className="relative border-y border-hairline bg-paper py-8 tablet:py-10">
+            <LogoMarquee logos={stack} duration={42} />
+          </section>
           <Footer />
         </main>
       </BaitIntro>
