@@ -59,17 +59,17 @@ export function Nav() {
         onStart: () => setDrawerVisible(true),
         onReverseComplete: () => setDrawerVisible(false),
       })
-      .to(drawer, { duration: 0.9, height: "auto", ease: "power4.out" })
+      .to(drawer, { duration: 0.55, height: "auto", ease: "power3.out" })
       .to(
         links.querySelectorAll("li"),
         {
-          duration: 0.7,
+          duration: 0.5,
           opacity: 1,
           y: 0,
           ease: "power3.out",
-          stagger: 0.05,
+          stagger: 0.045,
         },
-        0.15,
+        0.12,
       )
       .reverse();
 
@@ -100,7 +100,11 @@ export function Nav() {
       style={{ transition: "background-color 200ms linear" }}
     >
       <div
-        className="rounded-pill border border-white/50 bg-cloud/35 px-3 shadow-[0_8px_24px_-8px_rgba(199,78,122,0.25),inset_0_1px_0_rgba(255,255,255,0.6)] backdrop-blur-2xl tablet:px-5"
+        className={`border border-white/50 bg-cloud/35 px-4 shadow-[0_8px_24px_-8px_rgba(199,78,122,0.25),inset_0_1px_0_rgba(255,255,255,0.6)] backdrop-blur-2xl transition-[border-radius,background-color] duration-500 ease-[cubic-bezier(0.42,0.21,0,1)] tablet:px-6 ${
+          drawerVisible
+            ? "rounded-[32px] bg-cloud/85"
+            : "rounded-pill"
+        }`}
         style={{
           WebkitBackdropFilter: "blur(24px) saturate(140%)",
           backdropFilter: "blur(24px) saturate(140%)",
@@ -144,15 +148,15 @@ export function Nav() {
           </button>
         </nav>
 
-        {/* drawer */}
+        {/* drawer — sits inside the morphing pill. height animates 0 → auto via gsap */}
         <div ref={drawerRef} aria-hidden={!open} style={{ height: 0, overflow: "hidden" }}>
-          <div className="border-t border-hairline pb-12 pt-10 tablet:pb-16 tablet:pt-14">
-            <ul ref={linksRef} className="flex flex-col gap-3 tablet:gap-4">
+          <div className="border-t border-hairline/60 pb-7 pt-6 tablet:pb-10 tablet:pt-8">
+            <ul ref={linksRef} className="flex flex-col gap-1 tablet:gap-2">
               {NAV_LINKS.map((item) => {
                 const isDownload = item.href === "/download";
                 const isExternal = item.href.startsWith("http");
                 const cls =
-                  "block font-bagel text-[44px] leading-[0.95] tracking-[-0.02em] text-ink-near transition-colors duration-300 hover:text-sakura-500 tablet:text-[72px] desktop:text-[96px]";
+                  "block font-bagel text-[32px] leading-[1.05] tracking-[-0.02em] text-ink-near transition-colors duration-300 hover:text-sakura-500 tablet:text-[44px] desktop:text-[56px]";
                 return (
                   <li
                     key={item.href}
@@ -190,7 +194,7 @@ export function Nav() {
               })}
             </ul>
 
-            <div className="mt-12 flex items-end justify-between gap-6 font-sans text-[15px] font-medium text-muted-deep tablet:mt-16 tablet:text-[16px]">
+            <div className="mt-8 flex items-end justify-between gap-6 font-sans text-[14px] font-medium text-muted-deep tablet:mt-10 tablet:text-[15px]">
               <div className="flex flex-col gap-1">
                 <a
                   href="mailto:founders@kalilabs.ai"
