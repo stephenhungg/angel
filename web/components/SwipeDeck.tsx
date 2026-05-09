@@ -104,6 +104,8 @@ export function SwipeDeck() {
           </motion.div>
         )}
       </AnimatePresence>
+      {/* heart burst on yes-swipe — gsap-driven 10-heart explosion */}
+      <HeartBurst triggerKey={burst.key} originX={burst.x} originY={burst.y} />
     </div>
   );
 }
