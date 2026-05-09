@@ -614,23 +614,31 @@ function pushHistory(msg: Anthropic.MessageParam): void {
 }
 
 /**
- * Anthropic invariant: every assistant message containing `tool_use`
- * blocks MUST be immediately followed by a user message containing a
- * matching `tool_result` block for each tool_use id. If we ever push an
- * assistant message with tool_use and forget the tool_results (e.g. the
- * orchestrator loop exited on stop_reason === 'end_turn' before pushing
- * follow-up results), the very NEXT user turn fails with HTTP 400 and
- * the brain falls back to mock forever.
+ * Anthropic invariants we have to enforce on every API call:
+ *   1. Every assistant message containing `tool_use` blocks MUST be
+ *      immediately followed by a user message containing a matching
+ *      `tool_result` block for each tool_use id.
+ *   2. The history must start with a user message. (Anthropic accepts
+ *      assistant-first in some versions, but it's an avoidable footgun.)
+ *   3. No `tool_result` block may appear without a matching `tool_use`
+ *      block in the *immediately preceding* assistant message. This is
+ *      the symmetric failure mode of (1) — orphan tool_results — and is
+ *      caused by HISTORY_LIMIT shifting an assistant tool_use off the
+ *      front of history while leaving its paired user tool_result behind.
  *
- * This guard scans the entire `history` and inserts synthetic stub
- * tool_results immediately after any assistant message that has unpaired
- * tool_use ids. Once the corruption has occurred (and the user has
- * accumulated a few brain-hiccup turns on top), it isn't always at the
- * tail anymore — a full scan is required to dig everything out.
+ * Without this guard, the brain falls back to mock forever once `history`
+ * gets corrupted, which it inevitably does during long sessions.
+ *
+ * Two passes:
+ *   - Pass 1: walk left-to-right; for any assistant with unpaired
+ *     tool_use blocks, splice/extend a synthetic stub tool_result message.
+ *   - Pass 2: walk from head; drop or strip any leading message that
+ *     would violate the user-first / no-orphan-tool_result rules.
  *
  * Idempotent. Safe to call before every API request.
  */
 function repairHistory(): void {
+  // Pass 1 — pair up any orphan tool_use blocks with synthetic results.
   let i = 0;
   while (i < history.length) {
     const msg = history[i];
@@ -647,7 +655,6 @@ function repairHistory(): void {
       continue;
     }
 
-    // gather any tool_result ids already present in the next message
     const next = history[i + 1];
     const nextContent = next && Array.isArray(next.content) ? next.content : null;
     const presentResultIds = new Set<string>();
@@ -672,16 +679,46 @@ function repairHistory(): void {
     }));
 
     if (next?.role === 'user' && nextContent) {
-      // the next message is a user — extend its content with stub results
-      // so all tool_use ids are paired.
       next.content = [...nextContent, ...stubs];
     } else {
-      // splice in a synthetic user message between assistant and whatever
-      // came next (or at end of history).
       history.splice(i + 1, 0, { role: 'user', content: stubs });
     }
     console.warn('[orchestrator] repaired orphan tool_use ids:', missing.join(', '));
     i += 1;
+  }
+
+  // Pass 2 — fix the head of history. Drop any leading message that
+  // can't legally start a conversation, or strip orphan tool_result
+  // blocks from the leading user message.
+  while (history.length > 0) {
+    const first = history[0];
+    if (first.role !== 'user') {
+      console.warn('[orchestrator] dropping non-user leading message:', first.role);
+      history.shift();
+      continue;
+    }
+    if (!Array.isArray(first.content)) break; // plain string content — fine
+    const orphans = first.content.filter(
+      (b) => (b as { type?: string }).type === 'tool_result',
+    );
+    if (orphans.length === 0) break;
+    const cleaned = first.content.filter(
+      (b) => (b as { type?: string }).type !== 'tool_result',
+    );
+    if (cleaned.length === 0) {
+      console.warn(
+        '[orchestrator] dropping leading user message containing only orphan tool_results:',
+        orphans.length,
+      );
+      history.shift();
+      continue;
+    }
+    console.warn(
+      '[orchestrator] stripping orphan tool_result blocks from leading user message:',
+      orphans.length,
+    );
+    first.content = cleaned;
+    break;
   }
 }
 
@@ -1436,6 +1473,21 @@ export async function runBootGreeting(input: {
     for (const block of resp.content) {
       if (block.type === 'tool_use') {
         toolUseIds.push(block.id);
+        // route brain tools (recall_memory, recall_recent, know) and
+        // local-context tools (read_file, etc.) the same way the main
+        // orchestrator loop does — toolUseToSceneAction is *only* for
+        // embodiment actions, and falling through there would log
+        // "[orchestrator] unknown tool ..." for every memory call.
+        const isBrainTool =
+          block.name === 'recall_memory' || block.name === 'recall_recent' || block.name === 'know';
+        const isLocalTool =
+          block.name === 'read_file' ||
+          block.name === 'list_files' ||
+          block.name === 'git_status' ||
+          block.name === 'git_log' ||
+          block.name === 'run_shell' ||
+          block.name === 'recent_files';
+        if (isBrainTool || isLocalTool) continue; // execution skipped — boot greeting is one-shot
         const action = toolUseToSceneAction(block.name, (block.input ?? {}) as Record<string, unknown>);
         if (action) input.send(action);
       }

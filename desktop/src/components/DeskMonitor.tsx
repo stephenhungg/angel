@@ -18,11 +18,12 @@
  * still renders — just floats at the provided default world position.
  */
 
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Html } from '@react-three/drei';
 import { useConversationStore } from '../stores/conversation';
 import { useAngelStore } from '../stores/angel';
 import { onTaskStatus } from '../lib/ipcEvents';
+import { getInteractable } from '../lib/interactables';
 import type { AngelTask } from '@angel/shared';
 
 const MAX_VISIBLE_LINES = 14;
@@ -65,6 +66,65 @@ export function DeskMonitor({
   const appendTaskLog = useConversationStore((s) => s.appendTaskLog);
   const persona = useAngelStore((s) => s.persona);
   const accent = persona?.paletteHex ?? 'var(--angel-accent)';
+
+  /* ------------------------------------------------------------------ */
+  /* derive monitor pose from the desk_workstation interactable so the   */
+  /* CRT lands on the actual desk after calibration. Falls back to the   */
+  /* component props if the workstation isn't loaded yet (the JSON fetch  */
+  /* in Room.tsx can land a frame or two after this mounts), and polls a  */
+  /* few times to catch up once it does.                                  */
+  /* ------------------------------------------------------------------ */
+  const [derived, setDerived] = useState<{ pos: [number, number, number]; rotY: number } | null>(null);
+
+  useEffect(() => {
+    const compute = (): { pos: [number, number, number]; rotY: number } | null => {
+      const it = getInteractable('desk_workstation');
+      const approach = it?.approaches?.[0];
+      if (!it || !approach) return null;
+      // user's forward direction under VRM convention: rotation.y=0 → -Z.
+      // Forward = rotate (0,0,-1) around Y by approach.yaw.
+      const fx = -Math.sin(approach.yaw);
+      const fz = -Math.cos(approach.yaw);
+      // monitor sits ~70cm in front of the chair-side approach, on the
+      // desk surface. that lands roughly at the back of an authored desk
+      // (the 'far' edge from the user) without poking into the wall.
+      const monitorDepth = 0.7;
+      const deskTop = it.bbox.center.y + it.bbox.halfExtents.y;
+      const pos: [number, number, number] = [
+        approach.pos.x + fx * monitorDepth,
+        deskTop + 0.32, // ~32cm above the desk surface for screen center
+        approach.pos.z + fz * monitorDepth,
+      ];
+      // monitor's html plane normal (+Z by default for drei <Html transform>)
+      // should point at the user. The user's facing yaw is approach.yaw, so
+      // for the html's +Z to point opposite (toward the user), we set the
+      // monitor's rotation.y == approach.yaw.
+      return { pos, rotY: approach.yaw };
+    };
+
+    const initial = compute();
+    if (initial) {
+      setDerived(initial);
+      return;
+    }
+    // workstation not loaded yet — poll briefly while Room.tsx fetches the
+    // defaults JSON + applies overrides. caps at 30 retries × 200ms = 6s.
+    let attempts = 0;
+    const id = window.setInterval(() => {
+      attempts += 1;
+      const c = compute();
+      if (c) {
+        setDerived(c);
+        window.clearInterval(id);
+      } else if (attempts > 30) {
+        window.clearInterval(id);
+      }
+    }, 200);
+    return () => window.clearInterval(id);
+  }, []);
+
+  const finalPosition = derived?.pos ?? position;
+  const finalRotationY = derived?.rotY ?? rotationY;
 
   // wire ipcEvents.onTaskStatus → store
   useEffect(() => {
@@ -131,7 +191,7 @@ export function DeskMonitor({
   }, [visible.length]);
 
   return (
-    <group position={position} rotation={[0, rotationY, 0]} scale={scale}>
+    <group position={finalPosition} rotation={[0, finalRotationY, 0]} scale={scale}>
       <Html
         transform
         distanceFactor={1}
