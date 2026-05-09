@@ -8,6 +8,7 @@ import { Avatar, type AvatarHandle } from '@/components/Avatar';
 import { ActionRunner } from '@/components/ActionRunner';
 import { Player } from '@/components/Player';
 import { DeskMonitor } from '@/components/DeskMonitor';
+import { AnimationTestPanel } from '@/components/AnimationTestPanel';
 import { useAngelStore } from '@/stores/angel';
 
 const FALLBACK_VRM = '/vrm/2068967230566994300.vrm';
@@ -18,13 +19,17 @@ type SceneProps = {
   debug?: boolean;
 };
 
-/** Place the avatar at a sensible spawn anchor once the room is ready. */
+/** Place the avatar at a sensible spawn point once the room is ready. We
+ * override the room's `center` anchor with a left-side offset so the player
+ * (who spawns near the door) has a clear sightline of her, and rotate her
+ * 180° to face that direction. */
+const AVATAR_SPAWN_POS: [number, number, number] = [-1.5, 0, -0.2];
+const AVATAR_SPAWN_YAW = Math.PI;
+
 function SpawnAvatarAtAnchor({
   avatarRef,
-  roomRoot,
 }: {
   avatarRef: React.MutableRefObject<AvatarHandle | null>;
-  roomRoot: THREE.Object3D | null;
 }) {
   useEffect(() => {
     let attempts = 0;
@@ -35,16 +40,13 @@ function SpawnAvatarAtAnchor({
         if (attempts > 80) window.clearInterval(id);
         return;
       }
-      import('@/lib/anchors').then(({ resolveAnchor }) => {
-        const a = resolveAnchor('center', roomRoot);
-        root.position.copy(a.position);
-        root.rotation.y = a.rotationY;
-        console.info('[scene] spawned avatar at', a.position.toArray());
-      });
+      root.position.set(...AVATAR_SPAWN_POS);
+      root.rotation.y = AVATAR_SPAWN_YAW;
+      console.info('[scene] spawned avatar at', AVATAR_SPAWN_POS, 'yaw', AVATAR_SPAWN_YAW.toFixed(2));
       window.clearInterval(id);
     }, 100);
     return () => window.clearInterval(id);
-  }, [avatarRef, roomRoot]);
+  }, [avatarRef]);
   return null;
 }
 
@@ -210,7 +212,7 @@ export function Scene({ debug = true }: SceneProps) {
         />
 
         <ActionRunner avatarRef={avatarRef} roomRoot={roomRoot} />
-        <SpawnAvatarAtAnchor avatarRef={avatarRef} roomRoot={roomRoot} />
+        <SpawnAvatarAtAnchor avatarRef={avatarRef} />
         <AvatarLookAtPlayer avatarRef={avatarRef} />
         <Player roomRoot={roomRoot} locked={pointerLocked} />
 
@@ -228,6 +230,7 @@ export function Scene({ debug = true }: SceneProps) {
       {!pointerLocked && <PointerLockPrompt />}
       <Crosshair />
       {debug && <SceneDebugBadge {...debugInfo} />}
+      {debug && <AnimationTestPanel avatarRef={avatarRef} />}
     </div>
   );
 }
@@ -309,6 +312,23 @@ function Crosshair() {
 
 function SceneDebugBadge({ vrm, room }: { vrm: boolean; room: boolean }) {
   const player = useAngelStore((s) => s.player);
+  const [brain, setBrain] = useState<'claude' | 'mock' | 'unknown'>('unknown');
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const res = (await (window as unknown as {
+          angel?: { invokeTool: (n: string) => Promise<{ source?: string }> };
+        }).angel?.invokeTool('brain:status')) as { source?: 'claude' | 'mock' } | undefined;
+        if (alive && res?.source) setBrain(res.source);
+      } catch {
+        /* main may not be ready yet — leave unknown */
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
   return (
     <div
       style={{
@@ -335,6 +355,16 @@ function SceneDebugBadge({ vrm, room }: { vrm: boolean; room: boolean }) {
       </div>
       <div>
         vrm · <span style={{ color: vrm ? '#7fffaf' : '#ff7e7e' }}>{vrm ? 'loaded' : 'loading…'}</span>
+      </div>
+      <div>
+        brain ·{' '}
+        <span
+          style={{
+            color: brain === 'claude' ? '#9b6dff' : brain === 'mock' ? '#ffd166' : '#888',
+          }}
+        >
+          {brain === 'unknown' ? 'checking…' : brain}
+        </span>
       </div>
       <div style={{ opacity: 0.75 }}>
         you · ({player.x.toFixed(2)}, {player.y.toFixed(2)}, {player.z.toFixed(2)})

@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 
-import { resolveCollision, groundProbe, STEP_UP_MAX } from '@/lib/collision';
+import { resolveCollision, groundProbe, findClearSpawn, STEP_UP_MAX } from '@/lib/collision';
 import { useAngelStore } from '@/stores/angel';
 
 type PlayerProps = {
@@ -40,8 +40,8 @@ const KEYS = {
 /** First-person WASD + mouse-look controller. */
 export function Player({
   roomRoot,
-  /** spawn 2m back from origin, facing the avatar at world (0,0,0) */
-  spawn = [0, 0, 2.2],
+  /** spawn left-of-center, near the door; auto-relocates if blocked */
+  spawn = [0, 0, 2.4],
   /** yaw=0 → looking down −Z (forward in three's default camera frame) */
   spawnYaw = 0,
   radius = 0.32,
@@ -62,12 +62,14 @@ export function Player({
 
   const keysRef = useRef<Record<string, boolean>>({});
 
-  // gather collider meshes once room is ready (skip the floor plane added
-  // separately — that's at y=−0.001 and only catches feet, fine)
+  // gather collider meshes once the room is ready, then teleport the player
+  // to a guaranteed-clear spot. fixes "spawned inside the desk and can't move"
   const collidersRef = useRef<THREE.Object3D[]>([]);
+  const spawnResolvedRef = useRef(false);
   useEffect(() => {
     if (!roomRoot) {
       collidersRef.current = [];
+      spawnResolvedRef.current = false;
       return;
     }
     const list: THREE.Object3D[] = [];
@@ -75,7 +77,21 @@ export function Player({
       if ((obj as THREE.Mesh).isMesh) list.push(obj);
     });
     collidersRef.current = list;
-  }, [roomRoot]);
+
+    // pick a clear spawn — preferred point first, spiral out if blocked
+    if (!spawnResolvedRef.current) {
+      const preferred = new THREE.Vector3(spawn[0], spawn[1], spawn[2]);
+      const clear = findClearSpawn(preferred, radius, list, { maxSearchRadius: 3.0 });
+      positionRef.current.copy(clear);
+      vyRef.current = 0;
+      spawnResolvedRef.current = true;
+      console.info('[player] spawn resolved', {
+        preferred: preferred.toArray().map((n) => n.toFixed(2)),
+        chosen: clear.toArray().map((n) => n.toFixed(2)),
+        moved: !preferred.equals(clear),
+      });
+    }
+  }, [roomRoot, spawn, radius]);
 
   // keyboard
   useEffect(() => {
@@ -120,23 +136,29 @@ export function Player({
     }
   }, [camera, spawn, spawnYaw, eyeHeight]);
 
-  // 'R' respawns at the configured spawn point — failsafe for "I clipped
-  // through a wall and now I'm in the void" moments
+  // 'R' respawns — failsafe for "I clipped through a wall and now I'm in
+  // the void" moments. uses the same clear-spawn search as initial spawn
+  // so it never lands you back inside the desk you just escaped from.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.code !== 'KeyR') return;
       const el = document.activeElement as HTMLElement | null;
       if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
-      positionRef.current.set(spawn[0], spawn[1], spawn[2]);
+      const preferred = new THREE.Vector3(spawn[0], spawn[1], spawn[2]);
+      const clear =
+        collidersRef.current.length > 0
+          ? findClearSpawn(preferred, radius, collidersRef.current, { maxSearchRadius: 3.0 })
+          : preferred;
+      positionRef.current.copy(clear);
       velocityRef.current.set(0, 0, 0);
       vyRef.current = 0;
       yawRef.current = spawnYaw;
       pitchRef.current = 0;
-      console.info('[player] respawned');
+      console.info('[player] respawned', clear.toArray().map((n) => n.toFixed(2)));
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [spawn, spawnYaw]);
+  }, [spawn, spawnYaw, radius]);
 
   useFrame((_, dt) => {
     const dtClamped = Math.min(dt, 0.05); // avoid huge jumps after a stutter

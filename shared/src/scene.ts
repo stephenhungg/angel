@@ -28,7 +28,10 @@ export type AnimationClip =
   | 'idle'
   | 'walking'
   | 'sitting'
+  | 'sitting_playful'
+  | 'sit_to_type'
   | 'typing'
+  | 'type_to_sit'
   | 'reading'
   | 'wave'
   | 'thinking';

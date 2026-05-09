@@ -18,6 +18,10 @@ import { useAngelStore } from '@/stores/angel';
 export type AvatarHandle = {
   /** crossfade into a named clip; missing clips silently degrade to default pose */
   play: (clip: ClipName, fadeMs?: number) => void;
+  /** play a one-shot clip, fade-in, and resolve when it ends. resolves
+   *  immediately with `false` if the clip isn't loaded so callers can chain
+   *  cleanly without timing out. */
+  playOnce: (clip: ClipName, fadeMs?: number) => Promise<boolean>;
   /** the loaded VRM (null while loading) */
   getVRM: () => VRM | null;
   /** wrapping group — ActionRunner mutates its position/rotation for walk lerp */
@@ -37,7 +41,10 @@ const DEFAULT_CLIPS: Partial<Record<ClipName, string>> = {
   idle: '/animations/Idle.fbx',
   walking: '/animations/Walking.fbx',
   sitting: '/animations/Sitting.fbx',
+  sitting_playful: '/animations/Sitting_playful.fbx',
+  sit_to_type: '/animations/typing%20flow/Sit%20To%20Type.fbx',
   typing: '/animations/typing%20flow/Typing.fbx',
+  type_to_sit: '/animations/typing%20flow/Type%20To%20Sit.fbx',
   wave: '/animations/celebration.fbx',
 };
 
@@ -108,7 +115,14 @@ export const Avatar = forwardRef<AvatarHandle, AvatarProps>(function Avatar(
               if (!src) return null;
               const retargeted = retargetMixamoClip(src, v, fbx);
               const action = mixer.clipAction(retargeted);
-              action.setLoop(THREE.LoopRepeat, Infinity);
+              // transition clips are one-shot; everything else loops
+              const isOneShot = name === 'sit_to_type' || name === 'type_to_sit' || name === 'wave';
+              if (isOneShot) {
+                action.setLoop(THREE.LoopOnce, 1);
+                action.clampWhenFinished = true;
+              } else {
+                action.setLoop(THREE.LoopRepeat, Infinity);
+              }
               return [name, action] as const;
             } catch (err) {
               console.info(`[avatar] clip "${name}" not loaded (${url})`, err);
@@ -191,6 +205,32 @@ export const Avatar = forwardRef<AvatarHandle, AvatarProps>(function Avatar(
         currentActionRef.current?.fadeOut(fadeMs / 1000);
         currentActionRef.current = next;
       },
+      playOnce: (clip: ClipName, fadeMs = 200) =>
+        new Promise<boolean>((resolve) => {
+          const action = actionsRef.current[clip];
+          const mixer = mixerRef.current;
+          if (!action || !mixer) {
+            resolve(false);
+            return;
+          }
+          const onFinished = (e: THREE.Event & { action: THREE.AnimationAction }) => {
+            if (e.action !== action) return;
+            mixer.removeEventListener('finished', onFinished as never);
+            resolve(true);
+          };
+          mixer.addEventListener('finished', onFinished as never);
+
+          if (currentActionRef.current === action) {
+            action.reset();
+            action.play();
+          } else {
+            action.reset();
+            action.fadeIn(fadeMs / 1000);
+            action.play();
+            currentActionRef.current?.fadeOut(fadeMs / 1000);
+            currentActionRef.current = action;
+          }
+        }),
       getVRM: () => vrm,
       getRoot: () => groupRef.current,
     }),

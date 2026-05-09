@@ -110,3 +110,15 @@ export const ALL_ANCHORS: AnchorId[] = [
   'couch_sit',
   'door',
 ];
+
+/** Anchors the avatar can actually sit on. Source of truth for the
+ *  orchestrator's "what is a chair" knowledge — the brain is told this
+ *  whitelist so it never asks her to sit on the door or the bookshelf,
+ *  and the runtime guards against it too. */
+export const CHAIR_ANCHORS: AnchorId[] = ALL_ANCHORS.filter(
+  (id) => ANCHOR_FALLBACKS[id]?.sit === true,
+);
+
+export function isChairAnchor(id: AnchorId): boolean {
+  return ANCHOR_FALLBACKS[id]?.sit === true;
+}

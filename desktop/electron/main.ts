@@ -1,9 +1,51 @@
 import { app, BrowserWindow, ipcMain, shell } from 'electron';
 import path from 'node:path';
+import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { registerProtocolHandler, parseClaimFromArgs } from './persona/claim';
 import type { SceneAction, SceneActionComplete, ClaimTokenPayload } from '@angel/shared';
 import { runMockOrchestrator, registerMockHandlers, bootAutonomyBeat } from './agent/mock';
+import { runOrchestrator, isAvailable as isBrainAvailable } from './agent/runner';
+
+/**
+ * Tiny .env.local loader — reads desktop/.env.local before any module that
+ * touches process.env (e.g., the Anthropic SDK). Skips comments + blanks.
+ * Doesn't override existing real env vars (so CI / shell exports win).
+ */
+function loadDotEnvLocal(): void {
+  const candidates = [
+    path.resolve(process.cwd(), '.env.local'),
+    path.resolve(process.cwd(), '.env'),
+    // when packaged, app.getAppPath() points at resources/app — drop a copy there if needed
+  ];
+  for (const file of candidates) {
+    if (!fs.existsSync(file)) continue;
+    try {
+      const text = fs.readFileSync(file, 'utf8');
+      for (const raw of text.split(/\r?\n/)) {
+        const line = raw.trim();
+        if (!line || line.startsWith('#')) continue;
+        const eq = line.indexOf('=');
+        if (eq < 1) continue;
+        const key = line.slice(0, eq).trim();
+        let value = line.slice(eq + 1).trim();
+        // strip optional matching surrounding quotes
+        if (
+          (value.startsWith('"') && value.endsWith('"')) ||
+          (value.startsWith("'") && value.endsWith("'"))
+        ) {
+          value = value.slice(1, -1);
+        }
+        if (process.env[key] == null) process.env[key] = value;
+      }
+      console.info('[env] loaded', file);
+    } catch (err) {
+      console.warn('[env] failed to load', file, err);
+    }
+  }
+}
+
+loadDotEnvLocal();
 
 const isDev = !!process.env.ELECTRON_RENDERER_URL || !app.isPackaged;
 
@@ -86,12 +128,21 @@ ipcMain.handle('tool:invoke', async (_evt, payload: { name: string; args?: Recor
     case 'chat': {
       const text = String(args.text ?? '').trim();
       if (!text) return { ok: false, error: 'empty text' };
-      runMockOrchestrator({
+      const ctx = {
         text,
         send: (action: SceneAction) => mainWindow?.webContents.send('scene:action', action),
-        sendChat: (token) => mainWindow?.webContents.send('chat:token', token),
-        sendState: (patch) => mainWindow?.webContents.send('state:update', patch),
-      });
+        sendChat: (token: { id: string; text: string; done?: boolean }) =>
+          mainWindow?.webContents.send('chat:token', token),
+        sendState: (patch: Record<string, unknown>) =>
+          mainWindow?.webContents.send('state:update', patch),
+      };
+      if (isBrainAvailable()) {
+        // fire and forget — runner handles its own errors and falls back
+        // to mock on auth/network failure
+        void runOrchestrator(ctx);
+      } else {
+        runMockOrchestrator(ctx);
+      }
       return { ok: true };
     }
     case 'action_complete': {
@@ -111,6 +162,13 @@ ipcMain.handle('tool:invoke', async (_evt, payload: { name: string; args?: Recor
 
 ipcMain.handle('claim:get-initial', async () => {
   return pendingClaim;
+});
+
+ipcMain.handle('brain:status', async () => {
+  return {
+    source: isBrainAvailable() ? 'claude' : 'mock',
+    keyConfigured: isBrainAvailable(),
+  } as const;
 });
 
 /* ------------------------------------------------------------------ */

@@ -5,9 +5,10 @@ import type { RefObject } from 'react';
 import type { AnchorId, SceneAction } from '@angel/shared';
 
 import { useAngelStore } from '@/stores/angel';
-import { resolveAnchor } from '@/lib/anchors';
+import { resolveAnchor, isChairAnchor } from '@/lib/anchors';
 import type { AvatarHandle } from '@/components/Avatar';
 import { ipc } from '@/lib/ipc';
+import { resolveCollision } from '@/lib/collision';
 
 type Props = {
   avatarRef: RefObject<AvatarHandle | null>;
@@ -20,6 +21,14 @@ const SPEED_M_S: Record<'slow' | 'normal' | 'urgent', number> = {
   normal: 1.3,
   urgent: 2.2,
 };
+
+/** avatar's collision capsule radius. smaller than the player's so she can
+ * slip into chair anchors without bumping the desk leg. */
+const AVATAR_COLLIDER_RADIUS = 0.25;
+/** considered "arrived" when within this distance of the target xz */
+const ARRIVE_EPS = 0.08;
+/** safety cap so a stuck-on-furniture path can't run forever */
+const WALK_TIMEOUT_S = 8;
 
 /** Per-action runtime — kept on the ref so we don't re-render on each frame. */
 type RunCtx = {
@@ -57,6 +66,24 @@ export function ActionRunner({ avatarRef, roomRoot }: Props) {
 
   const ctxRef = useRef<RunCtx | null>(null);
   const currentLocationRef = useRef<AnchorId>('center');
+  // tracks the action id that scheduled a typing-chain return so a
+  // cancel/replace can suppress the stale timer without ref-count bookkeeping
+  const currentActionAtTimeoutRef = useRef<string | null>(null);
+
+  // collect collider meshes from the room once it's loaded so the avatar's
+  // walks can slide along walls rather than clip through them
+  const collidersRef = useRef<THREE.Object3D[]>([]);
+  useEffect(() => {
+    if (!roomRoot) {
+      collidersRef.current = [];
+      return;
+    }
+    const list: THREE.Object3D[] = [];
+    roomRoot.traverse((obj) => {
+      if ((obj as THREE.Mesh).isMesh) list.push(obj);
+    });
+    collidersRef.current = list;
+  }, [roomRoot]);
 
   // when a new `current` lands, initialise context.
   useEffect(() => {
@@ -87,13 +114,28 @@ export function ActionRunner({ avatarRef, roomRoot }: Props) {
         ctx.toRotY = anchor.rotationY;
         const dist = ctx.fromPos.distanceTo(ctx.toPos);
         const speed = SPEED_M_S[current.speed ?? 'normal'];
-        ctx.totalDuration = Math.max(0.4, dist / speed);
+        // budget is generous — actual completion uses arrival check + timeout
+        ctx.totalDuration = Math.max(WALK_TIMEOUT_S, (dist / speed) * 1.6);
         avatarRef.current?.play('walking', 200);
         setClip('walking');
         setStoreState({ isWalking: true, walkTarget: current.anchor });
         break;
       }
       case 'sit_at': {
+        // chair guard — refuse to sit on non-chair anchors (window, door,
+        // bookshelf...). Logs and degrades to a face-and-stand pose.
+        if (!isChairAnchor(current.anchor)) {
+          console.warn('[scene] refused sit_at on non-chair anchor', current.anchor);
+          const anchor = resolveAnchor(current.anchor, roomRoot);
+          root.position.copy(anchor.position);
+          root.rotation.y = anchor.rotationY;
+          avatarRef.current?.play('idle', 250);
+          setClip('idle');
+          setStoreState({ isWalking: false, location: current.anchor });
+          currentLocationRef.current = current.anchor;
+          ctx.totalDuration = 0.3;
+          break;
+        }
         const anchor = resolveAnchor(current.anchor, roomRoot);
         // snap position + rotation
         root.position.copy(anchor.position);
@@ -115,6 +157,31 @@ export function ActionRunner({ avatarRef, roomRoot }: Props) {
         break;
       }
       case 'play_clip': {
+        // typing flow auto-chain: sit_to_type → typing(loop) → type_to_sit
+        // so the brain only has to emit one play_clip:'typing'. If the
+        // transitions aren't loaded the chain falls through to plain typing.
+        if (current.clip === 'typing') {
+          const handle = avatarRef.current;
+          const totalMs = current.durationMs ?? 5000;
+          ctx.totalDuration = totalMs / 1000;
+          (async () => {
+            if (!handle) return;
+            await handle.playOnce('sit_to_type', 180);
+            handle.play('typing', 220);
+            setClip('typing');
+            // schedule the type→sit return so the avatar isn't stuck typing
+            const remainingMs = Math.max(800, totalMs - 1400);
+            window.setTimeout(() => {
+              if (currentActionAtTimeoutRef.current === current.id) {
+                handle.playOnce('type_to_sit', 220).then(() => {
+                  handle.play('sitting', 220);
+                });
+              }
+            }, remainingMs);
+          })();
+          currentActionAtTimeoutRef.current = current.id;
+          break;
+        }
         avatarRef.current?.play(current.clip, 200);
         setClip(current.clip);
         ctx.totalDuration = (current.durationMs ?? 800) / 1000;
@@ -207,20 +274,64 @@ export function ActionRunner({ avatarRef, roomRoot }: Props) {
 
     switch (current.type) {
       case 'walk_to': {
-        // smoothstep eases the lerp so footsteps don't snap at endpoints
-        const e = t * t * (3 - 2 * t);
-        root.position.lerpVectors(ctx.fromPos, ctx.toPos, e);
-        const targetDelta = shortestAngleDelta(ctx.fromRotY, ctx.toRotY);
-        root.rotation.y = ctx.fromRotY + targetDelta * Math.min(1, t * 1.4);
-        if (t >= 1) {
-          root.position.copy(ctx.toPos);
+        // velocity-driven walk with capsule collision. moves toward the
+        // target each frame, slides along walls if blocked, and rotates to
+        // face the direction of motion.
+        const speed = SPEED_M_S[current.speed ?? 'normal'];
+        const dx = ctx.toPos.x - root.position.x;
+        const dz = ctx.toPos.z - root.position.z;
+        const distToTarget = Math.hypot(dx, dz);
+
+        const arrived = distToTarget < ARRIVE_EPS;
+        const timedOut = elapsed >= ctx.totalDuration;
+        if (arrived || timedOut) {
+          // snap to anchor position only on real arrival; on timeout, just
+          // stop where collision left us so we don't pop through a wall.
+          if (arrived) {
+            root.position.x = ctx.toPos.x;
+            root.position.z = ctx.toPos.z;
+          }
           root.rotation.y = ctx.toRotY;
           avatarRef.current?.play('idle', 200);
           setClip('idle');
           setStoreState({ isWalking: false, walkTarget: null, location: current.anchor });
           currentLocationRef.current = current.anchor;
           finish(current);
+          break;
         }
+
+        // step toward target this frame
+        const stepLen = Math.min(distToTarget, speed * dt);
+        const dirX = dx / distToTarget;
+        const dirZ = dz / distToTarget;
+        const next = root.position.clone();
+        next.x += dirX * stepLen;
+        next.z += dirZ * stepLen;
+
+        const corrected = resolveCollision({
+          current: root.position,
+          target: next,
+          radius: AVATAR_COLLIDER_RADIUS,
+          colliders: collidersRef.current,
+        });
+        root.position.x = corrected.x;
+        root.position.z = corrected.z;
+
+        // face direction of actual motion (after collision) so she pivots
+        // along walls rather than facing through them
+        const moveDx = corrected.x - ctx.fromPos.x;
+        const moveDz = corrected.z - ctx.fromPos.z;
+        const lookDir = Math.atan2(
+          ctx.toPos.x - root.position.x,
+          ctx.toPos.z - root.position.z,
+        );
+        // mostly aim at the target, but blend in motion direction so she
+        // doesn't moon-walk against a wall
+        const motionLen = Math.hypot(moveDx, moveDz);
+        const motionDir = motionLen > 0.05 ? Math.atan2(moveDx, moveDz) : lookDir;
+        const targetYaw = lookDir * 0.6 + motionDir * 0.4;
+        const yawDelta = shortestAngleDelta(root.rotation.y, targetYaw);
+        root.rotation.y += yawDelta * Math.min(1, dt * 8);
         break;
       }
       case 'face': {

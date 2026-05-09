@@ -130,3 +130,67 @@ export function ceilingProbe(
   if (hits.length === 0) return null;
   return hits[0].point.y;
 }
+
+/**
+ * Returns true if the player capsule has wall clearance at `pos`. Used
+ * outside the per-frame loop (e.g. spawn search) so we don't have to
+ * hand-roll the same multi-ray sweep.
+ */
+export function isPositionClear(
+  pos: THREE.Vector3,
+  radius: number,
+  colliders: THREE.Object3D[],
+  sampleYs: readonly number[] = DEFAULT_BODY_SAMPLES_Y,
+): boolean {
+  if (colliders.length === 0) return true;
+  return isClear(pos, sampleYs, radius, colliders);
+}
+
+/**
+ * Spiral outward from `preferred` looking for a position with capsule
+ * clearance and ground beneath it. Use at room-load time so we never spawn
+ * the player inside a desk/dresser/wall.
+ *
+ * Tries the preferred point first, then samples on rings of increasing
+ * radius (every ~30°). Returns the first clear sample, or `preferred` if
+ * nothing's clear within `maxSearchRadius` (you'll still respawn cleanly
+ * via R, so this never traps the user).
+ */
+export function findClearSpawn(
+  preferred: THREE.Vector3,
+  radius: number,
+  colliders: THREE.Object3D[],
+  opts: { maxSearchRadius?: number; rings?: number; samplesPerRing?: number } = {},
+): THREE.Vector3 {
+  if (colliders.length === 0) return preferred.clone();
+
+  const maxR = opts.maxSearchRadius ?? 3.5;
+  const rings = opts.rings ?? 8;
+  const samples = opts.samplesPerRing ?? 12;
+
+  // try preferred first
+  const probe = new THREE.Vector3();
+  const tryAt = (x: number, z: number): THREE.Vector3 | null => {
+    probe.set(x, preferred.y, z);
+    const ground = groundProbe(probe, colliders);
+    if (ground == null) return null; // no floor here → outside the room
+    probe.y = ground;
+    return isPositionClear(probe, radius, colliders) ? probe.clone() : null;
+  };
+
+  const first = tryAt(preferred.x, preferred.z);
+  if (first) return first;
+
+  for (let r = 1; r <= rings; r++) {
+    const dist = (maxR * r) / rings;
+    for (let s = 0; s < samples; s++) {
+      const a = (s / samples) * Math.PI * 2;
+      const x = preferred.x + Math.cos(a) * dist;
+      const z = preferred.z + Math.sin(a) * dist;
+      const hit = tryAt(x, z);
+      if (hit) return hit;
+    }
+  }
+  // give up — caller's preferred point will at least let R-respawn work
+  return preferred.clone();
+}
