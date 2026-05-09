@@ -265,10 +265,13 @@ export default defineSchema({
     personalityMd: v.optional(v.string()),
     /** E.164 phone number — populated when the user opts into the SMS surface. */
     phoneNumber: v.optional(v.string()),
+    /** Discord user id (snowflake) — populated when the user links discord. */
+    discordUserId: v.optional(v.string()),
     updatedAt: v.number(),
   })
     .index('by_authId', ['authId'])
-    .index('by_phoneNumber', ['phoneNumber']),
+    .index('by_phoneNumber', ['phoneNumber'])
+    .index('by_discordUserId', ['discordUserId']),
 
   // ──────────────────────────────────────────────────────────────────────────
   // SMS surface — angel's thinnest body. always-on, lid-closed, txt only.
@@ -289,5 +292,28 @@ export default defineSchema({
   })
     .index('by_user', ['userId', 'timestamp'])
     .index('by_phone', ['phoneNumber', 'timestamp'])
+    .index('by_time', ['timestamp']),
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Discord surface — slash-command body. interactions endpoint, no gateway.
+  // ──────────────────────────────────────────────────────────────────────────
+
+  /**
+   * discordTurns — transcript log of every inbound slash command + outbound
+   * followup. mirrors smsTurns. interactionToken is kept for traceability +
+   * possible "edit-the-original" use cases (only valid 15min after creation).
+   */
+  discordTurns: defineTable({
+    userId: v.string(),
+    direction: v.union(v.literal('inbound'), v.literal('outbound')),
+    body: v.string(),
+    discordUserId: v.string(),
+    discordChannelId: v.optional(v.string()),
+    discordGuildId: v.optional(v.string()),
+    interactionToken: v.optional(v.string()),
+    timestamp: v.number(),
+  })
+    .index('by_user', ['userId', 'timestamp'])
+    .index('by_discord', ['discordUserId', 'timestamp'])
     .index('by_time', ['timestamp']),
 });
