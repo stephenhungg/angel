@@ -1,4 +1,8 @@
 {
   "functions": "./",
-  "generateCommonJSApi": false
+  "generateCommonJSApi": false,
+  "node": {
+    "externalPackages": []
+  },
+  "exclude": ["scripts/**"]
 }
