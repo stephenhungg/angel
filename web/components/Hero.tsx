@@ -117,7 +117,7 @@ export function Hero() {
           <header className="flex flex-col items-start gap-3">
             <h1 className="m-0">
               <img
-                src="/kawaii/wordmark-pink-nano.png"
+                src="/kawaii/wordmark-pink-nano-t.png"
                 alt="angel"
                 className="hero-wordmark h-[260px] w-auto select-none tablet:h-[440px] desktop:h-[560px]"
                 style={{

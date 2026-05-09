@@ -119,7 +119,7 @@ export function Footer() {
         className="pointer-events-none absolute right-[5%] top-1/2 hidden -translate-y-1/2 select-none tablet:block"
       >
         <Image
-          src="/kawaii/mascot-wave.png"
+          src="/kawaii/mascot-wave-t.png"
           alt=""
           aria-hidden
           width={620}

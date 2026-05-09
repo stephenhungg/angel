@@ -108,7 +108,7 @@ export function Nav() {
             data-cursor-grow
           >
             <Image
-              src="/kawaii/wordmark-pink-nano.png"
+              src="/kawaii/wordmark-pink-nano-t.png"
               alt="angel"
               width={400}
               height={200}
@@ -119,7 +119,7 @@ export function Nav() {
               priority
             />
             <Image
-              src="/kawaii/cute-bow.png"
+              src="/kawaii/cute-bow-t.png"
               alt=""
               aria-hidden
               width={120}

@@ -25,10 +25,10 @@ if (typeof window !== "undefined") {
 // in the user's gsap-inspo collection.
 
 const archetypes = [
-  { title: "soft",  meta: "morning haze",  asset: "/kawaii/archetype-soft.png",  body: "she opens the curtains. light spills in, the room exhales. soft means slow, considerate, willing to wait." },
-  { title: "warm",  meta: "golden hour",   asset: "/kawaii/archetype-warm.png",  body: "she pours you tea. asks about your week, remembers the part you'd half-forgotten. warm means present." },
-  { title: "deep",  meta: "study lamp",    asset: "/kawaii/archetype-deep.png",  body: "she sits with you and the problem. doesn't simplify. asks the question you were avoiding." },
-  { title: "quiet", meta: "twilight",      asset: "/kawaii/archetype-quiet.png", body: "she's there but not loud. she watches you sleep, wakes the laptop in the morning, cued up." },
+  { title: "soft",  meta: "morning haze",  asset: "/kawaii/archetype-soft-t.png",  body: "she opens the curtains. light spills in, the room exhales. soft means slow, considerate, willing to wait." },
+  { title: "warm",  meta: "golden hour",   asset: "/kawaii/archetype-warm-t.png",  body: "she pours you tea. asks about your week, remembers the part you'd half-forgotten. warm means present." },
+  { title: "deep",  meta: "study lamp",    asset: "/kawaii/archetype-deep-t.png",  body: "she sits with you and the problem. doesn't simplify. asks the question you were avoiding." },
+  { title: "quiet", meta: "twilight",      asset: "/kawaii/archetype-quiet-t.png", body: "she's there but not loud. she watches you sleep, wakes the laptop in the morning, cued up." },
 ];
 
 export function Archetypes() {
