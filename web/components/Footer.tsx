@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import Image from "next/image";
 import { useRef } from "react";
 import gsap from "gsap";
@@ -8,6 +7,7 @@ import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { useGSAP } from "@gsap/react";
 import { MaskedLine } from "./MaskedLine";
 import { SparkleField } from "./SparkleField";
+import { TransitionLink } from "./PageTransition";
 
 if (typeof window !== "undefined") {
   gsap.registerPlugin(ScrollTrigger, useGSAP);
@@ -147,12 +147,12 @@ export function Footer() {
           >
             github
           </a>
-          <Link
+          <TransitionLink
             href="/download"
             className="inline-flex min-h-11 min-w-11 items-center justify-center px-2 transition-colors hover:text-sakura-600"
           >
             download
-          </Link>
+          </TransitionLink>
         </div>
 
         {/* middle: big tagline + cta + status */}
@@ -171,14 +171,13 @@ export function Footer() {
           </div>
 
           <div className="flex flex-wrap items-center gap-4">
-            <Link
+            <TransitionLink
               href="/download"
               className="inline-flex h-14 items-center gap-2 rounded-pill bg-sakura-500 px-8 font-sans text-[16px] font-semibold tracking-[-0.005em] text-cloud transition-colors duration-200 ease-linear hover:bg-sakura-600"
-             
             >
               <span>download angel</span>
               <span aria-hidden>↓</span>
-            </Link>
+            </TransitionLink>
             <span className="inline-flex items-center gap-2 px-3 py-4 font-sans text-[15px] text-muted-deep">
               <span className="relative inline-flex h-[7px] w-[7px]">
                 <span className="absolute inset-0 animate-ping rounded-full bg-sakura-500 opacity-75" />

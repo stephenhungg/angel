@@ -4,6 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import gsap from "gsap";
+import { TransitionLink } from "./PageTransition";
 
 /**
  * Nav — ported verbatim from portfolio-temp/portfolio/components/Nav.tsx,
@@ -147,20 +148,46 @@ export function Nav() {
         <div ref={drawerRef} aria-hidden={!open} style={{ height: 0, overflow: "hidden" }}>
           <div className="border-t border-hairline pb-12 pt-10 tablet:pb-16 tablet:pt-14">
             <ul ref={linksRef} className="flex flex-col gap-3 tablet:gap-4">
-              {NAV_LINKS.map((item) => (
-                <li
-                  key={item.href}
-                  style={{ opacity: 0, transform: "translateY(20px)" }}
-                >
-                  <Link
-                    href={item.href}
-                    onClick={() => setOpen(false)}
-                    className="block font-bagel text-[44px] leading-[0.95] tracking-[-0.02em] text-ink-near transition-colors duration-300 hover:text-sakura-500 tablet:text-[72px] desktop:text-[96px]"
+              {NAV_LINKS.map((item) => {
+                const isDownload = item.href === "/download";
+                const isExternal = item.href.startsWith("http");
+                const cls =
+                  "block font-bagel text-[44px] leading-[0.95] tracking-[-0.02em] text-ink-near transition-colors duration-300 hover:text-sakura-500 tablet:text-[72px] desktop:text-[96px]";
+                return (
+                  <li
+                    key={item.href}
+                    style={{ opacity: 0, transform: "translateY(20px)" }}
                   >
-                    {item.label}
-                  </Link>
-                </li>
-              ))}
+                    {isDownload ? (
+                      <TransitionLink
+                        href={item.href}
+                        onClick={() => setOpen(false)}
+                        className={cls}
+                      >
+                        {item.label}
+                      </TransitionLink>
+                    ) : isExternal ? (
+                      <a
+                        href={item.href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={() => setOpen(false)}
+                        className={cls}
+                      >
+                        {item.label}
+                      </a>
+                    ) : (
+                      <Link
+                        href={item.href}
+                        onClick={() => setOpen(false)}
+                        className={cls}
+                      >
+                        {item.label}
+                      </Link>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
 
             <div className="mt-12 flex items-end justify-between gap-6 font-sans text-[15px] font-medium text-muted-deep tablet:mt-16 tablet:text-[16px]">
@@ -182,9 +209,9 @@ export function Nav() {
                 >
                   github →
                 </a>
-                <Link href="/download" className="inline-flex min-h-11 items-center hover:text-sakura-600">
+                <TransitionLink href="/download" className="inline-flex min-h-11 items-center hover:text-sakura-600">
                   download angel ↓
-                </Link>
+                </TransitionLink>
               </div>
             </div>
           </div>

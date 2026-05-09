@@ -1,10 +1,10 @@
-import Link from "next/link";
 import Image from "next/image";
 import { Reveal } from "./Reveal";
 import { MaskedLine } from "./MaskedLine";
 import { TiltedCard } from "./TiltedCard";
 import { SparkleField } from "./SparkleField";
 import { CuteAccent } from "./CuteAccent";
+import { TransitionLink } from "./PageTransition";
 
 // section 02 — four properties grid. each card uses one of the kawaii sticker
 // PNGs we generated (transparent bg via knockout-white.mjs). the dark band
@@ -99,13 +99,13 @@ export function WhatSheIs() {
 
         <Reveal delay={0.3}>
           <div className="mt-20 flex flex-wrap items-center gap-6">
-            <Link
+            <TransitionLink
               href="/download"
               className="inline-flex h-14 items-center gap-2 rounded-pill bg-sakura-500 px-8 font-sans text-[16px] font-semibold tracking-[-0.005em] text-cloud transition-colors duration-200 ease-linear hover:bg-sakura-600"
             >
               <span>download angel</span>
               <span aria-hidden>→</span>
-            </Link>
+            </TransitionLink>
             <span className="font-sans text-[12px] text-muted-secondary">
               ~90 seconds · 12 cards · one persona
             </span>

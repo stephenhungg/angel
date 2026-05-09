@@ -5,6 +5,31 @@ import Image from "next/image";
 import gsap from "gsap";
 import { useGSAP } from "@gsap/react";
 import { MaskedLine } from "./MaskedLine";
+import { TransitionLink } from "./PageTransition";
+
+// route — TransitionLink for /download (kawaii wipe), plain anchor for hashes (smooth scroll)
+function SlideLink({
+  href,
+  className,
+  children,
+}: {
+  href: string;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  if (href.startsWith("/")) {
+    return (
+      <TransitionLink href={href} className={className}>
+        {children}
+      </TransitionLink>
+    );
+  }
+  return (
+    <a href={href} className={className}>
+      {children}
+    </a>
+  );
+}
 
 if (typeof window !== "undefined") {
   gsap.registerPlugin(useGSAP);
@@ -170,13 +195,12 @@ export function Origin() {
 
             {/* read more */}
             <div className="mt-6 flex justify-end">
-              <a
+              <SlideLink
                 href={slide.viewHref}
                 className="font-sans text-[15px] font-medium text-ink-near underline underline-offset-[6px] decoration-ink-near transition-colors hover:text-sakura-600 hover:decoration-sakura-600"
-               
               >
                 Read more
-              </a>
+              </SlideLink>
             </div>
 
             {/* hairline + meta */}
@@ -190,13 +214,12 @@ export function Origin() {
                     {slide.metaValue}
                   </span>
                 </div>
-                <a
+                <SlideLink
                   href={slide.viewHref}
                   className="font-sans text-[15px] font-medium text-ink-near underline underline-offset-[6px] decoration-ink-near transition-colors hover:text-sakura-600 hover:decoration-sakura-600"
-                 
                 >
                   {slide.viewLabel} →
-                </a>
+                </SlideLink>
               </div>
             </div>
           </div>

@@ -1,10 +1,10 @@
-import Link from "next/link";
 import Image from "next/image";
 import { Reveal } from "./Reveal";
 import { MaskedLine } from "./MaskedLine";
 import { TiltedCard } from "./TiltedCard";
 import { SparkleField } from "./SparkleField";
 import { CuteAccent } from "./CuteAccent";
+import { TransitionLink } from "./PageTransition";
 
 // reference cluster centers from PERSONA.md — these are NOT a 4-option pick.
 // the swipe converges on a 768d persona vector across aesthetic × disposition
@@ -82,14 +82,13 @@ export function Archetypes() {
         </ul>
 
         <Reveal delay={0.3} className="mt-16 tablet:mt-20">
-          <Link
+          <TransitionLink
             href="/download"
             className="group inline-flex items-baseline gap-3 font-sans text-[20px] font-medium tracking-[-0.005em] text-ink-near transition-colors duration-200 ease-linear hover:text-sakura-600"
-           
           >
-            <span>see all archetypes</span>
+            <span>discover yours</span>
             <span className="transition-transform duration-200 ease-linear group-hover:translate-x-1">→</span>
-          </Link>
+          </TransitionLink>
         </Reveal>
       </div>
     </section>

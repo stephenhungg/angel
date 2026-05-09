@@ -9,6 +9,7 @@ import {
   animate,
   useReducedMotion,
 } from "framer-motion";
+import { TransitionLink } from "./PageTransition";
 
 /**
  * hero — split layout. left half is paper-white with the wordmark + cta + byline.
@@ -60,7 +61,7 @@ export function Hero() {
               By Stephen Hung &amp; Matthew · 天使
             </p>
 
-            <a
+            <TransitionLink
               href="/download"
               className="group mt-6 inline-flex h-14 items-center gap-3 rounded-pill bg-sakura-500 pl-3 pr-7 font-sans text-[16px] font-semibold tracking-[-0.005em] text-cloud shadow-[0_8px_0_rgba(155,58,95,0.35)] transition-all duration-200 ease-linear hover:-translate-y-0.5 hover:bg-sakura-600 hover:shadow-[0_10px_0_rgba(155,58,95,0.45)] tablet:h-16 tablet:pl-4 tablet:pr-9 tablet:text-[18px]"
             >
@@ -77,7 +78,7 @@ export function Hero() {
               >
                 ↓
               </span>
-            </a>
+            </TransitionLink>
 
             <p className="mt-8 max-w-[480px] font-sans text-[15px] leading-[1.55] text-muted-deep tablet:text-[16px]">
               she sits at the desk with you for 8 hours and you don&apos;t feel
