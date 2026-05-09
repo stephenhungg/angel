@@ -6,9 +6,11 @@ import { VRM_BY_AESTHETIC, PALETTE_BY_AESTHETIC } from '@angel/shared';
  * three things the renderer cares about: which VRM file to load, what
  * accent color to drive CSS vars with, and what to put in the titlebar.
  *
- * v1 reality: only `2068967230566994300.vrm` exists in /public/vrm/, so
- * every aesthetic falls back to it. The mapping table is preserved so
- * adding new VRMs only requires dropping files into /public/vrm/.
+ * The /public/vrm/ pool is keyed by aesthetic archetype (see manifest.json).
+ * If a claim's archetype is missing or the VRM file fails to parse, we fall
+ * back to the original placeholder VRM (restored from git after the
+ * swipe-pipeline merge clobbered it). The abison pool ships with arms-up
+ * bind poses that don't survive our retargeter cleanly during idle.
  */
 
 const FALLBACK_VRM = '/vrm/2068967230566994300.vrm';

@@ -18,6 +18,11 @@ import {
 import { CalibrationOverlay, CalibrationRaycaster } from '@/components/CalibrationOverlay';
 import { useAngelStore } from '@/stores/angel';
 
+// Original placeholder VRM, restored from git after the swipe-pipeline
+// merge clobbered it. The abison-curated pool (cottagecore, academia,
+// tech-minimal, cyber) all ship with arms-up bind poses that bleed through
+// our Mixamo retarget when an idle clip doesn't drive every arm bone — this
+// model behaves cleanly with Idle.fbx, so it's the safe fallback.
 const FALLBACK_VRM = '/vrm/2068967230566994300.vrm';
 const FALLBACK_ROOM = '/room.glb';
 

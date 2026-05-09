@@ -8,6 +8,25 @@ import * as THREE from 'three';
  * animation, so they pop out of view at certain angles otherwise).
  */
 export async function loadVRM(url: string): Promise<VRM> {
+  // pre-flight: HEAD the URL so a missing file produces a clear error
+  // instead of GLTFLoader trying to JSON.parse the SPA's index.html and
+  // throwing an opaque "Unexpected token '<'" trace.
+  try {
+    const res = await fetch(url, { method: 'HEAD' });
+    if (!res.ok) {
+      throw new Error(`[vrm-load] ${url} not found (HTTP ${res.status}). Did the asset get renamed?`);
+    }
+    const ct = res.headers.get('content-type') ?? '';
+    if (ct.includes('text/html')) {
+      throw new Error(
+        `[vrm-load] ${url} returned HTML — the dev server is serving the SPA fallback, meaning the VRM file is missing from /public/vrm/.`,
+      );
+    }
+  } catch (err) {
+    if (err instanceof Error && err.message.startsWith('[vrm-load]')) throw err;
+    // network/CORS/etc — fall through and let the loader try anyway
+  }
+
   const loader = new GLTFLoader();
   loader.register((parser) => new VRMLoaderPlugin(parser));
   const gltf = await loader.loadAsync(url);
