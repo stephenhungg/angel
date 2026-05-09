@@ -83,9 +83,10 @@ export function Hero() {
               </span>
             </a>
 
-            <p className="mt-8 max-w-[440px] font-sans text-[15px] leading-[1.55] text-muted-deep tablet:text-[16px]">
-              a presence, not an app. discovered through choice. she remembers you
-              across sessions, lives on your machine, and ships your code.
+            <p className="mt-8 max-w-[480px] font-sans text-[15px] leading-[1.55] text-muted-deep tablet:text-[16px]">
+              she sits at the desk with you for 8 hours and you don&apos;t feel
+              alone. discovered through choice — not picked, not prompted. one
+              of millions of versions of her, shaped by what you swipe.
             </p>
           </header>
         </div>

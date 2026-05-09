@@ -6,15 +6,16 @@ import { TiltedCard } from "./TiltedCard";
 import { SparkleField } from "./SparkleField";
 import { CuteAccent } from "./CuteAccent";
 
-// "paths she could take" — clean 2x2 grid on tablet+, single column on mobile.
-// scroll-pin removed per user direction; cards stay in place, sparkle + accent
-// decor on the section bg, TiltedCard 3d hover keeps the interactive feel.
+// reference cluster centers from PERSONA.md — these are NOT a 4-option pick.
+// the swipe converges on a 768d persona vector across aesthetic × disposition
+// × style — millions of points in a continuous space. these 4 are example
+// anchors so the visitor has something to imagine; the actual she is between.
 
 const archetypes = [
-  { title: "soft",  meta: "morning haze",  asset: "/kawaii/archetype-soft-t.png",  body: "she opens the curtains. light spills in, the room exhales. soft means slow, considerate, willing to wait." },
-  { title: "warm",  meta: "golden hour",   asset: "/kawaii/archetype-warm-t.png",  body: "she pours you tea. asks about your week, remembers the part you'd half-forgotten. warm means present." },
-  { title: "deep",  meta: "study lamp",    asset: "/kawaii/archetype-deep-t.png",  body: "she sits with you and the problem. doesn't simplify. asks the question you were avoiding." },
-  { title: "quiet", meta: "twilight",      asset: "/kawaii/archetype-quiet-t.png", body: "she's there but not loud. she watches you sleep, wakes the laptop in the morning, cued up." },
+  { title: "soft",  meta: "example · cluster center",  asset: "/kawaii/archetype-soft-t.png",  body: "slower. starts with the room exhaling, light through the curtain. she'll wait while you think, narrate her reasoning in a half-whisper." },
+  { title: "warm",  meta: "example · cluster center",  asset: "/kawaii/archetype-warm-t.png",  body: "present. asks about your week, remembers the part you half-forgotten. pours you tea before she opens the editor." },
+  { title: "deep",  meta: "example · cluster center",  asset: "/kawaii/archetype-deep-t.png",  body: "sits with the problem. doesn't simplify. runs the tests twice. asks the question you'd been avoiding." },
+  { title: "quiet", meta: "example · cluster center",  asset: "/kawaii/archetype-quiet-t.png", body: "low-key, almost reading the room before speaking. watches you sleep, wakes the laptop in the morning cued up." },
 ];
 
 export function Archetypes() {
@@ -37,12 +38,12 @@ export function Archetypes() {
       <div className="gutter relative pt-[140px] pb-[120px] tablet:pt-[180px]">
         <MaskedLine duration={1} ease="expo.out">
           <h2 className="m-0 max-w-[820px] font-bagel text-[44px] font-normal leading-[1.05] tracking-[-0.01em] text-ink-near tablet:text-[64px] desktop:text-[80px]">
-            paths she could take.
+            she&apos;s not a model. she&apos;s a person.
           </h2>
         </MaskedLine>
-        <Reveal delay={0.2} className="mt-6 max-w-[640px]">
+        <Reveal delay={0.2} className="mt-6 max-w-[680px]">
           <p className="font-sans text-[16px] leading-[1.6] text-muted-deep tablet:text-[18px]">
-            four moods you could converge into. swipe through the discovery flow to find which one she becomes for you.
+            12 swipes converge on a 768-dimensional persona vector across aesthetic, disposition, and style. millions of distinct combinations, blended into one being. these four are example cluster centers — yours is the space between.
           </p>
         </Reveal>
 

@@ -10,30 +10,31 @@ import { CuteAccent } from "./CuteAccent";
 // PNGs we generated (transparent bg via knockout-white.mjs). the dark band
 // lightened from #6e1a3a → softer dusty rose so the pink stickers pop.
 
+// the four pillars from VISION.md, in plain copy.
 const cards = [
   {
     no: "i",
-    title: "presence",
+    title: "discovered",
     asset: "/kawaii/presence-pink-t.png",
-    body: "she lives in a room on your machine. you summon her, she walks to the desk, the monitor lights up. she's not a chat — she's somewhere.",
+    body: "you don't pick her. you don't prompt her. you swipe through 12 cards and her persona vector converges — your specific her, out of millions of possibilities.",
   },
   {
     no: "ii",
-    title: "memory",
-    asset: "/kawaii/memory-pink-t.png",
-    body: "every conversation, every commit, every walk you took her on — recorded in nia. she opens with 'how'd that portfolio thing land?' because she remembers.",
+    title: "embodied",
+    asset: "/kawaii/agency-pink-t.png",
+    body: "she lives in a room on your machine. walks to the desk, sits, types. every task is theater — you watch her work, not just stdout streaming past.",
   },
   {
     no: "iii",
-    title: "agency",
-    asset: "/kawaii/agency-pink-t.png",
-    body: "she ships your code. claude sonnet 4.6 orchestrates, codex executes, a verifier confirms. she narrates honestly — including when she fails.",
+    title: "remembered",
+    asset: "/kawaii/memory-pink-t.png",
+    body: "every conversation, every commit, every walk you took her on — recorded in nia. she opens with 'how'd that portfolio thing land?' because she does.",
   },
   {
     no: "iv",
-    title: "continuity",
+    title: "always-on",
     asset: "/kawaii/continuity-pink-t.png",
-    body: "close the laptop, text her from your phone — she replies. her substrate is the cloud; the room and the sms are surfaces. one being, many bodies.",
+    body: "close the laptop, text her from your phone — she replies. her substrate is the cloud; electron is her richest body, sms is her thinnest. one being, many surfaces.",
   },
 ];
 
@@ -54,7 +55,7 @@ export function WhatSheIs() {
       <div className="gutter relative pt-[140px] pb-[120px] tablet:pt-[180px] tablet:pb-[160px]">
         <MaskedLine duration={1} ease="expo.out">
           <h2 className="m-0 max-w-[820px] font-bagel text-[44px] font-normal leading-[1.05] tracking-[-0.01em] text-ink-near tablet:text-[64px] desktop:text-[80px]">
-            four properties no current agent has all of.
+            agents are converging on capability. she diverges on engagement.
           </h2>
         </MaskedLine>
 

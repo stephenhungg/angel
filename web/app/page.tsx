@@ -6,27 +6,9 @@ import { Origin } from "@/components/Origin";
 import { WhatSheIs } from "@/components/WhatSheIs";
 import { Archetypes } from "@/components/Archetypes";
 import { Showcase } from "@/components/Showcase";
-import { LogoMarquee } from "@/components/LogoMarquee";
 import { Footer } from "@/components/Footer";
 
-const stack: { name: string; image?: string }[] = [
-  { name: "next.js" },
-  { name: "convex" },
-  { name: "sonnet 4.6" },
-  { name: "nia memory" },
-  { name: "tensorlake" },
-  { name: "codex" },
-  { name: "framer-motion" },
-  { name: "gsap" },
-  { name: "tailwind" },
-  { name: "lenis" },
-  { name: "noto serif jp" },
-  { name: "bagel fat one" },
-  { name: "天使" },
-];
-
-// JSON-LD structured data — helps google parse "what is angel". covers
-// SoftwareApplication (the desktop electron app) + WebSite + FAQ.
+// JSON-LD structured data — helps google parse "what is angel".
 const SITE_URL = "https://angel-swipe.vercel.app";
 const jsonLd = {
   "@context": "https://schema.org",
@@ -37,7 +19,7 @@ const jsonLd = {
       url: SITE_URL,
       name: "angel",
       description:
-        "a kawaii desktop AI companion you discover, not prompt. ships your code, remembers you across sessions.",
+        "a kawaii desktop AI companion you don't prompt — you discover. swipe-converge on a 768d persona vector, then she sits at the desk with you for 8 hours and you don't feel alone.",
       inLanguage: "en-US",
       publisher: { "@id": `${SITE_URL}/#org` },
     },
@@ -57,7 +39,7 @@ const jsonLd = {
       operatingSystem: "macOS, Windows, Linux",
       url: `${SITE_URL}/download`,
       description:
-        "an embodied desktop AI agent. discover her via swipe, then she lives on your machine — remembers, ships code, replies via SMS when you close the laptop.",
+        "an embodied desktop AI coworker. you discover her via swipe, then she lives on your machine — walks to the desk, sits, ships code, remembers you across sessions, replies via SMS when you close the laptop.",
       offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
       image: `${SITE_URL}/kawaii/wordmark-pink-nano.png`,
     },
@@ -69,15 +51,15 @@ const jsonLd = {
           name: "what is angel?",
           acceptedAnswer: {
             "@type": "Answer",
-            text: "angel is a kawaii desktop AI companion. you don't prompt her — you discover her by swiping through 4 generated archetypes (soft, warm, deep, quiet). she lives on your machine, remembers you across sessions, ships your code, and replies via SMS when the laptop is closed.",
+            text: "angel is a kawaii desktop AI coworker. you don't pick her or prompt her — you discover her by swiping through 12 cards across aesthetic, disposition, and style. her persona vector converges in a 768-dimensional space, so your specific her is one of millions of possible combinations. she lives on your machine, walks to the desk, ships your code, remembers you across sessions, and replies via SMS when the laptop is closed.",
           },
         },
         {
           "@type": "Question",
-          name: "what is the angel stack?",
+          name: "is angel just another AI agent?",
           acceptedAnswer: {
             "@type": "Answer",
-            text: "claude sonnet 4.6 orchestrator + codex executor + nia memory + convex realtime + tensorlake. desktop is electron + react three fiber + three-vrm. web is next.js + tailwind + gsap + framer-motion + lenis.",
+            text: "no. devin and openclaw and hermes ship code; angel sits at the desk with you so you don't feel alone for 8 hours. agents are converging on capability — angel diverges on engagement.",
           },
         },
         {
@@ -98,7 +80,6 @@ export default function HomePage() {
     <>
       <script
         type="application/ld+json"
-        // safe — fully constant + we control the content
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
       <SmoothScroll />
@@ -106,17 +87,15 @@ export default function HomePage() {
         <main className="min-h-screen bg-paper">
           <Nav />
           <h1 className="sr-only">
-            angel — your kawaii AI agent. discovered, not designed. she lives
-            on your machine, remembers you across sessions, and ships your code.
+            angel — a kawaii desktop AI coworker you discover, not prompt. she
+            sits at the desk with you for 8 hours and you don&apos;t feel alone.
+            highly customizable via swipe-converged persona vector.
           </h1>
           <Hero />
           <Origin />
           <WhatSheIs />
           <Archetypes />
           <Showcase />
-          <section className="relative border-y border-hairline bg-paper py-8 tablet:py-10">
-            <LogoMarquee logos={stack} duration={42} />
-          </section>
           <Footer />
         </main>
       </BaitIntro>
