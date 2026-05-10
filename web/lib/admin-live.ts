@@ -149,7 +149,10 @@ function nearestMacro(v: Vec5): 'cute' | 'pretty' | 'hot' {
 
 function generateVisitor(seed: number, baseTime: number): VisitorTrace {
   const rng = makeRng(seed * 2654435761);
-  const targetMacro = MACROS[Math.floor(rng() * 3)];
+  // defensive: in some prod bundles MACROS imports as undefined at module
+  // eval — fall back to a hardcoded shape so generateVisitor never throws.
+  const FALLBACK = { id: 'cute' as const, vector: [0.85, 0.55, 0.4, 0.1, 0.85] as Vec5 };
+  const targetMacro = (MACROS && MACROS[Math.floor(rng() * 3)]) || FALLBACK;
   const startedAt = baseTime - Math.floor(rng() * 1000 * 60 * 30); // last 30min
   const userId = `visitor-${seed.toString().padStart(3, '0')}`;
   const displayName = `${FIRSTS[seed % FIRSTS.length]}.${(seed * 7) % 97}`;

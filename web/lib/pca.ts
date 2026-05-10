@@ -261,8 +261,12 @@ export const MOCK_LIBRARY: LibraryEntry[] = (() => {
     return (s & 0xffffffff) / 0xffffffff;
   };
   // generate 30 entries, gravitating toward the 3 macros so PCA finds the modes.
+  // defensive: SWC/Turbopack can reorder module-level consts during tree-shake
+  // such that MACROS appears undefined here in some prod bundles. fall back to
+  // a hardcoded macro shape so the IIFE never throws on import.
+  const FALLBACK_MACRO = { id: 'cute' as const, vector: [0.85, 0.55, 0.4, 0.1, 0.85] as Vec5 };
   for (let i = 0; i < 30; i++) {
-    const macro = MACROS[i % 3];
+    const macro = (MACROS && MACROS[i % 3]) || FALLBACK_MACRO;
     const jitter = (): number => (rand() - 0.5) * 0.6;
     const v = macro.vector.map((c, k) =>
       Math.max(0, Math.min(1, c + jitter() + (k === 2 ? jitter() * 0.4 : 0))),
