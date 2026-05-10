@@ -18,7 +18,7 @@
 
 set -euo pipefail
 
-DMG_URL="https://github.com/stephenhungg/angel/releases/download/v0.0.2-alpha/Angel-0.0.2-arm64.dmg"
+DMG_URL="https://github.com/stephenhungg/angel/releases/download/v0.0.3-alpha/Angel-0.0.3-arm64.dmg"
 TMP_DMG="/tmp/angel-install-$$.dmg"
 MOUNT_POINT="/Volumes/Angel"
 APP_PATH="/Applications/Angel.app"

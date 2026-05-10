@@ -9,7 +9,7 @@ export const metadata = {
 
 const RELEASES = "https://github.com/stephenhungg/angel/releases";
 const MAC_DMG_URL =
-  "https://github.com/stephenhungg/angel/releases/download/v0.0.2-alpha/Angel-0.0.2-arm64.dmg";
+  "https://github.com/stephenhungg/angel/releases/download/v0.0.3-alpha/Angel-0.0.3-arm64.dmg";
 
 // inline brand-true svg icons (no emoji)
 function AppleIcon({ className }: { className?: string }) {
