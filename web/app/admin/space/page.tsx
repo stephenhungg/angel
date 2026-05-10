@@ -1,5 +1,10 @@
 'use client';
 
+// skip static generation — this page is fully client-driven (PCA + reactive
+// useQuery) and a stale SSR snapshot can crash if module-eval order quirks
+// during build leave MACROS/MOCK_LIBRARY partially undefined.
+export const dynamic = 'force-dynamic';
+
 import { useMemo, useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {

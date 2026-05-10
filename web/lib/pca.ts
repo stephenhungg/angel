@@ -139,7 +139,12 @@ function deflate(M: number[][], v: Vec5, lambda: number): number[][] {
 
 /** compute the 5d→2d basis from the library. call once at load. */
 export function computePcaBasis(entries: LibraryEntry[]): PcaBasis {
-  if (entries.length === 0) {
+  // defensive: filter out any entries missing .vector (can happen during
+  // partial SSR hydration or if a remote source returns malformed rows)
+  const safe = (entries ?? []).filter(
+    (e): e is LibraryEntry => !!e && Array.isArray(e.vector) && e.vector.length === DIM,
+  );
+  if (safe.length === 0) {
     return {
       mean: zeros(),
       pc1: [1, 0, 0, 0, 0],
@@ -150,12 +155,12 @@ export function computePcaBasis(entries: LibraryEntry[]): PcaBasis {
 
   // mean
   const mean: Vec5 = zeros();
-  for (const e of entries) {
+  for (const e of safe) {
     for (let i = 0; i < DIM; i++) mean[i] += e.vector[i];
   }
-  for (let i = 0; i < DIM; i++) mean[i] /= entries.length;
+  for (let i = 0; i < DIM; i++) mean[i] /= safe.length;
 
-  const centered = entries.map((e) => sub(e.vector, mean));
+  const centered = safe.map((e) => sub(e.vector, mean));
   const cov = covariance(centered);
 
   const { vec: pc1, lambda: l1 } = leadingEigen(cov);
@@ -192,7 +197,10 @@ export function projectAll(
   entries: LibraryEntry[],
   basis: PcaBasis,
 ): { points: ProjectedPoint[]; range: { x: number; y: number } } {
-  const raw = entries.map((e) => ({ id: e.id, ...project(e.vector, basis) }));
+  const safe = (entries ?? []).filter(
+    (e): e is LibraryEntry => !!e && Array.isArray(e.vector) && e.vector.length === DIM,
+  );
+  const raw = safe.map((e) => ({ id: e.id, ...project(e.vector, basis) }));
   let xMax = 0;
   let yMax = 0;
   for (const p of raw) {
