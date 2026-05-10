@@ -46,17 +46,85 @@ const DEFAULT_TIMEOUT_MS = 90_000;
 /* helpers                                                             */
 /* ------------------------------------------------------------------ */
 
-/** is the codex CLI on PATH? cached so we only stat once per process. */
-let _codexAvailable: boolean | null = null;
-export function isCodexAvailable(): boolean {
-  if (_codexAvailable !== null) return _codexAvailable;
+/**
+ * find the codex CLI binary. when packaged in a dmg, electron's spawned
+ * children inherit a tiny PATH (`/usr/bin:/bin`) — homebrew, bun, cargo,
+ * npm-global, etc. don't show up. so `which codex` returns nothing even
+ * though codex is installed. we search common install locations explicitly
+ * + fall back to PATH-aware `which`. cached per process.
+ */
+let _codexPath: string | null | undefined; // undefined = not yet checked
+
+const HOME = process.env.HOME ?? '';
+const CODEX_CANDIDATE_PATHS = [
+  // bun
+  `${HOME}/.bun/bin/codex`,
+  // homebrew apple silicon + intel
+  '/opt/homebrew/bin/codex',
+  '/usr/local/bin/codex',
+  // npm global (npm prefix)
+  `${HOME}/.npm-global/bin/codex`,
+  `${HOME}/.npm/bin/codex`,
+  // cargo
+  `${HOME}/.cargo/bin/codex`,
+  // local bin
+  `${HOME}/.local/bin/codex`,
+  // n / volta / nvm — common
+  `${HOME}/.n/bin/codex`,
+  `${HOME}/.volta/bin/codex`,
+];
+
+function resolveCodexPath(): string | null {
+  if (_codexPath !== undefined) return _codexPath;
+  // 1. try explicit candidates first (works in packaged app where PATH is minimal)
+  for (const candidate of CODEX_CANDIDATE_PATHS) {
+    try {
+      const stat = fs.statSync(candidate);
+      if (stat.isFile()) {
+        _codexPath = candidate;
+        return _codexPath;
+      }
+    } catch {
+      /* not present, try next */
+    }
+  }
+  // 2. fall back to user's shell PATH via login shell (zsh / bash both work)
+  // packaged electron has a stripped PATH; running through the user's shell
+  // resolves their full env (.zshrc / .bashrc).
+  try {
+    const r = spawnSync(
+      process.env.SHELL || '/bin/zsh',
+      ['-l', '-c', 'command -v codex'],
+      { encoding: 'utf8', timeout: 4000 },
+    );
+    if (r.status === 0 && r.stdout?.trim()) {
+      _codexPath = r.stdout.trim();
+      return _codexPath;
+    }
+  } catch {
+    /* ignore */
+  }
+  // 3. last resort: the bare `which` (works in dev where electron is launched from terminal)
   try {
     const which = spawnSync('which', ['codex'], { encoding: 'utf8' });
-    _codexAvailable = which.status === 0 && Boolean(which.stdout?.trim());
+    if (which.status === 0 && which.stdout?.trim()) {
+      _codexPath = which.stdout.trim();
+      return _codexPath;
+    }
   } catch {
-    _codexAvailable = false;
+    /* ignore */
   }
-  return _codexAvailable;
+  _codexPath = null;
+  return null;
+}
+
+export function isCodexAvailable(): boolean {
+  return resolveCodexPath() !== null;
+}
+
+/** absolute path to the codex binary (or null if not found). */
+export function codexBinaryPath(): string | null {
+  return resolveCodexPath();
 }
 
 export function newJob(intent: string, workingDir: string): CodexJob {
@@ -106,7 +174,11 @@ async function execReal(
   return new Promise<CodexResult>((resolve) => {
     let stdout = '';
     let settled = false;
-    const child = spawn('codex', args, {
+    // use the resolved absolute path so spawn doesn't depend on PATH
+    // (packaged dmg apps have a tiny PATH that doesn't include codex's
+    // install location).
+    const codexBin = codexBinaryPath() ?? 'codex';
+    const child = spawn(codexBin, args, {
       cwd: job.workingDir,
       env: { ...process.env, NO_COLOR: '1', CI: '1' },
     });
@@ -288,9 +360,12 @@ export async function executeCodex(
 ): Promise<CodexResult> {
   const useMock = options.forceMock || !isCodexAvailable();
   if (useMock) {
-    onChunk('[exec] codex CLI unavailable — using deterministic mock');
+    onChunk(
+      '[exec] codex binary not found on host. install codex (`bun add -g @openai/codex` or equivalent) for real shipping. running deterministic mock for this turn.',
+    );
     return execMock(job, onChunk);
   }
+  onChunk(`[exec] using codex at ${codexBinaryPath()}`);
   const timeout = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   return execReal(job, onChunk, timeout);
 }

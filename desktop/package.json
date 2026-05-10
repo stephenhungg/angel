@@ -1,6 +1,6 @@
 {
   "name": "@angel/desktop",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "private": true,
   "description": "electron app — embodied 3d room, agent loop, codex executor",
   "main": "dist-electron/main/index.js",
