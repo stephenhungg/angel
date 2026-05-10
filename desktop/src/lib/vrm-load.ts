@@ -3,30 +3,113 @@ import { VRMLoaderPlugin, type VRM } from '@pixiv/three-vrm';
 import * as THREE from 'three';
 
 /**
- * Detect a baked 180°-around-Y rotation on the VRM's scene-root nodes
- * (a quirk of VRoid Studio's recent VRM 0.x exports — cottagecore /
- * tech-minimal / cyber / academia / alt-abison-5 all ship root nodes
- * with `rotation: [0, 1, 0, 0]`). The placeholder VRM doesn't have this
- * flip and faces -Z natively.
+ * Cancel VRoid Studio's baked 180°-around-Y rotation on the VRM's scene
+ * root nodes (cottagecore / tech-minimal / cyber / academia /
+ * alt-abison-5 all ship root nodes with `rotation: [0, 1, 0, 0]`; the
+ * placeholder VRM doesn't, which is why it always worked).
  *
- * Returns `true` if any direct child of `vrm.scene` carries the 180°-Y
- * quaternion. We intentionally **do not** modify the VRM's scene tree
- * or the humanoid rig — the rig captured its rest world rotations at
- * construction time *with* the flip in place, and the Mixamo retargeter's
- * X/Z mirror is consistent with that captured frame, so animations work
- * cleanly when we leave it alone. Instead, the Avatar component reads
- * this flag and inserts an inner wrapping group with a 180°-Y rotation
- * to canonicalize the visible forward direction to -Z. That keeps the
- * outer wrapping group (which `ActionRunner` mutates for sit/walk/face
- * yaw) and `yawToFace` semantics the same across every body.
+ * Symptom when not corrected:
+ *   - the avatar faces +Z when @pixiv/three-vrm helpers and the
+ *     Mixamo retargeter all assume -Z (so it stands backward)
+ *   - applying the retargeter's X/Z mirror through a rig whose rest
+ *     captures already include the 180° flip double-mirrors the
+ *     animation → arms/legs land in the wrong frame
+ *
+ * Why the sync-time and external-wrapper attempts failed:
+ *   - Setting normalized rig bones to identity is a no-op: pixiv's rig
+ *     formula is `rawLocal = invParentRest * rigLocal * parentRest *
+ *     boneRotation`, which collapses to `boneRotation` (the original
+ *     bind pose) when rigLocal is identity.
+ *   - Wrapping `vrm.scene` in an outer 180°-Y group rotates the visual
+ *     but the rig's `_parentWorldRotations` (captured at construction)
+ *     still see the bone parent at 180°-Y, so the sync formula applies
+ *     animations through a stale frame and produces wrong arm/leg
+ *     orientations.
+ *
+ * The fix that actually works:
+ *   1. Reset every flipped scene-root child's quaternion to identity.
+ *   2. Update world matrices so the raw bones reflect the un-flipped
+ *      state (their `matrixWorld` is read by the rig builder).
+ *   3. Construct a fresh `VRMHumanoidRig(humanoid._rawHumanBones)`. The
+ *      constructor's `_setupTransforms` walks each raw bone, captures
+ *      its current `matrixWorld`-decomposed rotation as
+ *      `parentWorldRotations` and `boneRotations`, and builds a fresh
+ *      normalized bone tree. Three-vrm doesn't expose a public
+ *      "rebuild" so we grab the constructor reference off the existing
+ *      `_normalizedHumanBones.constructor` (same class).
+ *   4. Swap `humanoid._normalizedHumanBones` to the new rig.
+ *   5. CRITICAL: the AnimationMixer resolves bones by name from
+ *      `vrm.scene`. The original rig root was added to `vrm.scene` by
+ *      VRMLoaderPlugin (see three-vrm.module.js line 2129); we need to
+ *      detach it and attach the new rig root in its place, otherwise
+ *      the mixer keeps driving stale-rest bones from the old rig.
+ *   6. Run `vrm.update(0)` once so the new rest propagates to the raw
+ *      humanoid before the next animation frame.
+ *
+ * Idempotent. No-op for VRMs already in canonical orientation (no
+ * children carry the 180°-Y quaternion).
  */
-function detectBakedFlip(vrm: VRM): boolean {
+function unflipBakedRotation(vrm: VRM): void {
   const isFlipQuat = (q: THREE.Quaternion): boolean =>
     Math.abs(q.x) < 1e-3 &&
     Math.abs(q.y - 1) < 1e-3 &&
     Math.abs(q.z) < 1e-3 &&
     Math.abs(q.w) < 1e-3;
-  return vrm.scene.children.some((c) => isFlipQuat(c.quaternion));
+
+  let unwoundCount = 0;
+  for (const child of vrm.scene.children) {
+    if (isFlipQuat(child.quaternion)) {
+      child.quaternion.identity();
+      unwoundCount += 1;
+    }
+  }
+  if (unwoundCount === 0) return;
+
+  vrm.scene.updateMatrixWorld(true);
+
+  // three-vrm internals — these private fields are stable across 2.x/3.x
+  // (verified against three-vrm.module.js for the version in node_modules):
+  //   _rawHumanBones      → VRMRig built from the GLTF humanoid bones
+  //   _normalizedHumanBones → VRMHumanoidRig built FROM _rawHumanBones
+  //                          (captures parentWorldRotations + boneRotations)
+  type HumanoidInternals = {
+    _rawHumanBones: unknown;
+    _normalizedHumanBones: { root: THREE.Object3D; constructor: new (raw: unknown) => unknown };
+  };
+  const humanoid = vrm.humanoid as unknown as HumanoidInternals | null;
+  if (!humanoid?._normalizedHumanBones || !humanoid?._rawHumanBones) {
+    console.warn('[vrm-load] humanoid internals unavailable — three-vrm shape changed; skipping rig rebuild');
+    return;
+  }
+
+  const oldNormalizedRig = humanoid._normalizedHumanBones;
+  const oldRigRoot = oldNormalizedRig.root;
+  const VRMHumanoidRigCtor = oldNormalizedRig.constructor;
+
+  // Detach the stale rig from vrm.scene so AnimationMixer's
+  // name-resolution doesn't keep finding its bones first.
+  if (oldRigRoot.parent) oldRigRoot.parent.remove(oldRigRoot);
+
+  let rebuilt: { root: THREE.Object3D } | null = null;
+  try {
+    rebuilt = new VRMHumanoidRigCtor(humanoid._rawHumanBones) as { root: THREE.Object3D };
+  } catch (err) {
+    // restore old rig if construction blew up so we don't leave the VRM
+    // in a half-broken state
+    vrm.scene.add(oldRigRoot);
+    console.warn('[vrm-load] failed to rebuild humanoid rig; reverting to baked-flip state', err);
+    return;
+  }
+
+  humanoid._normalizedHumanBones = rebuilt as never;
+  vrm.scene.add(rebuilt.root);
+  vrm.update(0);
+
+  console.info(
+    '[vrm-load] unflipped',
+    unwoundCount,
+    'scene root child(ren); rebuilt + swapped normalized humanoid rig',
+  );
 }
 
 /**
@@ -86,12 +169,10 @@ export async function loadVRM(url: string): Promise<VRM> {
   // `@/lib/anchors` for any "look toward target" yaw computation; literal
   // yaws stored on anchors / calibrations don't need the offset.
 
-  // detect VRoid's baked 180°-Y root flip (see detectBakedFlip docstring)
-  // and stash the result on `vrm.scene.userData` so the Avatar component
-  // can insert a compensating wrapper group. Avoids touching the rig
-  // (which would invalidate its captured rest world rotations).
-  const hadBakedFlip = detectBakedFlip(vrm);
-  (vrm.scene.userData as { angelBakedFlip?: boolean }).angelBakedFlip = hadBakedFlip;
+  // un-flip VRoid's baked 180°-Y root rotation and rebuild the humanoid
+  // rig in place so the AnimationMixer drives the freshly-captured rest
+  // (see unflipBakedRotation docstring for the full reasoning).
+  unflipBakedRotation(vrm);
 
   // log final bbox so we can see where the avatar landed
   const bbox = new THREE.Box3().setFromObject(vrm.scene);

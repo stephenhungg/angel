@@ -245,26 +245,13 @@ export const Avatar = forwardRef<AvatarHandle, AvatarProps>(function Avatar(
     [vrm],
   );
 
-  // VRoid Studio's recent VRM 0.x exports (cottagecore / tech-minimal /
-  // cyber / academia / alt-abison-5) bake a 180°-around-Y rotation into
-  // the scene root nodes; the placeholder VRM doesn't. `vrm-load.ts`
-  // detects this and stamps `vrm.scene.userData.angelBakedFlip`. Rather
-  // than mutate the VRM internals (which invalidates the humanoid rig's
-  // captured rest rotations and breaks Mixamo retargeting), we insert
-  // an INNER wrapping group with the compensating 180°-Y. The outer
-  // groupRef remains the canonical "avatar facing -Z at rotation.y=0"
-  // handle that ActionRunner manipulates and yawToFace assumes.
-  const flipped = vrm
-    ? Boolean((vrm.scene.userData as { angelBakedFlip?: boolean }).angelBakedFlip)
-    : false;
-
+  // The VRoid 180°-Y baked rotation is corrected at load time inside
+  // `vrm-load.ts` (un-flip + rig rebuild + reattach), so by the time
+  // we render here every body faces canonical -Z at rotation.y = 0.
+  // No wrapper group needed.
   return (
     <group ref={groupRef}>
-      {vrm && (
-        <group rotation={[0, flipped ? Math.PI : 0, 0]}>
-          <primitive object={vrm.scene} />
-        </group>
-      )}
+      {vrm && <primitive object={vrm.scene} />}
     </group>
   );
 });
