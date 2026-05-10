@@ -1,6 +1,6 @@
 /**
  * SwipeCard — single tinder-style card. Ported from web/components/SwipeCard.tsx.
- * Image src points at /library/${id}.jpg (resolved from desktop public/).
+ * Image src: /library/_portraits/<id>.jpg (synced from web/public/library/_portraits/).
  */
 
 import { motion, useMotionValue, useTransform, type PanInfo } from 'framer-motion';
@@ -27,8 +27,7 @@ export function SwipeCard({ entry, onSwipe, onHover, isTop, zIndex }: SwipeCardP
     else if (info.offset.x < -SWIPE_THRESHOLD) onSwipe('no');
   }
 
-  // electron public/ → /library/<id>.jpg
-  const thumbSrc = `/library/${entry.id}.jpg`;
+  const thumbSrc = `/library/_portraits/${entry.id}.jpg`;
 
   return (
     <motion.div

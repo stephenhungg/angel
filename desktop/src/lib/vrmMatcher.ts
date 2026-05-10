@@ -1,7 +1,7 @@
 /**
  * vrmMatcher.ts — pick the avatar body the user matched into.
  *
- * The swipe deck draws from 426 library cards (vroid hub portraits) for the
+ * The swipe deck draws from the vision-tagged library (vroid hub portraits) for the
  * personality/centroid math. The room ships 5 abison-curated VRM bodies
  * + the original placeholder (manifest.json):
  *   - cottagecore.vrm     (A1, soft warm)

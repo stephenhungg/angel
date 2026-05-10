@@ -101,7 +101,7 @@ export function computeEmbed(yesPicks: LibraryEntry[]): EmbedResult {
   const heroCard: HeroCard = {
     id: heroEntry.id,
     name: heroEntry.name,
-    thumbnailUrl: `/library/${heroEntry.id}.jpg`,
+    thumbnailUrl: `/library/_portraits/${heroEntry.id}.jpg`,
     vibePhrase: heroEntry.tags.vibe_phrase,
     personalityBlurb: heroEntry.tags.personality_blurb,
     energyDescriptor: heroEntry.tags.energy_descriptor,

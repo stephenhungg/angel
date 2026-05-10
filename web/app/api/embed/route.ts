@@ -162,7 +162,7 @@ export async function POST(request: Request) {
     heroCard: {
       id: heroCard.id,
       name: heroCard.name,
-      thumbnailUrl: `/library/${heroCard.id}.jpg`,
+      thumbnailUrl: `/library/_portraits/${heroCard.id}.jpg`,
       vibePhrase: heroCard.tags.vibe_phrase,
       personalityBlurb: heroCard.tags.personality_blurb,
       energyDescriptor: heroCard.tags.energy_descriptor,

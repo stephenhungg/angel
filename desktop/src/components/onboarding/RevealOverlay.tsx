@@ -141,7 +141,7 @@ export function RevealOverlay({ onComplete }: RevealOverlayProps) {
             ? {
                 id: hero.id,
                 name: hero.name,
-                thumbnailUrl: `/library/${hero.id}.jpg`,
+                thumbnailUrl: `/library/_portraits/${hero.id}.jpg`,
                 vibePhrase: hero.tags.vibe_phrase,
                 personalityBlurb: hero.tags.personality_blurb,
                 energyDescriptor: hero.tags.energy_descriptor,
