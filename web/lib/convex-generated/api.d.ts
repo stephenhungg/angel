@@ -28,6 +28,7 @@ import type * as sms_index from "../sms/index.js";
 import type * as sms_orchestrator from "../sms/orchestrator.js";
 import type * as sms_sendblue from "../sms/sendblue.js";
 import type * as sms_twilio from "../sms/twilio.js";
+import type * as skills_mirror from "../skills/mirror.js";
 import type * as tasks from "../tasks.js";
 import type * as turns from "../turns.js";
 import type * as users from "../users.js";
@@ -52,6 +53,7 @@ declare const fullApi: ApiFromModules<{
   "sms/orchestrator": typeof sms_orchestrator;
   "sms/sendblue": typeof sms_sendblue;
   "sms/twilio": typeof sms_twilio;
+  "skills/mirror": typeof skills_mirror;
   tasks: typeof tasks;
   turns: typeof turns;
   users: typeof users;

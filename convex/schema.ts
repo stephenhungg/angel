@@ -329,6 +329,31 @@ export default defineSchema({
    * keep the cursor source-of-truth in Convex and let Tensorlake be the
    * scheduled execution layer.
    */
+  /**
+   * skills — convex mirror of angel's recursive self-improvement filesystem
+   * (~/.angel/skills/{proposed,active,archived}/<slug>.md). the desktop is
+   * still source of truth; this table exists so /admin/skills can show
+   * mid-demo: she calls propose_skill → a row appears here in real-time.
+   *
+   * upsert is keyed by (userId, slug). status transitions (proposed → active
+   * → archived) update in place + bump bumpedAt so the admin page can sort
+   * "just appeared" to the top and pulse a sakura ring on it.
+   */
+  skills: defineTable({
+    userId: v.string(),
+    slug: v.string(),
+    name: v.string(),
+    description: v.string(),
+    status: v.string(), // 'proposed' | 'active' | 'archived'
+    content: v.string(), // markdown body
+    origin: v.optional(v.string()),
+    proposedAt: v.string(), // ISO
+    bumpedAt: v.number(), // ms epoch — used for "just appeared" sort + pulse
+  })
+    .index('by_userId_status', ['userId', 'status'])
+    .index('by_userId_slug', ['userId', 'slug'])
+    .index('by_bumpedAt', ['bumpedAt']),
+
   discordListenerCursors: defineTable({
     /** Discord channel snowflake (or DM channel id). */
     channelId: v.string(),

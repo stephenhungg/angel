@@ -10,6 +10,7 @@ const TABS: { href: string; label: string; sublabel: string }[] = [
   { href: '/admin/synthesis', label: 'synthesis', sublabel: 'personality.md log' },
   { href: '/admin/timeline', label: 'timeline', sublabel: 'cross-surface feed' },
   { href: '/admin/heartbeats', label: 'heartbeats', sublabel: 'always-on dashboard' },
+  { href: '/admin/skills', label: 'skills', sublabel: 'recursive self-improvement' },
 ];
 
 export function AdminChrome({ children }: React.PropsWithChildren) {

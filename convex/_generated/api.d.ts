@@ -19,6 +19,7 @@ import type * as intro_ingest from "../intro/ingest.js";
 import type * as llm_proxy from "../llm/proxy.js";
 import type * as memoryMirror from "../memoryMirror.js";
 import type * as observability from "../observability.js";
+import type * as skills_mirror from "../skills/mirror.js";
 import type * as sms_functions from "../sms/functions.js";
 import type * as sms_index from "../sms/index.js";
 import type * as sms_orchestrator from "../sms/orchestrator.js";
@@ -46,6 +47,7 @@ declare const fullApi: ApiFromModules<{
   "llm/proxy": typeof llm_proxy;
   memoryMirror: typeof memoryMirror;
   observability: typeof observability;
+  "skills/mirror": typeof skills_mirror;
   "sms/functions": typeof sms_functions;
   "sms/index": typeof sms_index;
   "sms/orchestrator": typeof sms_orchestrator;

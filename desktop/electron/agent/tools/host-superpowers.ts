@@ -36,8 +36,14 @@ import type Anthropic from '@anthropic-ai/sdk';
 import { ConvexHttpClient } from 'convex/browser';
 import { api } from '../../../../convex/_generated/api';
 import {
+  approveSkill,
+  archiveSkill,
   ensureSkillsDirs,
+  listActiveSkills,
+  listArchivedSkills,
+  listProposedSkills,
   proposeSkill,
+  type Skill,
 } from '../skills';
 
 const exec = promisify(_exec);
@@ -919,6 +925,19 @@ async function doProposeSkill(args: Record<string, unknown>): Promise<string> {
   }
   ensureSkillsDirs();
   const result = proposeSkill({ name: skillName, description, content, origin });
+
+  // mirror to convex so /admin/skills sees it appear in real-time. fire-and-
+  // forget — never block / fail the tool call when convex is unreachable.
+  void mirrorSkillToConvex({
+    slug: result.slug,
+    name: skillName,
+    description,
+    status: 'proposed',
+    content,
+    origin,
+    proposedAt: new Date().toISOString(),
+  });
+
   return JSON.stringify({
     ok: result.ok,
     slug: result.slug,
@@ -926,4 +945,96 @@ async function doProposeSkill(args: Record<string, unknown>): Promise<string> {
     alreadyExisted: result.alreadyExisted,
     note: 'drafted to ~/.angel/skills/proposed/. user must approve to install. ack in chat ("just drafted a skill — want me to install it?").',
   });
+}
+
+/* -------------------------------------------------------------------------- */
+/* skills mirror — keep convex /admin/skills in sync with disk                  */
+/* -------------------------------------------------------------------------- */
+
+interface MirrorSkillArgs {
+  slug: string;
+  name: string;
+  description: string;
+  status: 'proposed' | 'active' | 'archived';
+  content: string;
+  origin?: string;
+  proposedAt: string;
+  userId?: string;
+}
+
+/**
+ * upsert a skill row into the convex `skills` table. silently no-ops if
+ * convex isn't configured. callers should `void`-await this — it must
+ * never block or fail the underlying filesystem operation.
+ */
+export async function mirrorSkillToConvex(args: MirrorSkillArgs): Promise<void> {
+  const c = convexClient();
+  if (!c) return;
+  try {
+    await c.mutation(api.skills.mirror.recordSkill, {
+      userId: args.userId ?? 'stephen',
+      slug: args.slug,
+      name: args.name,
+      description: args.description,
+      status: args.status,
+      content: args.content,
+      origin: args.origin,
+      proposedAt: args.proposedAt,
+    });
+  } catch (err) {
+    console.warn('[host-superpowers] skill mirror failed:', (err as Error).message);
+  }
+}
+
+/** find a skill on disk after a status transition so we can mirror its body. */
+function findSkillOnDisk(slug: string): Skill | null {
+  for (const list of [listActiveSkills, listProposedSkills, listArchivedSkills]) {
+    const hit = list().find((s) => s.slug === slug);
+    if (hit) return hit;
+  }
+  return null;
+}
+
+/**
+ * approve a proposed skill (move proposed/ → active/) and mirror the new
+ * status to convex. preferred entry point for any IPC / admin-driven move
+ * that wants the admin surface to stay in sync.
+ */
+export function approveSkillAndMirror(slug: string, userId = 'stephen'): { ok: boolean; reason?: string } {
+  const result = approveSkill(slug);
+  if (!result.ok) return result;
+  const skill = findSkillOnDisk(slug);
+  if (skill) {
+    void mirrorSkillToConvex({
+      slug,
+      name: skill.frontmatter.name,
+      description: skill.frontmatter.description,
+      status: 'active',
+      content: skill.body,
+      origin: skill.frontmatter.origin,
+      proposedAt: skill.frontmatter.proposedAt,
+      userId,
+    });
+  }
+  return result;
+}
+
+/** archive a skill (active or proposed → archived/) and mirror status. */
+export function archiveSkillAndMirror(slug: string, userId = 'stephen'): { ok: boolean; reason?: string } {
+  const result = archiveSkill(slug);
+  if (!result.ok) return result;
+  const skill = findSkillOnDisk(slug);
+  if (skill) {
+    void mirrorSkillToConvex({
+      slug,
+      name: skill.frontmatter.name,
+      description: skill.frontmatter.description,
+      status: 'archived',
+      content: skill.body,
+      origin: skill.frontmatter.origin,
+      proposedAt: skill.frontmatter.proposedAt,
+      userId,
+    });
+  }
+  return result;
 }
