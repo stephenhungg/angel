@@ -2,6 +2,7 @@ import { BaitIntro } from "@/components/BaitIntro";
 import { SmoothScroll } from "@/components/SmoothScroll";
 import { Nav } from "@/components/Nav";
 import { Hero } from "@/components/Hero";
+import { AlwaysOn } from "@/components/AlwaysOn";
 import { Origin } from "@/components/Origin";
 import { WhatSheIs } from "@/components/WhatSheIs";
 import { Archetypes } from "@/components/Archetypes";
@@ -92,6 +93,7 @@ export default function HomePage() {
             highly customizable via swipe-converged persona vector.
           </h1>
           <Hero />
+          <AlwaysOn />
           <Origin />
           <WhatSheIs />
           <Archetypes />

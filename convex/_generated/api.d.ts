@@ -14,6 +14,8 @@ import type * as discord_functions from "../discord/functions.js";
 import type * as discord_interactions from "../discord/interactions.js";
 import type * as discord_orchestrator from "../discord/orchestrator.js";
 import type * as http from "../http.js";
+import type * as intro_ingest from "../intro/ingest.js";
+import type * as llm_proxy from "../llm/proxy.js";
 import type * as memoryMirror from "../memoryMirror.js";
 import type * as observability from "../observability.js";
 import type * as sms_functions from "../sms/functions.js";
@@ -38,6 +40,8 @@ declare const fullApi: ApiFromModules<{
   "discord/interactions": typeof discord_interactions;
   "discord/orchestrator": typeof discord_orchestrator;
   http: typeof http;
+  "intro/ingest": typeof intro_ingest;
+  "llm/proxy": typeof llm_proxy;
   memoryMirror: typeof memoryMirror;
   observability: typeof observability;
   "sms/functions": typeof sms_functions;

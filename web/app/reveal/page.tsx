@@ -705,6 +705,35 @@ export default function RevealPage() {
                 <path d="M12 21 C 12 21 2 14 2 8 C 2 5 4 3 7 3 C 9 3 11 4 12 6 C 13 4 15 3 17 3 C 20 3 22 5 22 8 C 22 14 12 21 12 21 Z" />
               </svg>
             </motion.a>
+
+            {/* download fallback — for users who don't have Angel installed yet.
+                "let her in" above is the angel:// deep link; if nothing happens
+                when they click it, they need this. */}
+            <motion.div
+              className="relative z-10 mt-5 flex flex-col items-center gap-1 text-center"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.7, delay: 0.4 }}
+            >
+              <div className="font-mono uppercase tracking-[0.22em] text-[9px] text-sakura-500">
+                first time?
+              </div>
+              <a
+                href="https://github.com/stephenhungg/angel/releases/download/v0.0.1-alpha/Angel-0.0.1-arm64.dmg"
+                className="font-sans text-[13px] font-medium text-sakura-700 underline-offset-4 hover:underline hover:text-sakura-800 transition-colors"
+              >
+                download angel for mac (arm64) ↓
+              </a>
+              <div className="font-mono uppercase tracking-[0.22em] text-[9px] text-muted-tertiary mt-1">
+                then come back & click let her in
+              </div>
+              <a
+                href="/download"
+                className="font-mono uppercase tracking-[0.22em] text-[9px] text-muted-secondary mt-1 underline-offset-4 hover:underline"
+              >
+                other platforms / install help
+              </a>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>

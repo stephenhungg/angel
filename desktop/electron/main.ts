@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, shell, globalShortcut } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -32,6 +32,15 @@ import {
   type BgObservation,
 } from './agent/tensorlake/bg-jobs';
 import { registerSwipeIpc, setPersonaApplier } from './swipe-ipc';
+import { tickAlive, recordQuit } from './agent/lifecycle';
+import {
+  captureBootEnv,
+  registerSettingsIpc,
+  loadSettings,
+  applyToEnv,
+  currentUserId,
+} from './settings-ipc';
+import { registerIntroIpc } from './intro-ipc';
 
 /**
  * Tiny .env.local loader — reads desktop/.env.local before any module that
@@ -72,6 +81,11 @@ function loadDotEnvLocal(): void {
 }
 
 loadDotEnvLocal();
+
+// Snapshot whether the user already had a real ANTHROPIC_API_KEY in env
+// BEFORE we considered settings.json. This preserves stephen's dev path
+// (env-key wins) and is checked by `shouldShowSettings()`.
+captureBootEnv();
 
 const isDev = !!process.env.ELECTRON_RENDERER_URL || !app.isPackaged;
 
@@ -120,6 +134,54 @@ function rendererIndex(): string {
   return path.resolve(__dirname_compat, '../renderer/index.html');
 }
 
+/* ------------------------------------------------------------------ */
+/* admin window — CMD+SHIFT+A opens an in-app frame around the         */
+/* deployed /admin (cross-surface timeline, traces, memory, heartbeats)*/
+/* ------------------------------------------------------------------ */
+
+let adminWindow: BrowserWindow | null = null;
+
+/** the admin URL — overridable via env for local web dev */
+function adminUrl(): string {
+  const override = process.env.ANGEL_ADMIN_URL?.trim();
+  if (override) return override;
+  // dev with local web server: use it; else hit the deployed admin
+  if (process.env.ANGEL_LOCAL_WEB === '1') return 'http://localhost:3000/admin';
+  return 'https://angel-swipe.vercel.app/admin';
+}
+
+function openAdminWindow(): void {
+  if (adminWindow && !adminWindow.isDestroyed()) {
+    adminWindow.show();
+    adminWindow.focus();
+    return;
+  }
+  adminWindow = new BrowserWindow({
+    width: 1200,
+    height: 780,
+    minWidth: 720,
+    minHeight: 480,
+    show: true,
+    title: 'angel · admin',
+    backgroundColor: '#0d0a14',
+    webPreferences: {
+      // admin window is a plain browser frame around the deployed admin —
+      // no preload, no nodeIntegration. it's a viewer.
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  });
+  adminWindow.on('closed', () => {
+    adminWindow = null;
+  });
+  adminWindow.webContents.setWindowOpenHandler(({ url }) => {
+    shell.openExternal(url).catch(() => undefined);
+    return { action: 'deny' };
+  });
+  void adminWindow.loadURL(adminUrl());
+}
+
 async function createMainWindow() {
   mainWindow = new BrowserWindow({
     width: 1280,
@@ -154,7 +216,7 @@ async function createMainWindow() {
         sendState: (p: Record<string, unknown>) =>
           mainWindow?.webContents.send('state:update', p),
       };
-      void runBootGreeting({ ...sender, userId: DEFAULT_USER_ID });
+      void runBootGreeting({ ...sender, userId: currentUserId() });
     }
   });
 
@@ -193,7 +255,7 @@ ipcMain.handle('tool:invoke', async (_evt, payload: { name: string; args?: Recor
       if (!text) return { ok: false, error: 'empty text' };
       const ctx = {
         text,
-        userId: DEFAULT_USER_ID,
+        userId: currentUserId(),
         send: (action: SceneAction) => mainWindow?.webContents.send('scene:action', action),
         sendChat: (token: { id: string; text: string; done?: boolean }) =>
           mainWindow?.webContents.send('chat:token', token),
@@ -340,6 +402,24 @@ if (!gotLock) {
   app.whenReady().then(async () => {
     registerProtocolHandler();
     registerMockHandlers();
+    registerSettingsIpc();
+    registerIntroIpc();
+
+    // Apply persisted settings to process.env BEFORE memory + orchestrator
+    // wire up. Determines whether the orchestrator goes direct vs convex on
+    // the very first turn after launch.
+    const persisted = loadSettings();
+    if (persisted) {
+      applyToEnv(persisted);
+      console.info(
+        '[main] settings.json applied → transport=%s userId=%s introCompleted=%s',
+        persisted.transport,
+        persisted.userId,
+        persisted.introCompleted,
+      );
+    } else {
+      console.info('[main] no settings.json — first run path; renderer will show SettingsScreen');
+    }
 
     // Onboarding (swipe + reveal) IPC: embed, synthesize, naming_response, complete.
     // The complete handler hands the persona to claim:received so applyClaim
@@ -362,11 +442,19 @@ if (!gotLock) {
     // seed the demo history. This must complete BEFORE the window opens so
     // the boot greeting's recall hits seeded entries.
     try {
-      const memory = buildMemory(DEFAULT_USER_ID);
+      const uid = currentUserId();
+      const memory = buildMemory(uid);
       setMemory(memory);
-      const wrote = await seedDemoHistory(memory, DEFAULT_USER_ID);
+      // Only seed Stephen's demo history for the legacy DEFAULT_USER_ID
+      // (dev path). Fresh per-install users start with an empty memory and
+      // accumulate their own through the introduction phase + chat.
+      if (uid === DEFAULT_USER_ID) {
+        const wrote = await seedDemoHistory(memory, uid);
+        console.info('[main] memory ready (stephen seed), seed', wrote ? 'written' : 'already-present');
+      } else {
+        console.info('[main] memory ready (fresh user namespace=%s), no seed', uid);
+      }
       setSeedComplete(true);
-      console.info('[main] memory ready, seed', wrote ? 'written' : 'already-present');
     } catch (err) {
       console.error('[main] memory bootstrap failed:', err);
       setSeedComplete(false);
@@ -380,7 +468,7 @@ if (!gotLock) {
       try {
         const mem = getMemory();
         await mem.remember({
-          userId: DEFAULT_USER_ID,
+          userId: currentUserId(),
           type: entry.type,
           content: entry.content,
           timestamp: entry.timestamp,
@@ -400,6 +488,16 @@ if (!gotLock) {
 
     await createMainWindow();
 
+    // CMD+SHIFT+A → in-app /admin window. judges/users get cross-surface
+    // ground truth without leaving the app.
+    const adminAccelerator = 'CommandOrControl+Shift+A';
+    const registered = globalShortcut.register(adminAccelerator, openAdminWindow);
+    if (registered) {
+      console.info('[main] admin shortcut registered:', adminAccelerator);
+    } else {
+      console.warn('[main] failed to register admin shortcut:', adminAccelerator);
+    }
+
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) void createMainWindow();
     });
@@ -413,6 +511,15 @@ if (!gotLock) {
       if (mainWindow) mainWindow.webContents.send('claim:received', claim);
       else pendingClaim = claim;
     }
+  });
+
+  // lifecycle ticks — write lastSeenAt on blur + focus + quit so the next
+  // boot greeting can compute the gap accurately. ~/.angel/lifecycle.json.
+  app.on('browser-window-blur', () => tickAlive('blur'));
+  app.on('browser-window-focus', () => tickAlive('unknown'));
+  app.on('before-quit', () => recordQuit('quit'));
+  app.on('will-quit', () => {
+    globalShortcut.unregisterAll();
   });
 
   app.on('window-all-closed', () => {

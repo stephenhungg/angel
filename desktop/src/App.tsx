@@ -13,46 +13,135 @@ import { TitleScreen } from '@/components/onboarding/TitleScreen';
 import { OnboardingPage } from '@/components/onboarding/OnboardingPage';
 import { RevealOverlay } from '@/components/onboarding/RevealOverlay';
 import { useSwipeStore } from '@/stores/swipe';
+import { SettingsScreen } from '@/components/settings/SettingsScreen';
+import { IntroductionPhase } from '@/components/introduction/IntroductionPhase';
+import { readSettingsBootstrap } from '@/lib/settings';
 import type { SceneAction } from '@angel/shared';
+import type { AngelSettings } from '@/global';
 
-type Phase = 'title' | 'onboarding' | 'reveal' | 'room';
+type Phase =
+  | 'booting' // checking settings + persisted persona before deciding
+  | 'settings' // first-run setup (transport + key)
+  | 'onboarding' // swipe deck
+  | 'reveal' // dopamine cascade + naming
+  | 'introduction' // she asks 5 questions in her voice → nia
+  | 'room';
 
-/** Composition root. Renders the title → swipe → reveal flow as the cold-boot
- *  experience, then transitions into the existing 3D <Room> tree once the
- *  persona is applied. Skips straight to 'room' if a persona already exists in
- *  the store (e.g., from a deep-link claim or a previous session). */
+/** Composition root. Picks the right cold-boot phase based on:
+ *   1. settings.json present? if not → 'settings' (unless dev env-key path)
+ *   2. persona persisted? if yes + introCompleted → 'room', else 'introduction'
+ *   3. otherwise → 'onboarding' (swipe → reveal → introduction → room)
+ *
+ * If a persona DISAPPEARS while in room (rediscover button wiped it), bounce
+ * back to the swipe deck + reset the swipe store so the user can re-run the
+ * flow from scratch.
+ */
 export function App() {
   const persona = useAngelStore((s) => s.persona);
-  const [phase, setPhase] = useState<Phase>(() =>
-    useAngelStore.getState().persona ? 'room' : 'title',
-  );
+  const [phase, setPhase] = useState<Phase>('booting');
+  const [settings, setSettings] = useState<AngelSettings | null>(null);
 
-  // If a persona arrives via claim:received while pre-room (deep link), jump
-  // straight to room. If a persona DISAPPEARS while in room (rediscover button
-  // wiped it), bounce back to the title screen + reset the swipe deck so the
-  // user can run the flow again from scratch.
+  // Boot decision: read settings from main, then route.
   useEffect(() => {
-    if (persona && phase !== 'room') {
-      setPhase('room');
-    } else if (!persona && phase === 'room') {
-      try {
-        useSwipeStore.getState().reset();
-      } catch {
-        /* ignore — store may not be hydrated yet */
+    let cancelled = false;
+    void readSettingsBootstrap().then((boot) => {
+      if (cancelled) return;
+      setSettings(boot.settings);
+      if (boot.shouldShowSettings) {
+        setPhase('settings');
+        return;
       }
-      setPhase('title');
+      // settings exist (or dev env-key path): pick onboarding/intro/room
+      const hydrated = useAngelStore.getState().persona;
+      if (hydrated) {
+        if (boot.settings && !boot.settings.introCompleted) {
+          setPhase('introduction');
+        } else {
+          setPhase('room');
+        }
+      } else {
+        setPhase('onboarding');
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // If a persona arrives via claim:received while we're elsewhere, route to
+  // the right phase: room if intro is done, introduction otherwise. If the
+  // persona DISAPPEARS while in room, reset the swipe store + bounce back to
+  // onboarding so the user can rediscover from scratch.
+  useEffect(() => {
+    if (!persona) {
+      if (phase === 'room') {
+        try {
+          useSwipeStore.getState().reset();
+        } catch {
+          /* ignore — store may not be hydrated yet */
+        }
+        setPhase('onboarding');
+      }
+      return;
     }
-  }, [persona, phase]);
+    if (phase === 'room' || phase === 'introduction') return;
+    if (phase === 'settings' || phase === 'booting') return;
+    if (settings?.introCompleted) {
+      setPhase('room');
+    } else {
+      setPhase('introduction');
+    }
+  }, [persona, phase, settings?.introCompleted]);
 
   return (
     <>
-      {phase === 'title' && <TitleScreen onBegin={() => setPhase('onboarding')} />}
+      {phase === 'booting' && <BootingShim />}
+      {phase === 'settings' && (
+        <SettingsScreen
+          mode="first-run"
+          onComplete={(s) => {
+            setSettings(s);
+            // a returning user with a persisted persona but no intro:
+            // settings just got created; route to the next logical step
+            const hydrated = useAngelStore.getState().persona;
+            if (hydrated && !s.introCompleted) setPhase('introduction');
+            else if (hydrated && s.introCompleted) setPhase('room');
+            else setPhase('onboarding');
+          }}
+        />
+      )}
       {phase === 'onboarding' && (
         <OnboardingPage onComplete={() => setPhase('reveal')} />
       )}
-      {phase === 'reveal' && <RevealOverlay onComplete={() => setPhase('room')} />}
+      {phase === 'reveal' && (
+        <RevealOverlay onComplete={() => setPhase('introduction')} />
+      )}
+      {phase === 'introduction' && (
+        <IntroductionPhase
+          onComplete={() => {
+            // refresh settings from main so introCompleted=true is captured
+            void readSettingsBootstrap().then((boot) => setSettings(boot.settings));
+            setPhase('room');
+          }}
+        />
+      )}
       {phase === 'room' && <RoomShell />}
     </>
+  );
+}
+
+/** Tiny full-screen black shim while we async-read settings. Prevents a
+ *  flash of "onboarding then settings" or vice versa. */
+function BootingShim() {
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: '#0d0a14',
+        zIndex: 9999,
+      }}
+    />
   );
 }
 

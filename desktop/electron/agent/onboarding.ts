@@ -40,6 +40,10 @@ function resolveAgentFile(rel: string): string {
     path.resolve(__dirname_compat, '../../electron/agent', rel),
     path.resolve(__dirname_compat, '../agent', rel),
     path.resolve(__dirname_compat, rel),
+    // packaged app: electron-builder ships these under Contents/Resources/electron/agent/
+    ...(typeof process.resourcesPath === 'string'
+      ? [path.resolve(process.resourcesPath, 'electron/agent', rel)]
+      : []),
   ];
   for (const c of candidates) {
     if (fs.existsSync(c)) return c;
@@ -181,6 +185,113 @@ interface NamingBody {
 function templatedReply(name: string): string {
   const safe = name.trim().slice(0, 32) || 'angel';
   return `${safe}. okay. i'll be that.`;
+}
+
+/* ------------------------------------------------------------------ */
+/* introduction phase — generate 5 questions in HER voice               */
+/* ------------------------------------------------------------------ */
+
+export interface IntroQuestionTopic {
+  id: string;
+  intent: string;
+  type: 'preference' | 'fact' | 'scratchpad';
+}
+
+export interface GeneratedIntroQuestion {
+  id: string;
+  q: string;
+  type: 'preference' | 'fact' | 'scratchpad';
+  ackHint?: string;
+}
+
+interface GenerateIntroBody {
+  personalityMd: string;
+  userName?: string;
+  topics: IntroQuestionTopic[];
+  promptTemplate: string;
+}
+
+/**
+ * Ask the model to rewrite each topic intent in HER voice. Returns a list of
+ * 5 question objects. Falls back to {fallback:true,questions:[]} on any error;
+ * the renderer is expected to use its hardcoded FALLBACK_QUESTIONS in that
+ * case.
+ */
+export async function generateIntroductionQuestions(
+  body: GenerateIntroBody,
+): Promise<{ questions: GeneratedIntroQuestion[]; fallback: boolean }> {
+  const c = client();
+  if (!c) return { questions: [], fallback: true };
+  if (!body.topics?.length || !body.promptTemplate?.trim()) {
+    return { questions: [], fallback: true };
+  }
+
+  const topicsBlock = body.topics
+    .map((t, i) => `${i + 1}. id="${t.id}" type="${t.type}" — ${t.intent}`)
+    .join('\n');
+  const personality = (body.personalityMd ?? '').slice(0, 2400);
+  const name = (body.userName ?? '').trim().slice(0, 32) || 'they';
+  const prompt = body.promptTemplate
+    .replace('{{PERSONALITY_MD}}', personality)
+    .replace('{{USER_NAME}}', name)
+    .replace('{{TOPICS}}', topicsBlock);
+
+  try {
+    const resp = await c.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 700,
+      temperature: 0.95,
+      messages: [{ role: 'user', content: prompt }],
+    });
+    const block = resp.content[0];
+    const text = block && block.type === 'text' ? block.text.trim() : '';
+    if (!text) return { questions: [], fallback: true };
+    const parsed = extractJsonArray(text);
+    if (!Array.isArray(parsed) || parsed.length === 0) {
+      return { questions: [], fallback: true };
+    }
+    // map back to topic types (the model only returns id + q + ackHint)
+    const byId = new Map(body.topics.map((t) => [t.id, t.type]));
+    const questions: GeneratedIntroQuestion[] = parsed
+      .filter(
+        (x): x is { id: string; q: string; ackHint?: string } =>
+          !!x && typeof x.id === 'string' && typeof x.q === 'string',
+      )
+      .map((x) => ({
+        id: x.id,
+        q: x.q.trim(),
+        ackHint: typeof x.ackHint === 'string' ? x.ackHint.trim() : undefined,
+        type: byId.get(x.id) ?? 'preference',
+      }));
+    if (questions.length === 0) return { questions: [], fallback: true };
+    return { questions, fallback: false };
+  } catch (err) {
+    console.warn('[onboarding] generateIntroductionQuestions threw:', err);
+    return { questions: [], fallback: true };
+  }
+}
+
+function extractJsonArray(text: string): unknown {
+  // strip markdown fences if present
+  let t = text.trim();
+  if (t.startsWith('```')) {
+    t = t.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '');
+  }
+  try {
+    return JSON.parse(t);
+  } catch {
+    // try to find first [ ... ] span
+    const start = t.indexOf('[');
+    const end = t.lastIndexOf(']');
+    if (start >= 0 && end > start) {
+      try {
+        return JSON.parse(t.slice(start, end + 1));
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
 }
 
 export async function respondToName(body: NamingBody): Promise<{ response: string }> {

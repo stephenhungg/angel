@@ -43,6 +43,10 @@ function loadLibrary(): LibraryEntry[] {
     path.resolve(process.cwd(), 'electron/data/library.json'),
     // fallback: process.cwd()/desktop/electron/data/library.json
     path.resolve(process.cwd(), 'desktop/electron/data/library.json'),
+    // packaged app: electron-builder copies electron/data/* into Contents/Resources/electron/data/
+    ...(typeof process.resourcesPath === 'string'
+      ? [path.resolve(process.resourcesPath, 'electron/data/library.json')]
+      : []),
   ];
   for (const file of candidates) {
     if (!fs.existsSync(file)) continue;
@@ -216,12 +220,19 @@ const PROMPT_PATHS = [
   path.resolve(__dirname_compat, '../agent/personality_synthesis.prompt.md'),
   path.resolve(process.cwd(), 'electron/agent/personality_synthesis.prompt.md'),
   path.resolve(process.cwd(), 'desktop/electron/agent/personality_synthesis.prompt.md'),
+  // packaged app: electron-builder copies the prompt + examples into Contents/Resources/electron/agent/
+  ...(typeof process.resourcesPath === 'string'
+    ? [path.resolve(process.resourcesPath, 'electron/agent/personality_synthesis.prompt.md')]
+    : []),
 ];
 const FALLBACK_DIRS = [
   path.resolve(__dirname_compat, '../../electron/agent/personality_examples'),
   path.resolve(__dirname_compat, '../agent/personality_examples'),
   path.resolve(process.cwd(), 'electron/agent/personality_examples'),
   path.resolve(process.cwd(), 'desktop/electron/agent/personality_examples'),
+  ...(typeof process.resourcesPath === 'string'
+    ? [path.resolve(process.resourcesPath, 'electron/agent/personality_examples')]
+    : []),
 ];
 
 function loadPrompt(): string {

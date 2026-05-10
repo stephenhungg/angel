@@ -12,7 +12,62 @@
     "preview": "electron-vite preview",
     "sync-library": "bun run scripts/sync-library.ts",
     "lint": "eslint src electron --ext .ts,.tsx",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepackage": "bun run build",
+    "package": "electron-builder --mac --arm64",
+    "package:dir": "electron-builder --dir --mac --arm64"
+  },
+  "build": {
+    "appId": "com.stephenhungg.angel",
+    "productName": "Angel",
+    "directories": {
+      "output": "dist-release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist-electron/**/*",
+      "package.json",
+      "!node_modules/**"
+    ],
+    "extraResources": [
+      { "from": "public", "to": "public", "filter": ["**/*"] },
+      { "from": "electron/data", "to": "electron/data", "filter": ["**/*"] },
+      {
+        "from": "electron/agent",
+        "to": "electron/agent",
+        "filter": [
+          "personality_synthesis.prompt.md",
+          "personality_examples/**/*"
+        ]
+      }
+    ],
+    "asar": true,
+    "mac": {
+      "category": "public.app-category.entertainment",
+      "target": [
+        { "target": "dmg", "arch": ["arm64"] }
+      ],
+      "icon": "build/icon.icns",
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false,
+      "identity": null,
+      "extendInfo": {
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLSchemes": ["angel"],
+            "CFBundleURLName": "Angel Claim"
+          }
+        ]
+      }
+    },
+    "dmg": {
+      "title": "Angel",
+      "icon": "build/icon.icns",
+      "contents": [
+        { "x": 130, "y": 220 },
+        { "x": 410, "y": 220, "type": "link", "path": "/Applications" }
+      ]
+    }
   },
   "dependencies": {
     "@angel/shared": "workspace:*",

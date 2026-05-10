@@ -33,6 +33,15 @@ export type CodexStreamEvent = { jobId: string; chunk: string };
 export type CodexCompleteEvent = { jobId: string; result: unknown };
 export type VerifyResultEvent = { check: string; ok: boolean; evidence: string };
 
+export type AngelSettings = {
+  transport: 'convex' | 'direct';
+  anthropicApiKey?: string;
+  convexUrl: string;
+  userId: string;
+  introCompleted: boolean;
+  savedAt: number;
+};
+
 declare global {
   interface Window {
     angel: {
@@ -88,6 +97,44 @@ declare global {
         dialogueSamples?: string[];
       }) => Promise<{ response: string }>;
       completeOnboarding: (persona: ClaimTokenPayload) => Promise<{ ok: boolean }>;
+
+      /* first-run settings + introduction */
+      settings: {
+        get: () => Promise<{
+          settings: AngelSettings | null;
+          shouldShowSettings: boolean;
+          bootHasEnvKey: boolean;
+          defaultConvexUrl: string;
+        }>;
+        set: (partial: Partial<AngelSettings>) => Promise<AngelSettings>;
+        reset: () => Promise<{ ok: boolean }>;
+        markIntroComplete: () => Promise<AngelSettings>;
+      };
+      introIngestAnswer: (args: {
+        userId?: string;
+        questionId: string;
+        question: string;
+        answer: string;
+        type: 'fact' | 'preference' | 'scratchpad';
+      }) => Promise<{ ok: boolean; error?: string }>;
+      introGenerateQuestions: (args: {
+        personalityMd: string;
+        userName?: string;
+        topics: Array<{
+          id: string;
+          intent: string;
+          type: 'fact' | 'preference' | 'scratchpad';
+        }>;
+        promptTemplate: string;
+      }) => Promise<{
+        questions: Array<{
+          id: string;
+          q: string;
+          type: 'fact' | 'preference' | 'scratchpad';
+          ackHint?: string;
+        }>;
+        fallback: boolean;
+      }>;
 
       platform: NodeJS.Platform;
     };

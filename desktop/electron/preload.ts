@@ -104,5 +104,34 @@ contextBridge.exposeInMainWorld('angel', {
   completeOnboarding: (persona: ClaimTokenPayload): Promise<{ ok: boolean }> =>
     ipcRenderer.invoke('swipe:complete', persona),
 
+  /* ---- first-run settings + introduction ---- */
+
+  settings: {
+    get: () => ipcRenderer.invoke('settings:get'),
+    set: (partial: Record<string, unknown>) =>
+      ipcRenderer.invoke('settings:set', partial),
+    reset: () => ipcRenderer.invoke('settings:reset'),
+    markIntroComplete: () => ipcRenderer.invoke('settings:mark-intro-complete'),
+  },
+
+  introIngestAnswer: (args: {
+    userId?: string;
+    questionId: string;
+    question: string;
+    answer: string;
+    type: 'fact' | 'preference' | 'scratchpad';
+  }) => ipcRenderer.invoke('intro:ingestAnswer', args),
+
+  introGenerateQuestions: (args: {
+    personalityMd: string;
+    userName?: string;
+    topics: Array<{
+      id: string;
+      intent: string;
+      type: 'fact' | 'preference' | 'scratchpad';
+    }>;
+    promptTemplate: string;
+  }) => ipcRenderer.invoke('intro:generateQuestions', args),
+
   platform: process.platform,
 });

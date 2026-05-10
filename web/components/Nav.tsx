@@ -194,16 +194,7 @@ export function Nav() {
               })}
             </ul>
 
-            <div className="mt-8 flex items-end justify-between gap-6 font-sans text-[14px] font-medium text-muted-deep tablet:mt-10 tablet:text-[15px]">
-              <div className="flex flex-col gap-1">
-                <a
-                  href="mailto:founders@kalilabs.ai"
-                  className="inline-flex min-h-11 items-center hover:text-sakura-600"
-                >
-                  founders@kalilabs.ai
-                </a>
-                <span className="text-muted-tertiary">berkeley, ca · 天使</span>
-              </div>
+            <div className="mt-8 flex items-end justify-end gap-6 font-sans text-[14px] font-medium text-muted-deep tablet:mt-10 tablet:text-[15px]">
               <div className="flex flex-col items-end gap-1 text-right">
                 <a
                   href="https://github.com/stephenhungg/angel"

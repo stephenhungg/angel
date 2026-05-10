@@ -32,6 +32,9 @@ interface SavedPersona {
   paletteHex: string;
   traits: PersonaTraits;
   vrmUrl?: string;
+  /** synthesized personality.md — kept so introduction phase can ask in
+   *  her voice on a fresh reload. */
+  personalityMd?: string;
   savedAt: number;
 }
 
@@ -72,6 +75,7 @@ export function hydratePersonaFromStorageOnce(): void {
     paletteHex: saved.paletteHex,
     name: saved.name,
     traits: saved.traits,
+    personalityMd: saved.personalityMd,
     iat: Math.floor(saved.savedAt / 1000),
     exp: Math.floor(saved.savedAt / 1000) + 60 * 60 * 24 * 365,
   };
@@ -145,6 +149,7 @@ export function setupPersonaPersist(): () => void {
         paletteHex: p.paletteHex,
         traits: p.traits,
         vrmUrl: p.vrmUrl,
+        personalityMd: p.personalityMd,
         savedAt: Date.now(),
       };
       write(payload);

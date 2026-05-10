@@ -171,8 +171,15 @@ async function checkHaikuReview(
     return { ok: false, evidence: 'haiku_review needs an intent' };
   }
 
+  // dual-mode (matches runner.ts):
+  //   ANTHROPIC_API_KEY local → direct anthropic SDK
+  //   else CONVEX_URL set     → proxy via convex action (production .dmg path)
+  //   else                    → heuristic-only fallback
   const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
-  if (!apiKey) {
+  const convexUrl =
+    process.env.CONVEX_URL?.trim() ?? process.env.NEXT_PUBLIC_CONVEX_URL?.trim();
+
+  if (!apiKey && !convexUrl) {
     // graceful fallback: heuristic over stdout
     const lower = stdout.toLowerCase();
     const looksGood =
@@ -190,25 +197,39 @@ async function checkHaikuReview(
     const ok = looksGood && !looksBad;
     return {
       ok,
-      evidence: `(no anthropic key) heuristic review → ${ok ? 'plausible success' : 'looks off'}`,
+      evidence: `(no anthropic key, no convex) heuristic review → ${ok ? 'plausible success' : 'looks off'}`,
       details: { mode: 'heuristic' },
     };
   }
 
-  const client = new Anthropic({ apiKey });
+  const callParams = {
+    model: 'claude-haiku-4-5',
+    max_tokens: 256,
+    system:
+      'You are a strict code-review verifier. Read the user\'s intent and the agent\'s stdout, then answer ONLY with a single JSON object {"ok": boolean, "reason": string}. ok=true ONLY if the stdout shows the intent was actually accomplished (real edits, passing tests/build if relevant). If anything is missing or fishy, ok=false.',
+    messages: [
+      {
+        role: 'user' as const,
+        content: `intent: ${intent}\n\nstdout (truncated to last 4000 chars):\n${stdout.slice(-4000)}`,
+      },
+    ],
+  };
+
   try {
-    const resp = await client.messages.create({
-      model: 'claude-haiku-4-5',
-      max_tokens: 256,
-      system:
-        'You are a strict code-review verifier. Read the user\'s intent and the agent\'s stdout, then answer ONLY with a single JSON object {"ok": boolean, "reason": string}. ok=true ONLY if the stdout shows the intent was actually accomplished (real edits, passing tests/build if relevant). If anything is missing or fishy, ok=false.',
-      messages: [
-        {
-          role: 'user',
-          content: `intent: ${intent}\n\nstdout (truncated to last 4000 chars):\n${stdout.slice(-4000)}`,
-        },
-      ],
-    });
+    let resp: Anthropic.Message;
+    if (apiKey) {
+      const client = new Anthropic({ apiKey });
+      resp = (await client.messages.create(callParams)) as unknown as Anthropic.Message;
+    } else {
+      // proxy through convex
+      const { claudeViaConvex } = await import('../claude-via-convex');
+      resp = await claudeViaConvex({
+        model: callParams.model,
+        maxTokens: callParams.max_tokens,
+        system: callParams.system,
+        messages: callParams.messages,
+      });
+    }
     const textBlock = resp.content.find((b) => b.type === 'text');
     const raw = textBlock && textBlock.type === 'text' ? textBlock.text.trim() : '';
     // tolerate code fences
@@ -220,7 +241,7 @@ async function checkHaikuReview(
     return {
       ok: Boolean(parsed.ok),
       evidence: parsed.reason ?? (parsed.ok ? 'haiku says ok' : 'haiku says not ok'),
-      details: { mode: 'haiku', raw },
+      details: { mode: apiKey ? 'haiku-direct' : 'haiku-convex', raw },
     };
   } catch (err) {
     return {

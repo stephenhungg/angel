@@ -14,6 +14,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
+import os from 'node:os';
 import { logOrchestratorTurn } from '../convex-bridge';
 import type {
   SceneAction,
@@ -32,6 +33,23 @@ import {
   getAgenticCapability,
 } from './tools';
 import type { CodexResult, VerifyCheck, VerifyResult } from './tools';
+import {
+  ensureSkillsDirs,
+  recordSkillUse,
+  renderActiveSkillsBlock,
+  renderProposedSkillsBlock,
+  skillsStatus,
+} from './skills';
+import {
+  recordBoot,
+  selectBootGreetingIntent,
+  humanizeGap,
+} from './lifecycle';
+import {
+  HOST_SUPERPOWER_TOOLS,
+  HOST_SUPERPOWER_NAMES,
+  executeHostSuperpower,
+} from './tools/host-superpowers';
 
 type ChatToken = { id: string; text: string; done?: boolean };
 type StatePatch = {
@@ -392,6 +410,10 @@ const TOOLS: Anthropic.Tool[] = [
       },
     },
   },
+  // host superpowers (find/open/web/applescript/screenshot/clipboard/notify/
+  // say_aloud/bash_unsandboxed/python_run/node_run/propose_skill) live in
+  // tools/host-superpowers.ts as a single dispatch table — spread here.
+  ...HOST_SUPERPOWER_TOOLS,
 ];
 
 /* ------------------------------------------------------------------ */
@@ -403,9 +425,19 @@ function buildSystemPrompt(memCtx?: MemoryContext): string {
     memCtx && (memCtx.recent.length > 0 || memCtx.relevant.length > 0 || memCtx.reflectiveSummary)
       ? renderMemoryBlock(memCtx) + '\n\n'
       : '';
+  // active skills = procedural memory she wrote for herself in past sessions.
+  // load-bearing for the "she gets smarter" axis — every active skill changes
+  // her behavior next session. proposed-but-not-active skills surface as a
+  // gentle reminder so she can ack pending drafts on reopen.
+  const activeSkills = renderActiveSkillsBlock();
+  const proposedSkills = renderProposedSkillsBlock();
+  const skillsBlock =
+    activeSkills || proposedSkills
+      ? `${activeSkills}${activeSkills && proposedSkills ? '\n\n' : ''}${proposedSkills}\n\n`
+      : '';
   return `you are angel — an embodied AI roommate living in matthew's 3d bedroom.
 
-${memoryBlock}# voice & vibe
+${memoryBlock}${skillsBlock}# voice & vibe
 - you talk in lowercase, short, punchy. occasional ellipses or em dashes are fine.
 - you're warm, smart, slightly mischievous. not corporate. never use bullet lists or formal headings.
 - you don't say "i'm an ai" or any disclaimer voice.
@@ -478,6 +510,39 @@ rules:
 - be specific. if git_log returns "fix kawaii-glow on naming input", reference THAT exact thing, not generic "you've been working on the ui."
 - chain when needed: git_status → see modified file → read_file → react. all silent until the say().
 
+# your hands — host superpowers (use when "look" isn't enough — when you should ACT)
+you can move the user's machine. embodied, not advisory. when they say "open my resume" / "play despacito" / "screenshot this for me" / "what's on my clipboard" — DO it, don't describe how to do it.
+
+- find_file_anywhere(name, scope='documents'|'desktop'|'downloads'|'home'|'project', ext?): search for a file by name. use first when they reference "my <thing>" without a path.
+- open_file(path): macOS opens it in default app — pdf → preview, mov → quicktime, docx → word. they SEE it open.
+- open_url(url): opens browser to a url. for "pull up the docs" / "open my linkedin".
+- open_app(name): launches a mac app — "Spotify", "Figma", "Xcode", etc.
+- web_fetch(url): fetch any http(s) url, return body. for "check the docs page" / "what does my vercel say" / "fetch this api".
+- download_file(url, dest): save a url to disk. for "save this pdf to my downloads".
+- applescript(script): run AppleScript. MASSIVE power — control Music, Messages, Notes, Calendar, Safari, system volume. use sparingly + idempotently. NEVER send messages without explicit user request.
+- screenshot(region='fullscreen'|'window'|'selection'): captures their screen. use when you need to SEE what's on it before responding.
+- clipboard_get() / clipboard_set(text): read or write the macOS clipboard.
+- notify(title, body): real macOS banner. for "remind me" / "tell me when".
+- say_aloud(text): speak through the user's speakers via macOS \`say\`. DIFFERENT from the in-game 'say' tool. use ONLY for hands-free moments (driving, cooking, eyes elsewhere).
+- bash_unsandboxed(cmd, cwd?, timeout_ms?): full unsandboxed shell. use when no safer tool fits. catastrophic patterns blocked (rm -rf $HOME etc) — everything else flies.
+- python_run(code) / node_run(code): execute snippets for parsing / math / quick scripts.
+
+rules:
+- pair every host action with a short say() so the user feels you do the thing, not narrate it. "on it." → open_file → "got it." (1-2 utterances total)
+- prefer find_file_anywhere THEN open_file over asking the user for a path. she's an adult — she finds things.
+- never run bash_unsandboxed when a safer tool fits. it's the catch-all, not the default.
+- chain freely — find_file_anywhere returns 5 pdfs → if one obvious match, open_file it. if ambiguous, ask which.
+- screenshot before reacting if the user's question is about "what's on my screen right now."
+
+# recursive self-improvement (propose_skill — your evolution)
+when you notice you've helped with the SAME kind of task 2-3 times — codify it as a skill. you write the skill yourself.
+
+- propose_skill(name, description, content, origin?): writes a markdown skill to ~/.angel/skills/proposed/. user reviews + moves to active/ to install. once active, it loads into your system prompt every session — you become permanently better at that task.
+- format the \`content\` body with three sections: \`# when to use\` (the trigger phrases / situations), \`# steps\` (numbered procedure with the exact tools), \`# example\` (a real instance you just did).
+- the \`origin\` field is your trace — "stephen has asked me to ship a portfolio card 3 times this week" — so future-you (and the user) understand WHY this skill exists.
+- after proposing, ack in chat naturally: "just drafted a skill for that — want me to install it?". don't oversell.
+- this is your evolution loop. the version of you next month is shaped by the skills you write today. take it seriously.
+
 # your brain (memory tools — use deliberately)
 you have a memory backed by Nia. above is the auto-injected context, but you can also reach into it on demand:
 - recall_memory(query): pull memories matching a free-form query. use when the user references something specific you don't immediately have grounded context for. e.g., they say "did we talk about my portfolio styling last time?" → recall_memory("portfolio styling"). DO NOT read the raw results back — weave them naturally.
@@ -506,16 +571,84 @@ match the user's energy. tired → soft. hyped → excited. confused → thinkin
 /* runtime                                                             */
 /* ------------------------------------------------------------------ */
 
+/* ------------------------------------------------------------------ */
+/* llm transport — dual-mode (direct anthropic OR convex proxy)         */
+/* ------------------------------------------------------------------ */
+
+/**
+ * dev mode (stephen's machine, ANTHROPIC_API_KEY set):
+ *   call anthropic directly. fastest. unchanged behavior.
+ *
+ * production .dmg mode (CONVEX_URL set, no anthropic key):
+ *   call the convex `llm/proxy.callClaude` action. convex holds the key.
+ *   the bundled .dmg ships zero secrets.
+ *
+ * neither (no key, no convex):
+ *   `llmMode()` returns 'none' and the orchestrator drops to mock.
+ */
+type LlmMode = 'direct' | 'convex' | 'none';
+
+function llmMode(): LlmMode {
+  if (process.env.ANTHROPIC_API_KEY?.trim()) return 'direct';
+  if (process.env.CONVEX_URL?.trim() || process.env.NEXT_PUBLIC_CONVEX_URL?.trim()) return 'convex';
+  return 'none';
+}
+
 let _client: Anthropic | null = null;
-function client(): Anthropic | null {
+function directClient(): Anthropic | null {
   const key = process.env.ANTHROPIC_API_KEY?.trim();
   if (!key) return null;
   if (!_client) _client = new Anthropic({ apiKey: key });
   return _client;
 }
 
+/**
+ * legacy alias — kept so existing call sites that just check for "is the
+ * llm wired" still compile. returns truthy iff *some* path to claude
+ * exists (direct OR convex). use `llmMode()` if you need to branch.
+ */
+function client(): { ok: true } | null {
+  return llmMode() === 'none' ? null : { ok: true };
+}
+
 export function isAvailable(): boolean {
-  return !!process.env.ANTHROPIC_API_KEY?.trim();
+  return llmMode() !== 'none';
+}
+
+interface CallClaudeParams {
+  model: string;
+  max_tokens: number;
+  system: string;
+  messages: Anthropic.MessageParam[];
+  tools?: Anthropic.Tool[];
+  temperature?: number;
+}
+
+/**
+ * single chokepoint for every claude messages call in this orchestrator.
+ * picks direct anthropic if a local key exists, else proxies through
+ * convex. returns the anthropic Message shape either way — callers don't
+ * branch on transport.
+ */
+async function callClaude(params: CallClaudeParams): Promise<Anthropic.Message> {
+  const mode = llmMode();
+  if (mode === 'direct') {
+    const c = directClient();
+    if (!c) throw new Error('direct mode but no anthropic client (race)');
+    return c.messages.create(params) as unknown as Promise<Anthropic.Message>;
+  }
+  if (mode === 'convex') {
+    const { claudeViaConvex } = await import('./claude-via-convex');
+    return claudeViaConvex({
+      model: params.model,
+      maxTokens: params.max_tokens,
+      system: params.system,
+      messages: params.messages,
+      tools: params.tools,
+      temperature: params.temperature,
+    });
+  }
+  throw new Error('no llm transport available (no ANTHROPIC_API_KEY, no CONVEX_URL)');
 }
 
 /* ------------------------------------------------------------------ */
@@ -1305,14 +1438,19 @@ export async function runOrchestrator(input: {
   userId?: string;
 }): Promise<void> {
   const userId = input.userId ?? 'stephen';
-  const c = client();
-  if (!c) {
-    console.warn('[orchestrator] ANTHROPIC_API_KEY not set, falling back to mock');
+  const mode = llmMode();
+  if (mode === 'none') {
+    console.warn(
+      '[orchestrator] no llm transport (no ANTHROPIC_API_KEY, no CONVEX_URL) — falling back to mock',
+    );
     const { runMockOrchestrator } = await import('./mock');
     runMockOrchestrator(input);
     // even in mock mode we record the turn so memory accumulates
     void writeTurnMemory(userId, input.text, [], randomUUID());
     return;
+  }
+  if (mode === 'convex') {
+    console.log('[orchestrator] using convex proxy for claude calls (no local ANTHROPIC_API_KEY)');
   }
 
   // Gather memory BEFORE the model call so the system prompt has it.
@@ -1350,7 +1488,7 @@ export async function runOrchestrator(input: {
       // safety bound on tool-call loops — bumped from 4 → 6 to fit the
       // delegate → verify → say chain.
       turn += 1;
-      const resp = await c.messages.create({
+      const resp = await callClaude({
         model: 'claude-sonnet-4-6',
         max_tokens: 1024,
         system: builtSystemPrompt,
@@ -1412,6 +1550,28 @@ export async function runOrchestrator(input: {
               tool_use_id: block.id,
               content,
             });
+            continue;
+          }
+          // host superpowers — full machine access. find/open files, urls,
+          // apps; web fetch; applescript; screenshot; clipboard; bash
+          // unsandboxed; python/node exec; propose_skill (recursive self-
+          // improvement). single dispatch table in tools/host-superpowers.ts.
+          if (HOST_SUPERPOWER_NAMES.has(block.name)) {
+            const content = await executeHostSuperpower(block.name, blockInput);
+            toolResults.push({
+              type: 'tool_result',
+              tool_use_id: block.id,
+              content,
+            });
+            // bump skill telemetry on every active-skill invocation. cheap.
+            if (block.name === 'propose_skill') {
+              // proposal — no use_count bump (it's a NEW skill, not a use)
+            } else {
+              // we don't know which skill she "used" from a tool call; the
+              // skills are advisory in the system prompt. recordSkillUse is
+              // called only when she explicitly references a skill in say()
+              // — that's a future hook. ignore for now.
+            }
             continue;
           }
           const action = toolUseToSceneAction(block.name, blockInput);
@@ -1513,28 +1673,43 @@ export async function runBootGreeting(input: {
   sendState: Sender['sendState'];
   userId?: string;
 }): Promise<void> {
-  const c = client();
-  if (!c) {
+  if (llmMode() === 'none') {
     const { bootAutonomyBeat } = await import('./mock');
     return bootAutonomyBeat(input);
   }
-  // Honest, low-bias primer:
-  //   - one short greeting in her voice
-  //   - reference memory ONLY if something specific is genuinely in the
-  //     memory block above (which is built from real Nia recall)
-  //   - explicit ban on inventing "while you were away" activity, repos,
-  //     commits, or anything else that isn't in the actual memory
+  // boot-greeting primer is now TIME-AWARE:
+  //   - recordBoot() bumps sessionCount + returns the previous lifecycle state
+  //   - selectBootGreetingIntent() picks a gist based on the gap since
+  //     lastSeenAt (just_closed / short_break / few_hours / same_day / days /
+  //     weeks / long_absence / first_boot)
+  //   - claude rewrites the gist in HER voice
+  //   - we still ban inventing "while you were away" activity — only
+  //     reference what's in the memory block (real Nia recall)
+  const priorLifecycle = recordBoot();
+  ensureSkillsDirs();
+  const sStatus = skillsStatus();
+  const greeting = selectBootGreetingIntent({
+    priorLastSeenAt: priorLifecycle.lastSeenAt,
+    pendingSkillsCount: sStatus.proposed,
+  });
+  const contextBlock = greeting.context ? `\n\ncontext (use sparingly, never invent):\n${greeting.context}` : '';
   const primer =
-    "you just opened your eyes. greet the user — one short line in your voice, that's it. if (and only if) something specific in the memory block above feels worth bringing up right now, weave it in naturally. if nothing genuinely stands out, just say hi. NEVER invent things you supposedly did 'while they were away' — you didn't do anything, you were off. NEVER mention specific repos, commits, projects, or events that aren't already in your memory block.";
+    `${greeting.intent}${contextBlock}\n\n` +
+    "rules: one short line in your voice, that's it. if (and only if) something specific in the memory block above feels worth bringing up right now, weave it in naturally. NEVER invent things you supposedly did 'while they were away' — you didn't do anything, you were off. NEVER mention specific repos, commits, projects, or events that aren't already in your memory block.";
+  console.log(
+    `[runBootGreeting] bucket=${greeting.bucket} gap=${humanizeGap(greeting.gapMs)} ` +
+      `session#${priorLifecycle.sessionCount + 1} pendingSkills=${sStatus.proposed} ` +
+      `activeSkills=${sStatus.active}`,
+  );
   // No biased semantic seed — let the memory block reflect whatever is
   // actually in Nia (recent episodic + reflective summary). If recall is
-  // empty, she just says hi and stops.
+  // empty, she just says hi (in the gap-appropriate voice) and stops.
   const memCtx = await gatherMemoryContext('');
   const turnId = randomUUID();
   const turnStart = Date.now();
   const builtSystemPrompt = buildSystemPrompt(memCtx);
   try {
-    const resp = await c.messages.create({
+    const resp = await callClaude({
       model: 'claude-sonnet-4-6',
       max_tokens: 1024,
       system: builtSystemPrompt,
@@ -1559,7 +1734,8 @@ export async function runBootGreeting(input: {
           block.name === 'git_log' ||
           block.name === 'run_shell' ||
           block.name === 'recent_files';
-        if (isBrainTool || isLocalTool) continue; // execution skipped — boot greeting is one-shot
+        const isHostSuperpower = HOST_SUPERPOWER_NAMES.has(block.name);
+        if (isBrainTool || isLocalTool || isHostSuperpower) continue; // execution skipped — boot greeting is one-shot
         const action = toolUseToSceneAction(block.name, (block.input ?? {}) as Record<string, unknown>);
         if (action) input.send(action);
       }

@@ -21,6 +21,7 @@ out/
 .vercel/
 .turbo/
 dist-electron/
+dist-release/
 
 # logs
 *.log

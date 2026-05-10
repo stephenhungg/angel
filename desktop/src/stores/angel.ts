@@ -40,6 +40,9 @@ export type PersonaState = {
   vrmUrl: string;
   paletteHex: string;
   traits: PersonaTraits;
+  /** Optional — synthesized personality.md from the reveal phase. The
+   *  introduction phase reads this to generate questions in HER voice. */
+  personalityMd?: string;
 } | null;
 
 export type AngelStore = {
@@ -144,6 +147,7 @@ export const useAngelStore = create<AngelStore>()(
           vrmUrl: vrmUrl ?? resolved.vrmUrl,
           paletteHex: resolved.paletteHex,
           traits: claim.traits,
+          personalityMd: claim.personalityMd,
         },
       });
     },
