@@ -468,18 +468,45 @@ async function findFileAnywhere(args: Record<string, unknown>): Promise<string> 
 }
 
 async function openFile(args: Record<string, unknown>): Promise<string> {
-  const p = expandHomePath(String(args.path ?? '').trim());
-  if (!p) return JSON.stringify({ ok: false, error: 'empty path' });
-  if (!path.isAbsolute(p)) return JSON.stringify({ ok: false, error: 'must be absolute path' });
-  if (!isSafeOpenPath(p)) return JSON.stringify({ ok: false, error: 'refused: system path' });
+  const raw = String(args.path ?? '').trim();
+  if (!raw) return JSON.stringify({ ok: false, error: 'empty path' });
+  const p = expandHomePath(raw);
+  if (!path.isAbsolute(p)) {
+    return JSON.stringify({
+      ok: false,
+      error:
+        'open_file needs an ABSOLUTE path (e.g. /Users/stephen/Documents/resume.pdf). recovery: call find_file_anywhere first to get the absolute path, then pass that path here.',
+    });
+  }
+  if (!isSafeOpenPath(p)) {
+    return JSON.stringify({
+      ok: false,
+      error: `refused: system path (${p}). pick a file in the user's home/work dirs.`,
+    });
+  }
   try {
     const stat = await fs.stat(p);
-    if (!stat.isFile()) return JSON.stringify({ ok: false, error: 'not a file' });
+    if (!stat.isFile()) {
+      return JSON.stringify({
+        ok: false,
+        error: `path exists but is not a file: ${p} (it's a directory or other). use open_app for apps, or pick a file inside this dir.`,
+      });
+    }
   } catch {
-    return JSON.stringify({ ok: false, error: 'file not found' });
+    return JSON.stringify({
+      ok: false,
+      error: `file not found: ${p}. recovery: call find_file_anywhere with a keyword from the filename to locate it elsewhere on disk.`,
+    });
   }
-  await execFile('open', [p], { timeout: 5000 });
-  return JSON.stringify({ ok: true, opened: p });
+  try {
+    await execFile('open', [p], { timeout: 5000 });
+    return JSON.stringify({ ok: true, opened: p });
+  } catch (err) {
+    return JSON.stringify({
+      ok: false,
+      error: `macOS \`open\` failed: ${(err as Error).message}. file may be corrupted or no app is registered for this filetype.`,
+    });
+  }
 }
 
 async function openUrl(args: Record<string, unknown>): Promise<string> {
