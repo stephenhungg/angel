@@ -33,6 +33,8 @@ import * as fsSync from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import type Anthropic from '@anthropic-ai/sdk';
+import { ConvexHttpClient } from 'convex/browser';
+import { api } from '../../../../convex/_generated/api';
 import {
   ensureSkillsDirs,
   proposeSkill,
@@ -227,6 +229,33 @@ export const HOST_SUPERPOWER_TOOLS: Anthropic.Tool[] = [
       required: ['code'],
     },
   },
+  /* ----- cross-surface discord I/O -------------------------------------- */
+  {
+    name: 'discord_send',
+    description:
+      "Post a message to a discord channel as your own bot identity. Use when you want to talk to the user (or anyone in the channel) FROM the desktop room — proactive nudges, status updates, threading a thought across surfaces. The bot token lives in convex; you never touch it. If you omit channelId, the default DISCORD_LISTEN_CHANNELS[0] is used. Pair with replyToMessageId when threading under a specific message.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        content: { type: 'string', description: 'message body, max 2000 chars' },
+        channelId: { type: 'string', description: 'optional — defaults to your main channel' },
+        replyToMessageId: { type: 'string', description: 'optional — thread under this message' },
+      },
+      required: ['content'],
+    },
+  },
+  {
+    name: 'discord_read',
+    description:
+      "Read the last N messages from a discord channel (default 20, max 100). Use to ground yourself in what's been said while you were busy on the desktop — 'what'd i miss', or before you discord_send to make sure you're not duplicating context. Returns id/content/authorUsername/timestamp/replyToId for each message, newest first.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        channelId: { type: 'string', description: 'optional — defaults to your main channel' },
+        limit: { type: 'number', description: 'default 20, max 100' },
+      },
+    },
+  },
   /* ----- judge / new-user personalization ------------------------------- */
   {
     name: 'personalize_for_user',
@@ -368,6 +397,9 @@ export async function executeHostSuperpower(
     if (name === 'bash_unsandboxed') return bashUnsandboxed(args);
     if (name === 'python_run') return pythonRun(args);
     if (name === 'node_run') return nodeRun(args);
+    /* ----- cross-surface discord -------------------------------------- */
+    if (name === 'discord_send') return discordSend(args);
+    if (name === 'discord_read') return discordRead(args);
     /* ----- judge / new-user personalization --------------------------- */
     if (name === 'personalize_for_user') return personalizeForUser(args);
     /* ----- self-improvement ------------------------------------------- */
@@ -680,6 +712,85 @@ async function nodeRun(args: Record<string, unknown>): Promise<string> {
       stdout: e.stdout ? truncate(e.stdout, 2000) : '',
       stderr: e.stderr ? truncate(e.stderr, 2000) : '',
     });
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* convex client (cached) — for actions like discord_send / discord_read       */
+/* -------------------------------------------------------------------------- */
+
+let _convexClient: ConvexHttpClient | null | undefined;
+
+function convexClient(): ConvexHttpClient | null {
+  if (_convexClient !== undefined) return _convexClient;
+  const url =
+    process.env.CONVEX_URL?.trim() ?? process.env.NEXT_PUBLIC_CONVEX_URL?.trim();
+  if (!url) {
+    _convexClient = null;
+    return null;
+  }
+  try {
+    _convexClient = new ConvexHttpClient(url);
+    return _convexClient;
+  } catch (err) {
+    console.warn('[host-superpowers] convex client init failed:', err);
+    _convexClient = null;
+    return null;
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* discord — send / read via convex (token never leaves the cloud)             */
+/* -------------------------------------------------------------------------- */
+
+async function discordSend(args: Record<string, unknown>): Promise<string> {
+  const content = String(args.content ?? '').trim();
+  if (!content) return JSON.stringify({ ok: false, error: 'empty content' });
+  const c = convexClient();
+  if (!c) {
+    return JSON.stringify({
+      ok: false,
+      error: 'convex not configured (CONVEX_URL missing) — cannot reach discord bridge',
+    });
+  }
+  try {
+    const result = (await c.action(api.discord.bridge.sendChannelMessage, {
+      channelId: args.channelId ? String(args.channelId) : undefined,
+      content,
+      replyToMessageId: args.replyToMessageId
+        ? String(args.replyToMessageId)
+        : undefined,
+      userId: 'stephen',
+    })) as { ok: boolean; channelId?: string; messageId?: string; error?: string };
+    return JSON.stringify(result);
+  } catch (err) {
+    return JSON.stringify({ ok: false, error: (err as Error).message });
+  }
+}
+
+async function discordRead(args: Record<string, unknown>): Promise<string> {
+  const c = convexClient();
+  if (!c) {
+    return JSON.stringify({
+      ok: false,
+      error: 'convex not configured (CONVEX_URL missing) — cannot reach discord bridge',
+    });
+  }
+  try {
+    const result = (await c.action(api.discord.bridge.fetchRecentMessages, {
+      channelId: args.channelId ? String(args.channelId) : undefined,
+      limit: args.limit ? Number(args.limit) : undefined,
+    })) as
+      | {
+          ok: true;
+          channelId: string;
+          count: number;
+          messages: Array<Record<string, unknown>>;
+        }
+      | { ok: false; error: string };
+    return JSON.stringify(result);
+  } catch (err) {
+    return JSON.stringify({ ok: false, error: (err as Error).message });
   }
 }
 

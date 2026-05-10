@@ -10,6 +10,7 @@
 
 import type * as agentState from "../agentState.js";
 import type * as crons from "../crons.js";
+import type * as discord_bridge from "../discord/bridge.js";
 import type * as discord_functions from "../discord/functions.js";
 import type * as discord_interactions from "../discord/interactions.js";
 import type * as discord_orchestrator from "../discord/orchestrator.js";
@@ -36,6 +37,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   agentState: typeof agentState;
   crons: typeof crons;
+  "discord/bridge": typeof discord_bridge;
   "discord/functions": typeof discord_functions;
   "discord/interactions": typeof discord_interactions;
   "discord/orchestrator": typeof discord_orchestrator;
