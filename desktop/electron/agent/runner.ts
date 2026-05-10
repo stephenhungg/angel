@@ -702,23 +702,77 @@ let _memory: AngelMemory | null = null;
 /** Inject the AngelMemory client. Called once at app boot from main.ts. */
 export function setMemory(memory: AngelMemory | null): void {
   _memory = memory;
+  // warmup the local recent buffer ONCE so we don't hit nia per turn for
+  // recent context. fire-and-forget — if it fails we just start with an
+  // empty buffer and writeTurnMemory fills it as turns happen.
+  if (memory) {
+    void memory
+      .recentEpisodic(RECENT_BUFFER_MAX)
+      .then((entries) => {
+        _recentBuffer = entries.slice(0, RECENT_BUFFER_MAX);
+        console.info('[memory] local buffer warmed: %d entries', _recentBuffer.length);
+      })
+      .catch((err) => {
+        console.warn('[memory] warmup failed (starting empty):', err);
+      });
+  }
 }
 
 export function getInjectedMemory(): AngelMemory | null {
   return _memory;
 }
 
+// ──────────────────────────────────────────────────────────────────────
+// LOCAL recent-memory buffer — kills the per-turn nia query for "recent"
+// ──────────────────────────────────────────────────────────────────────
+//
+// previously every orchestrator turn awaited nia.recentEpisodic(5) +
+// nia.relevantSemantic(msg, 3). that's two network calls per turn, hot
+// path, blocking claude. now:
+//   - "recent" is served entirely from this in-process rolling buffer.
+//     warmed once at boot (above), kept fresh by writeTurnMemory pushing
+//     each new turn into the front. zero network during turns.
+//   - "relevant semantic" is only fired when the user message actually
+//     looks like a recall ("remember", "did we", "last time", etc).
+//     otherwise the model uses recall_memory tool on demand if it needs
+//     deeper context.
+
+const RECENT_BUFFER_MAX = 20;
+let _recentBuffer: MemoryEntry[] = [];
+
+/** Push an entry to the front of the local recent buffer. */
+export function pushRecentLocal(entry: MemoryEntry): void {
+  _recentBuffer.unshift(entry);
+  if (_recentBuffer.length > RECENT_BUFFER_MAX) {
+    _recentBuffer.length = RECENT_BUFFER_MAX;
+  }
+}
+
+// regex: keywords that suggest the user is asking about prior history.
+// only THEN do we actually hit nia for semantic recall.
+const RECALL_TRIGGER =
+  /\b(remember|recall|did we|last time|the other day|earlier|previously|before|past week|last week|yesterday|when did|that thing|what about|did you|forgot|forgotten|talked about|told you|mentioned)\b/i;
+
+function shouldQuerySemantic(msg: string): boolean {
+  if (!msg.trim()) return false;
+  if (msg.length < 8) return false;
+  return RECALL_TRIGGER.test(msg);
+}
+
 /**
- * Build the per-turn MemoryContext. Resilient: returns an empty context
- * (recent=[], relevant=[]) on any sub-failure, never throws.
+ * Build the per-turn MemoryContext.
+ *
+ * "recent" — served from the in-process buffer, NEVER hits nia per turn
+ * "relevant" — only queries nia when the message contains a recall trigger
+ * "reflectiveSummary" — local file read, cheap
+ *
+ * the model can still pull deeper context on demand via the recall_memory
+ * tool. this just stops the eager network calls on every single turn.
  */
 async function gatherMemoryContext(userMessage: string): Promise<MemoryContext> {
-  if (!_memory) return { recent: [], relevant: [] };
-  // load reflective summary lazily — main.ts also exposes one, but the
-  // runner reads it directly so this works in mock mode too.
+  // reflective summary: cheap local file read
   let reflectiveSummary: string | undefined;
   try {
-    // Done inline to avoid a circular dep on memory/index.ts
     const fs = await import('node:fs');
     const path = await import('node:path');
     const os = await import('node:os');
@@ -730,18 +784,21 @@ async function gatherMemoryContext(userMessage: string): Promise<MemoryContext> 
   } catch {
     // ignore
   }
-  const [recent, relevant] = await Promise.all([
-    _memory.recentEpisodic(5).catch((err) => {
-      console.warn('[orchestrator] memory.recentEpisodic failed:', err);
-      return [];
-    }),
-    userMessage.trim()
-      ? _memory.relevantSemantic(userMessage, 3).catch((err) => {
-          console.warn('[orchestrator] memory.relevantSemantic failed:', err);
-          return [];
-        })
-      : Promise.resolve([]),
-  ]);
+
+  // recent: from local buffer (zero network)
+  const recent = _recentBuffer.slice(0, 5);
+
+  // relevant: only when message looks like a recall request
+  let relevant: MemoryEntry[] = [];
+  if (_memory && shouldQuerySemantic(userMessage)) {
+    try {
+      relevant = await _memory.relevantSemantic(userMessage, 3);
+    } catch (err) {
+      console.warn('[memory] semantic recall failed (skipped):', err);
+      relevant = [];
+    }
+  }
+
   return { recent, relevant, reflectiveSummary };
 }
 
@@ -776,6 +833,7 @@ function mirrorTurnToConvex(args: {
   userInput: string;
   assistantContent: Anthropic.ContentBlock[];
   latencyMs: number;
+  stopReason?: string;
 }): void {
   try {
     const says: string[] = [];
@@ -792,6 +850,23 @@ function mirrorTurnToConvex(args: {
       }
     }
     const output = says.join(' ');
+    // loud warn when the brain returns NOTHING — empty say + zero tools.
+    // typically means the model emitted naked text we filter out, or a
+    // refusal that surfaces with stop_reason='end_turn' + empty content.
+    // without this log, the UI just goes silent and you can't tell why.
+    if (!output && toolsCalled.length === 0) {
+      console.warn(
+        '[orchestrator] EMPTY brain response — userInput=%j stopReason=%s blocks=%d latency=%dms',
+        args.userInput.slice(0, 80),
+        args.stopReason ?? 'unknown',
+        args.assistantContent.length,
+        args.latencyMs,
+      );
+      // dump first block shape to console so we can see what claude returned
+      if (args.assistantContent[0]) {
+        console.warn('[orchestrator] first block:', JSON.stringify(args.assistantContent[0]).slice(0, 200));
+      }
+    }
     const systemPromptHash = createHash('sha1')
       .update(args.systemPrompt)
       .digest('hex')
@@ -814,13 +889,27 @@ function mirrorTurnToConvex(args: {
 }
 
 async function writeTurnMemory(userId: string, userMessage: string, assistantContent: Anthropic.ContentBlock[], turnId: string): Promise<void> {
+  const summary = summarizeTurn(userMessage, assistantContent);
+  const ts = Date.now();
+  // local buffer push is INSTANT — keeps "recent" context fresh without
+  // needing to await nia. push first so even if nia is down, future turns
+  // still see this one.
+  pushRecentLocal({
+    id: turnId,
+    userId,
+    type: 'episodic',
+    content: summary,
+    timestamp: ts,
+    metadata: { sourceTurnId: turnId, source: 'turn' },
+  });
+  // background nia write — fire and forget, never blocks the orchestrator
   if (!_memory) return;
   try {
     await _memory.remember({
       userId,
       type: 'episodic',
-      content: summarizeTurn(userMessage, assistantContent),
-      timestamp: Date.now(),
+      content: summary,
+      timestamp: ts,
       metadata: { sourceTurnId: turnId, source: 'turn' },
     });
   } catch (err) {
@@ -1526,6 +1615,7 @@ export async function runOrchestrator(input: {
   try {
     let turn = 0;
     let lastAssistantContent: Anthropic.ContentBlock[] = [];
+    let lastStopReason: string | undefined;
     while (turn < 6) {
       // safety bound on tool-call loops — bumped from 4 → 6 to fit the
       // delegate → verify → say chain.
@@ -1649,6 +1739,7 @@ export async function runOrchestrator(input: {
       // record this turn into history
       pushHistory({ role: 'assistant', content: resp.content });
       lastAssistantContent = resp.content as Anthropic.ContentBlock[];
+      lastStopReason = resp.stop_reason ?? undefined;
 
       // CRITICAL: if the model emitted any tool_use blocks, the very next
       // history message MUST contain matching tool_results — even if we're
@@ -1676,6 +1767,30 @@ export async function runOrchestrator(input: {
     }
     // write episodic memory after the model is done — non-blocking
     void writeTurnMemory(userId, input.text, lastAssistantContent, turnId);
+
+    // SILENT-EMPTY guard: if the brain returned nothing useful (no say tool,
+    // no naked text, no host action), surface a fallback so the UI doesn't
+    // just go quiet. without this the user types something, waits 5s, and
+    // sees zero response — looks broken even though the call succeeded.
+    const hasSay = lastAssistantContent.some(
+      (b) => b.type === 'tool_use' && b.name === 'say',
+    );
+    const hasText = lastAssistantContent.some(
+      (b) => b.type === 'text' && b.text.trim(),
+    );
+    const hasAnyTool = lastAssistantContent.some((b) => b.type === 'tool_use');
+    if (!hasSay && !hasText && !hasAnyTool) {
+      console.warn(
+        '[orchestrator] empty response surfaced as UI fallback (input=%j)',
+        input.text.slice(0, 80),
+      );
+      input.sendChat({
+        id: randomUUID(),
+        text: '(brain returned empty — try rephrasing? logged to /admin/timeline)',
+        done: true,
+      });
+    }
+
     // mirror the turn into convex.orchestratorTurns so /admin/timeline
     // can interleave it with sms / discord / web rows. fire-and-forget.
     mirrorTurnToConvex({
@@ -1685,6 +1800,7 @@ export async function runOrchestrator(input: {
       userInput: input.text,
       assistantContent: lastAssistantContent,
       latencyMs: Date.now() - turnStart,
+      stopReason: lastStopReason,
     });
   } catch (err) {
     console.error('[orchestrator] anthropic call failed', err);
@@ -1727,6 +1843,11 @@ export async function runBootGreeting(input: {
   //   - claude rewrites the gist in HER voice
   //   - we still ban inventing "while you were away" activity — only
   //     reference what's in the memory block (real Nia recall)
+  // CRITICAL: hard-clear rolling history at boot. session-scoped state
+  // shouldn't leak across cold-restarts, and any orphan tool_use/result
+  // blocks left over from a crashed prior session would 400 the very
+  // first anthropic call. start every session with a clean slate.
+  history.length = 0;
   const priorLifecycle = recordBoot();
   ensureSkillsDirs();
   const sStatus = skillsStatus();
