@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-const CMD = "curl -sSL https://angel-swipe.vercel.app/install.sh | bash";
+const CMD = "curl -sSL https://angel.stephenhung.me/install.sh | bash";
 
 /**
  * one-line installer terminal box. click anywhere to copy.

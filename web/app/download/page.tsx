@@ -152,9 +152,7 @@ export default function DownloadPage() {
                   </span>
                 </div>
                 <span className="mt-1 inline-flex items-baseline gap-2 font-sans text-[12px] font-semibold text-sakura-600 transition-transform duration-200 group-hover:translate-x-0.5">
-                  <span>
-                    {p.available ? "download ↓" : "see us at the table"}
-                  </span>
+                  <span>{p.available ? "download ↓" : "coming soon"}</span>
                 </span>
               </>
             );

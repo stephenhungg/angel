@@ -4,10 +4,10 @@
 # of an unsigned alpha build by clearing the quarantine bit after copy.
 #
 # usage:
-#   curl -sSL https://angel-swipe.vercel.app/install.sh | bash
+#   curl -sSL https://angel.stephenhung.me/install.sh | bash
 #
 # what it does:
-#   1. downloads the latest .dmg from github releases (arm64 only for v0.0.1)
+#   1. downloads the latest .dmg from github releases (arm64 only)
 #   2. mounts the disk image with hdiutil
 #   3. copies Angel.app into /Applications (replacing any existing copy)
 #   4. removes the com.apple.quarantine xattr so first-launch doesn't bounce
@@ -18,7 +18,7 @@
 
 set -euo pipefail
 
-DMG_URL="https://github.com/stephenhungg/angel/releases/download/v0.0.1-alpha/Angel-0.0.1-arm64.dmg"
+DMG_URL="https://github.com/stephenhungg/angel/releases/download/v0.0.2-alpha/Angel-0.0.2-arm64.dmg"
 TMP_DMG="/tmp/angel-install-$$.dmg"
 MOUNT_POINT="/Volumes/Angel"
 APP_PATH="/Applications/Angel.app"
@@ -38,12 +38,12 @@ trap cleanup EXIT
 
 # --- preflight ---
 if [[ "$(uname -s)" != "Darwin" ]]; then
-  red "angel desktop is mac-only for v0.0.1. windows/linux: coming soon."
+  red "angel desktop is mac-only for now. windows/linux: coming soon."
   exit 1
 fi
 
 if [[ "$(uname -m)" != "arm64" ]]; then
-  red "angel v0.0.1 is apple silicon only. intel mac build: coming soon."
+  red "angel is apple silicon only for now. intel mac build: coming soon."
   red "if you really want to try, grab the dmg from"
   red "  https://github.com/stephenhungg/angel/releases"
   exit 1
@@ -87,5 +87,5 @@ pink "  she's waking up..."
 open "$APP_PATH"
 
 echo
-dim "  next: head to https://angel-swipe.vercel.app/swipe to discover her."
+dim "  next: head to https://angel.stephenhung.me/swipe to discover her."
 echo
